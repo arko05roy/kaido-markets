@@ -237,8 +237,6 @@ export function TradePanel({
 
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [blendOpen, setBlendOpen] = useState(false);
-  const [blendDepth7dp, setBlendDepth7dp] = useState<bigint>(0n);
-  const [blendDepthLoading, setBlendDepthLoading] = useState(false);
   const [walletGate, setWalletGate] = useState<"connect" | "no-funds" | null>(null);
   const [errorOpen, setErrorOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -366,30 +364,9 @@ export function TradePanel({
     }
   };
 
-  const blendTapEnabled = !settlement.isDemo;
-
-  const openBlendStep = async () => {
+  const handleReceiptConfirm = () => {
     setReceiptOpen(false);
     setBlendOpen(true);
-    setBlendDepthLoading(true);
-    const seed = market.blendBackedDepth7dp ?? 0n;
-    setBlendDepth7dp(seed);
-    try {
-      const live = await kaido.blendBackedDepth(market.address);
-      setBlendDepth7dp(live);
-    } catch {
-      if (seed > 0n) setBlendDepth7dp(seed);
-    } finally {
-      setBlendDepthLoading(false);
-    }
-  };
-
-  const handleReceiptConfirm = () => {
-    if (blendTapEnabled) {
-      void openBlendStep();
-      return;
-    }
-    void confirmTrade();
   };
 
   const confirmTrade = async () => {
@@ -628,8 +605,7 @@ export function TradePanel({
         symbol={sym}
         feeBps={market.feeBps ?? 0}
         riskUsdc={riskUsdc}
-        availableDepth7dp={blendDepth7dp}
-        loadingDepth={blendDepthLoading}
+        poolDepth7dp={market.blendBackedDepth7dp}
         onContinue={() => void confirmTrade()}
         continuing={submitting}
       />

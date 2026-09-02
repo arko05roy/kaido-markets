@@ -4,6 +4,7 @@ import {
   BLEND_BORROW_DEN,
   BLEND_BORROW_NUM,
   computeBlendTapBreakdown,
+  displayBlendTapBreakdown,
   usdc7dpFromFloat,
 } from "@/lib/blend-tap";
 
@@ -30,5 +31,17 @@ describe("computeBlendTapBreakdown", () => {
       availableDepth7dp: usdc7dpFromFloat(1),
     });
     expect(b.withinDepth).toBe(false);
+  });
+});
+
+describe("displayBlendTapBreakdown", () => {
+  it("always produces positive headroom for UI", () => {
+    const b = displayBlendTapBreakdown({
+      maxTotal7dp: usdc7dpFromFloat(25),
+      feeBps: 100,
+    });
+    expect(b.withinDepth).toBe(true);
+    expect(b.depthAfter7dp).toBeGreaterThan(0n);
+    expect(b.borrow7dp).toBeGreaterThan(0n);
   });
 });

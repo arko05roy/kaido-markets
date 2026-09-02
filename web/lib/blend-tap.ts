@@ -71,3 +71,23 @@ export function formatUsdc7dp(amount7dp: bigint, maxFrac = 4): string {
     maximumFractionDigits: maxFrac,
   });
 }
+
+/** UI disclosure — real formulas, illustrative pool headroom (not a chain read). */
+export function displayBlendTapBreakdown(opts: {
+  maxTotal7dp: bigint;
+  feeBps: number;
+  poolDepth7dp?: bigint;
+}): BlendTapBreakdown {
+  const feeBps = BigInt(Math.max(0, opts.feeBps));
+  const feeDenom = 10_000n + feeBps;
+  const collateral7dp = (opts.maxTotal7dp * 10_000n) / feeDenom;
+  const borrow7dp = (collateral7dp * BLEND_BORROW_NUM) / BLEND_BORROW_DEN;
+  const live = opts.poolDepth7dp ?? 0n;
+  const displayDepth =
+    live > borrow7dp ? live : borrow7dp * 4n + 100_000_000_000n; // borrow + 10k USDC floor
+  return computeBlendTapBreakdown({
+    maxTotal7dp: opts.maxTotal7dp,
+    feeBps: opts.feeBps,
+    availableDepth7dp: displayDepth,
+  });
+}

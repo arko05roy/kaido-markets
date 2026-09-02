@@ -123,10 +123,10 @@ export function formatContractTradeError(message: string): string {
     return "Trading window is not open — the market may have locked or the window expired. Create a new market via /create.";
   }
   if (message.includes("Error(Contract, #46)") || message.includes("BlendDepthExceeded")) {
-    return "Blend borrow depth exhausted — reduce trade size or wait for positions to unwind at claim.";
+    return "Trade size exceeds available liquidity. Reduce your risk amount.";
   }
   if (message.includes("Error(Contract, #47)") || message.includes("BlendMarketNotAuthorized")) {
-    return "This market is not authorized for BlendTap — run authorize_market on the adapter after deploy.";
+    return "Liquidity backing is not available for this market.";
   }
   if (message.includes("Error(Contract, #34)") || message.includes("SlippageExceeded")) {
     return "Slippage guard tripped — raise your max risk amount.";
