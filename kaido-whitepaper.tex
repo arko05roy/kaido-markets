@@ -1,0 +1,404 @@
+\documentclass{portalciencia}
+
+\usepackage{portalciencia}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{etoolbox}
+\usepackage{ragged2e}
+\usepackage{fancyhdr}
+
+% Remove "Revista Portal de la Ciencia - Manuscrito" header banner
+\makeatletter
+\newcommand{\kaido@clearheaders}{%
+  \fancyhf{}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0pt}%
+  \fancyfoot[C]{\thepage}%
+}
+\fancypagestyle{plain}{\kaido@clearheaders}
+\fancypagestyle{fancy}{\kaido@clearheaders}
+\fancypagestyle{headings}{\kaido@clearheaders}
+\fancypagestyle{myheadings}{\kaido@clearheaders}
+\providecommand{\titulorevista}{}
+\renewcommand{\titulorevista}{}
+\providecommand{\tipodoc}{}
+\renewcommand{\tipodoc}{}
+\providecommand{\journalname}{}
+\renewcommand{\journalname}{}
+\providecommand{\cabecera}{}
+\renewcommand{\cabecera}{}
+\providecommand{\encabezado}{}
+\renewcommand{\encabezado}{}
+\AtBeginDocument{%
+  \pagestyle{fancy}%
+  \markboth{}{}%
+  \markright{}%
+}
+\AfterEndPreamble{%
+  \pagestyle{fancy}%
+  \markboth{}{}%
+  \markright{}%
+}
+\makeatother
+
+% Direct in-text links (no broken cite keys if biber is skipped)
+\newcommand{\paradigmdistribution}{%
+  \href{https://www.paradigm.xyz/2024/12/distribution-markets}{%
+    \emph{Distribution Markets} (White, Paradigm, December~2024)%
+  }%
+}
+\newcommand{\linkgneiting}{%
+  \href{https://doi.org/10.1198/016214506000001437}{Gneiting and Raftery (2007)}%
+}
+\newcommand{\linksoroban}{%
+  \href{https://soroban.stellar.org}{Soroban documentation}%
+}
+\newcommand{\linkscf}{%
+  \href{https://stellar.gitbook.io/scf-handbook}{SCF Handbook}%
+}
+
+\makeatletter
+% No right-margin line numbers (review mode / lineno)
+\AtBeginDocument{%
+  \@ifpackageloaded{lineno}{\nolinenumbers}{}%
+}
+\makeatother
+
+% English labels
+\renewcommand{\contentsname}{Contents}
+
+% Center all section and subsection headings (numbered and unnumbered)
+\titleformat{\section}
+  {\centering\normalfont\Large\bfseries}
+  {\thesection}{1em}{}
+\titleformat{\subsection}
+  {\centering\normalfont\large\bfseries}
+  {\thesubsection}{1em}{}
+\titleformat{name=\section,numberless}
+  {\centering\normalfont\Large\bfseries}
+  {}{0pt}{}
+\titleformat{name=\subsection,numberless}
+  {\centering\normalfont\large\bfseries}
+  {}{0pt}{}
+
+% Direct in-text links
+\newcommand{\kaidoabstracttext}{%
+Existing prediction markets are fragmented. Users can forecast binary outcomes across politics, sports, and crypto, but they cannot easily express full probability distributions, trade continuous beliefs, price uncertainty, or exit with payouts scaled to forecast accuracy. Real beliefs are not coin flips; they are shapes---``Bitcoin probably drifts toward \textasciitilde\$68k, with a fat tail toward \$75k''; ``the election margin is likely +3 to +6, but a blowout isn't impossible.'' We present Kaido, a Stellar-native distribution-market protocol that turns shaped beliefs into tradable positions. Users submit Gaussian beliefs $(\mu, \sigma)$ through a two-slider Belief Surface, trade against an $L^2$-norm distribution AMM implemented in Soroban, settle through a tiered oracle framework, and bootstrap liquidity via BlendTap JIT borrowing from Blend lending pools. Kaido is built as a composable protocol stack: an on-chain Distribution Engine, consumer Belief Surface, scalar and trajectory market types, tiered Resolver layer (T0--T3), BlendTap liquidity bootstrap, and TypeScript/Rust SDK. Together, these components let users forecast, trade, settle, and compose continuous-outcome markets through one protocol. Kaido starts with BTC-close markets and expands toward a broader vision: making every quantifiable forecast tradable.%
+}
+
+\newcommand{\kaidodisclaimertext}{%
+This White Paper is a proposed technical paper and architecture plan for Kaido v1. It is shared for feedback and discussion, and should not be read as the final protocol architecture, a product guarantee, financial advice, or an offer to buy or sell any token or financial instrument. Kaido involves DeFi, distribution-market AMM accounting, oracle resolution, and smart contracts, all of which require extensive testing, audits, risk review, and possible design changes before any production release. Parameters, mechanisms, integrations, and roadmap items described here may change materially as the protocol is developed.%
+}
+
+% English-only title page (skips portalciencia Spanish Resumen / Palabras clave blocks)
+\makeatletter
+\newcommand{\kaidomaketitle}{%
+  \begin{titlepage}
+    \thispagestyle{empty}
+    \vspace*{1.2cm}
+    \begin{center}
+      {\LARGE\bfseries Kaido: A Distribution-Market Primitive for Continuous Forecasting on Stellar\par}
+      \vspace{1.2em}
+      {\large Arko Roy$^{1}$\par}
+      \vspace{0.5em}
+      {\normalsize $^{1}$Independent researcher. Email: arkoroy302@gmail.com\par}
+    \end{center}
+    \vspace{2.2em}
+    \begin{center}
+      {\large\bfseries Abstract\par}
+    \end{center}
+    \vspace{0.6em}
+    \begin{center}
+      \begin{minipage}{0.92\textwidth}
+        \justifying
+        \kaidoabstracttext
+      \end{minipage}
+    \end{center}
+    \vspace{1.8em}
+    \begin{center}
+      {\large\bfseries Legal Disclaimer\par}
+    \end{center}
+    \vspace{0.6em}
+    \begin{center}
+      \begin{minipage}{0.92\textwidth}
+        \small
+        \justifying
+        \kaidodisclaimertext
+      \end{minipage}
+    \end{center}
+    \vfill
+  \end{titlepage}
+}
+
+% Unnumbered sections that appear in the table of contents
+\newcommand{\kaidosection}[1]{%
+  \section*{#1}%
+  \addcontentsline{toc}{section}{#1}%
+}
+\makeatother
+
+% Keep template macros empty so nothing Spanish leaks if \maketitle is called elsewhere
+\tituloes{}
+\tituloen{
+Kaido: A Distribution-Market Primitive for Continuous Forecasting on Stellar
+}
+
+\author{
+Arko Roy$^{1}$
+}
+
+\date{
+$^{1}$Independent researcher. Email: arkoroy302@gmail.com
+}
+
+\resumen{}
+\palabrasclave{}
+
+\abstracten{\kaidoabstracttext}
+
+% hyperref must load last for working citation/URL links
+\usepackage{xurl}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\newcommand{\reflink}[1]{\href{#1}{\footnotesize\url{#1}}}
+
+\begin{document}
+
+\kaidomaketitle
+
+\setcounter{tocdepth}{2}
+
+\begingroup
+\hypersetup{linkcolor=black}
+\tableofcontents
+\endgroup
+\clearpage
+
+\section{Introduction}
+
+Prediction markets, as they exist today, ask a single impoverished question: \emph{will X happen---yes or no?} That format throws away almost everything a forecaster actually believes. Real beliefs are not coin flips; they are \textbf{shapes}.
+
+\textbf{Kaido} is a protocol that lets anyone trade those shapes. It is built on the \textbf{distribution-market mechanism} in \paradigmdistribution: an automated market maker (AMM) not over tokens, but over entire probability distributions, such that, in an efficient market, the market's state \emph{becomes} the crowd's best collective forecast of a continuous quantity.
+
+Kaido packages this into two layers:
+
+\begin{enumerate}
+  \item \textbf{The Distribution Engine}---a Soroban (Stellar smart-contract) implementation of a bounded-loss distribution-market AMM. It is \textbf{outcome-agnostic}: any market that supplies a numeric outcome space, a resolver (oracle), and underwriter liquidity can be created permissionlessly.
+  \item \textbf{The Belief Surface}---a consumer-facing UI where users set \textbf{where they think the number lands} and \textbf{how confident they are} in two slider gestures. The interface compiles those into a Gaussian belief $(\mu, \sigma)$, prices it against the market's current curve, and shows cost, max payout, and worst case before confirmation.
+\end{enumerate}
+
+\subsection{The problem with yes/no markets}
+
+Binary prediction markets (Polymarket, Kalshi) compress rich beliefs into a single bit. Most interesting questions have a \textbf{number} as an answer: Bitcoin's price, election margin, rainfall in mm, inflation print. Hacking yes/no markets onto these requires dozens of separate markets and still cannot express how the pieces fit together.
+
+\subsection{Distribution markets}
+
+A \textbf{distribution market} lets traders submit a \textbf{shape}---a curve over all possible numbers---and profit based on how close that shape was to what actually happened. Two properties make this powerful:
+
+\begin{itemize}
+  \item It captures everything you believe at once---not just ``up or down'' but ``where, and how sure.''
+  \item It rewards honesty about uncertainty via proper scoring rules (\linkgneiting).
+\end{itemize}
+
+Table~\ref{tab:family} situates Kaido in the mechanism landscape.
+
+\begin{table}[ht]
+\centering
+\caption{Mechanism family tree.}
+\label{tab:family}
+\begin{tabular}{llll}
+\toprule
+Mechanism & What you bet on & Expressiveness & Money? \\
+\midrule
+Binary prediction market & YES or NO & 1 bit & Yes \\
+Categorical market & One of $N$ buckets & Few bits & Yes \\
+Scoring-rule forecasting & Full distribution & Whole shape & Usually no \\
+\textbf{Distribution market (Kaido)} & Full distribution & Whole shape & \textbf{Yes} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Distribution Markets: The Mechanism}
+
+This section follows \paradigmdistribution. The core invariant: the \textbf{$L^2$ norm} of the position curve, analogous to $xy=k$ in Uniswap.
+
+\subsection{Discrete warm-up: $N$ outcomes}
+
+For $N$ discrete outcomes, let $\mathbf{x} = (x_1, \ldots, x_N)$ be trader positions. The AMM invariant is:
+\begin{equation}
+\label{eq:sphere-invariant}
+\|\mathbf{x}\|_2 = \sqrt{x_1^2 + \cdots + x_N^2} = k
+\end{equation}
+Arbitrageurs maximize $\mathbf{p} \cdot \mathbf{x}$ subject to $\|\mathbf{x}\|_2 = k$. By Cauchy--Schwarz, the equilibrium position is proportional to the true probability distribution $\mathbf{p}$:
+\begin{equation}
+\label{eq:equilibrium}
+\mathbf{x}^* = k \cdot \frac{\mathbf{p}}{\|\mathbf{p}\|_2}
+\end{equation}
+
+\subsection{Continuous outcomes}
+
+For outcome $x \in \mathbb{R}$, a position is a function $f: \mathbb{R} \to \mathbb{R}^+$. The invariant becomes:
+\begin{equation}
+\label{eq:continuous-invariant}
+\|f\|_2 = \sqrt{\int f(x)^2 \, dx} = k
+\end{equation}
+In an efficient market, the aggregate trader curve becomes a scaled copy of the true probability density $p(x)$.
+
+\subsection{Settlement and bounded loss}
+
+At resolution $x_0$, traders receive $f(x_0)$ and the AMM receives $b - f(x_0)$; total payout is always $b$:
+\begin{equation}
+\label{eq:settlement}
+f(x_0) + \bigl(b - f(x_0)\bigr) = b
+\end{equation}
+In infinite dimensions, a curve can have finite $L^2$ norm yet unbounded peak height. Kaido enforces safety via:
+\begin{enumerate}
+  \item \textbf{$\sigma$-floor:} for Gaussians, require
+  \begin{equation}
+  \label{eq:sigma-floor}
+  \sigma \geq \frac{k^2}{b^2\sqrt{\pi}}
+  \end{equation}
+  \item \textbf{Capped Gaussians:} clip payout at height $b$.
+\end{enumerate}
+
+\subsection{Gaussian trades}
+
+Each belief is $(\mu, \sigma)$. A Gaussian PDF's $L^2$ norm depends only on $\sigma$, so shifting $\mu$ is cheap; sharpening (small $\sigma$) auto-throttles position size via
+\begin{equation}
+\label{eq:lambda-scaling}
+\lambda = k\sqrt{2\sigma\sqrt{\pi}}
+\end{equation}
+
+\section{Kaido: System Architecture}
+
+Kaido comprises Layer~1 (Soroban contracts), Layer~2 (Belief Surface UI), and an oracle framework.
+
+\subsection{Layer 1: Distribution Engine}
+
+Soroban contract suite:
+\begin{itemize}
+  \item \textbf{MarketFactory}---permissionless \texttt{create\_market(...)} with outcome space, Gaussian parameterization, $k$, $b$, fee bps, Resolver, and trading window.
+  \item \textbf{DistributionMarket}---per-market AMM: collateral, \texttt{trade(belief, collateral)}, LP \texttt{add}/\texttt{remove}, resolution payout.
+  \item \textbf{BlendAdapter}---optional BlendTap JIT borrow spine.
+  \item \textbf{Registry}---indexes markets and resolver trust tiers.
+\end{itemize}
+
+A Kaido market is the tuple:
+\begin{equation}
+\label{eq:market-tuple}
+M = (\text{OutcomeSpace}, \text{Parameterization}, k, b, \text{fee}, \text{Resolver}, \text{Window})
+\end{equation}
+
+\subsection{Market types}
+
+\textbf{Scalar markets} resolve to one final number (BTC close, election margin, CPI). \textbf{Trajectory markets} resolve to a path $x(t)$ sampled at checkpoints; beliefs are distributions over the path vector.
+
+\subsection{Oracle framework}
+
+\begin{table}[ht]
+\centering
+\caption{Resolver trust tiers.}
+\label{tab:oracle}
+\begin{tabular}{llll}
+\toprule
+Tier & How truth arrives & Trust & Good for \\
+\midrule
+T0 & On-chain feed (Reflector) & Oracle network & Crypto, FX \\
+T1 & Attested off-chain report & Named provider + challenge window & Elections, sports, weather \\
+T2 & Optimistic oracle + dispute & Economic bonds & Long-tail metrics \\
+T3 & Designated resolver & Named party & Community/fun markets \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{BlendTap liquidity bootstrap}
+
+On the first \texttt{trade()}, the market JIT-borrows counterparty USDC from a Blend lending pool (collateral = trader margin). At \texttt{claim()}, forfeitures repay the borrow. No protocol-owned book or seed transaction required.
+
+\subsection{Layer 2: Belief Surface}
+
+Two sliders ($\mu$ center, $\sigma$ confidence) plus pre-trade quote (cost, worst case, max payout). At resolution: result card with curve, truth marker, payout, and calibration-scored leaderboards.
+
+\subsection{Launch wedge}
+
+Day one: \textbf{``Where does BTC close on Friday?''} with Reflector T0 oracle, BlendTap depth, 1~USDC minimum stake, 1\% fee. Then permissionless market creation across scalar and trajectory markets.
+
+\subsection{Economics}
+
+No protocol token at launch; settlement in USDC on Stellar. Fees split between LPs and protocol treasury. Value capture: fee share, LP returns, and SDK adoption as Stellar's distribution-market primitive.
+
+\section{Why Stellar, Why Now}
+
+\begin{itemize}
+  \item \textbf{Micro-stakes need micro-fees.} Sub-cent fees and $\sim$5-second finality make 90-second, 1-USDC markets viable (\linksoroban).
+  \item \textbf{Ecosystem fit.} Reflector oracles, Soroban contracts, passkey onboarding, and SCF funding for new financial primitives (\linkscf).
+  \item \textbf{Mechanism gap.} White's distribution markets (December~2024) have no production implementation; a 6--12 month window exists before replication on other chains.
+\end{itemize}
+
+\section{Worked Examples}
+
+\textbf{Example A---BTC close (scalar, T0).} Outcome $\in [\$60\text{k}, \$80\text{k}]$; belief $\mu=\$68{,}200$, $\sigma=\$1{,}400$; stake 1~USDC; resolve via Reflector at Friday close.
+
+\textbf{Example B---US popular-vote margin 2028 (scalar, T1).} Outcome $\in [-20, +20]$ percentage points; capped-Gaussian enabled; certified result via attested adapter with 7-day challenge window.
+
+\textbf{Example C---Mumbai rainfall (scalar, T1/T2).} Outcome $\in [0, 300]$~mm; right-skewed parameterization in later versions; meteorological service adapter with optimistic fallback.
+
+\section{Security, Risks, and Mitigations}
+
+\begin{table}[ht]
+\centering
+\caption{Primary risks and mitigations.}
+\label{tab:risks}
+\begin{tabular}{p{3cm}p{4cm}p{5cm}}
+\toprule
+Risk & Why it matters & Mitigation \\
+\midrule
+Unbounded LP loss & Near-delta beliefs & $\sigma$-floor; capped Gaussians; BlendTap borrow caps \\
+Contract bugs & Subtle curve accounting & Property tests; fuzzing; audit; bug bounty \\
+Oracle failure & Wrong $x_0$ & Tiered resolvers; challenge windows; TWAP reads \\
+Liquidity cold-start & Empty markets & BlendTap JIT borrow; LP fee incentives \\
+Frontend mismatch & UI vs.\ chain belief & Deterministic slider mapping; pre-trade quote \\
+Regulatory action & Real-money forecasting & See regulatory posture \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Regulatory Posture}
+
+Kaido manages regulatory sensitivity deliberately:
+\begin{enumerate}
+  \item Build as a \textbf{market}, not a casino---transparent AMM fees, not house odds.
+  \item Position as a \textbf{forecasting platform}---crypto is the wedge, not the identity.
+  \item Geofence sensitive jurisdictions with honest disclosures.
+  \item Label resolver trust tiers; no false ``trustless'' claims.
+  \item No protocol token at launch.
+  \item Obtain legal opinion before mainnet.
+\end{enumerate}
+
+\section{Conclusion}
+
+Kaido turns shaped probabilistic beliefs about continuous outcomes into tradable, settleable positions on Stellar. The construction relies on independently auditable Soroban contracts whose dependency graph is a strict pipeline: a distribution-market AMM implements the $L^2$-norm invariant, a \texttt{MarketFactory} and \texttt{Registry} enable permissionless market creation, a tiered resolver framework reports realized outcomes, \texttt{BlendTap} JIT-borrows counterparty liquidity from Blend pools on the first trade, and the Belief Surface compiles two-slider Gaussian beliefs into on-chain positions. We deliberately do not present the protocol as a guaranteed-forecast or guaranteed-profit product: the realized USDC payout at resolution is determined by the scoring rule evaluated at the oracle-reported outcome $x_0$, which depends on the trader's submitted belief curve relative to the market's aggregate curve and on the trust tier of the resolver.
+
+We have given the implementation-side specification of each layer, focusing on the mechanisms that are specific to Kaido's execution model: the discrete sphere invariant (Eq.~\ref{eq:sphere-invariant}), the Cauchy--Schwarz equilibrium mapping (Eq.~\ref{eq:equilibrium}), the continuous Hilbert-space invariant (Eq.~\ref{eq:continuous-invariant}), the $\sigma$-floor bound that enforces capped peak payout (Eq.~\ref{eq:sigma-floor}), the $\lambda$-scaling rule that throttles confident beliefs (Eq.~\ref{eq:lambda-scaling}), the always-solvent settlement identity (Eq.~\ref{eq:settlement}), and the market tuple that parameterizes permissionless creation (Eq.~\ref{eq:market-tuple}). The composition is what matters: a stack with each layer operating under its own narrow trust assumption and contributing one financial primitive.
+
+\section{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}
+  \item D.~White, ``Distribution Markets,'' Paradigm Whitepaper, 2024. \reflink{https://www.paradigm.xyz/2024/12/distribution-markets}
+
+  \item R.~Hanson, ``Logarithmic Market Scoring Rules for Modular Combinatorial Information Aggregation,'' 2003.
+
+  \item R.~Hanson, ``Combinatorial Information Market Design,'' 2003.
+
+  \item T.~Gneiting and A.~E.~Raftery, ``Strictly Proper Scoring Rules, Prediction, and Estimation,'' \emph{Journal of the American Statistical Association}, 2007. \reflink{https://doi.org/10.1198/016214506000001437}
+
+  \item Stellar Development Foundation, ``Soroban Documentation,'' 2024. \reflink{https://soroban.stellar.org}
+
+  \item Reflector, ``Stellar Oracle Network Documentation,'' 2024. \reflink{https://reflector.network/docs}
+
+  \item Stellar Community Fund, ``SCF Handbook,'' 2024. \reflink{https://stellar.gitbook.io/scf-handbook}
+
+  \item Polymarket and Kalshi (comparators): binary and categorical prediction markets; Metaculus: distributional forecasting without financial stakes.
+\end{enumerate}
+
+\end{document}

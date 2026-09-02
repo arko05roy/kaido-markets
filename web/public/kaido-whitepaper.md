@@ -1,5 +1,7 @@
 # Kaido — A Distribution-Market Primitive for Stellar
 
+**Arko Roy** · arkoroy302@gmail.com · 2026
+
 ### *Kaido is the first distribution market of its kind — providing more capital efficiency than traditional markets.*
 
 **Whitepaper v0.1 — Working Draft**
@@ -24,18 +26,13 @@
 
 ## Abstract
 
-Prediction markets, as they exist today, ask a single impoverished question: *will X happen — yes or no?* That format throws away almost everything a forecaster actually believes. Real beliefs are not coin flips; they are **shapes** — "Bitcoin probably drifts toward ~$68k over the next hour, with a fat tail toward $75k"; "the election margin is likely +3 to +6, but a blowout isn't impossible"; "tomorrow's rainfall is most likely 0–5mm, with a small chance of a storm."
+Existing prediction markets are fragmented. Users can forecast binary outcomes across politics, sports, and crypto, but they cannot easily express full probability distributions, trade continuous beliefs, price uncertainty, or exit with payouts scaled to forecast accuracy. Real beliefs are not coin flips; they are **shapes** — "Bitcoin probably drifts toward ~$68k, with a fat tail toward $75k"; "the election margin is likely +3 to +6, but a blowout isn't impossible."
 
-**Kaido** is a protocol that lets anyone trade those shapes. It is built on top of the **distribution-market mechanism** introduced by Dave White at Paradigm in December 2024 — a way to run an automated market maker (AMM) not over tokens, but over entire probability distributions, such that, in an efficient market, the market's state *becomes* the crowd's best collective forecast of a continuous quantity.
+We present **Kaido**, a Stellar-native distribution-market protocol that turns shaped beliefs into tradable positions. Users submit Gaussian beliefs `(μ, σ)` through a two-slider **Belief Surface**, trade against an L²-norm distribution AMM implemented in Soroban, settle through a tiered oracle framework, and bootstrap liquidity via **BlendTap** JIT borrowing from Blend lending pools. Kaido is built as a composable protocol stack: an on-chain **Distribution Engine**, consumer **Belief Surface**, scalar and trajectory market types, tiered **Resolver** layer (T0–T3), **BlendTap** liquidity bootstrap, and TypeScript/Rust **SDK**. Together, these components let users forecast, trade, settle, and compose continuous-outcome markets through one protocol. Kaido starts with BTC-close markets and expands toward a broader vision: making every quantifiable forecast tradable.
 
-Kaido packages this into two layers:
+**Keywords:** distribution markets · L² norm · Gaussian beliefs · Soroban · Stellar · prediction markets · oracle resolution · BlendTap
 
-1. **The Distribution Engine** — a Soroban (Stellar smart-contract) implementation of a bounded-loss distribution-market AMM. It is **outcome-agnostic**: any market that supplies a numeric outcome space, a resolver (oracle), and an underwriter (liquidity) can be created permissionlessly. Crypto prices are merely the *first* application, not the only one.
-2. **The Belief Surface** — a consumer-facing UI where you don't read order books or type limit prices: you set **where you think the number lands** and **how confident you are**, in two slider gestures. The interface compiles those into a Gaussian belief `(μ, σ)`, prices it against the market's current curve, and shows you cost, max payout, and worst case before you confirm. A smart contract scores everyone by how close they were and pays out automatically.
-
-Kaido launches with a Bitcoin-close market — because the audience is already there and BTC has a free, trustless, manipulation-resistant price oracle — and then opens the surface so anyone can create a market on **anything quantifiable**. Every builder who shows up gets a new financial primitive for free.
-
-This document explains all of it: what a distribution market *is*, starting from a coin flip and building up; the precise mechanism from the Paradigm paper, including the math and its sharp edges; how Kaido turns that mechanism into a working product on Stellar; the oracle design that determines how wide "all possible markets" can actually go; the economics; the risks; and the roadmap.
+**Legal Disclaimer.** This White Paper is a proposed technical paper and architecture plan for Kaido v1. It is shared for feedback and discussion, and should not be read as the final protocol architecture, a product guarantee, financial advice, or an offer to buy or sell any token or financial instrument. Kaido involves DeFi, distribution-market AMM accounting, oracle resolution, and smart contracts, all of which require extensive testing, audits, risk review, and possible design changes before any production release. Parameters, mechanisms, integrations, and roadmap items described here may change materially as the protocol is developed.
 
 ---
 
@@ -443,4 +440,13 @@ Structured to map onto an SCF Build Award's milestone tranches.
 
 ---
 
-*Kaido whitepaper v0.1 — working draft. The mechanism described in Part II is due to White (2024); Parts III–VIII (the Stellar implementation, the Belief Surface, the oracle tiering, the economics, the roadmap) are Kaido's contribution. Open questions flagged in-text: belief parameterizations beyond Gaussian; correlation structure across trajectory checkpoints; hardening the T2 optimistic oracle; the pre-mainnet legal opinion. Feedback welcome.*
+## Primary Reference
+
+White, D. **"Distribution Markets."** Paradigm, December 2024.  
+https://www.paradigm.xyz/2024/12/distribution-markets
+
+The distribution-market mechanism that Kaido's Layer 1 implements---the $L^2$-norm market-scoring-rule AMM over continuous outcomes, discrete sphere case, Gaussian parameterization and $\lambda$-scaling, bounded-loss via $\sigma$-floor / capped Gaussians, LP construction, and always-solvent settlement---is due to this paper.
+
+---
+
+*Kaido whitepaper v0.1 — working draft. Author: Arko Roy (arkoroy302@gmail.com). The mechanism described in Part II is due to White (2024); Parts III–VIII (the Stellar implementation, the Belief Surface, the oracle tiering, the economics, the roadmap) are Kaido's contribution. Open questions flagged in-text: belief parameterizations beyond Gaussian; correlation structure across trajectory checkpoints; hardening the T2 optimistic oracle; the pre-mainnet legal opinion. Feedback welcome.*
