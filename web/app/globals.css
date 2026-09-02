@@ -169,6 +169,15 @@
   }
 }
 
+/* Scrollable regions without visible scrollbar (wheel/touch still works) */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* In-app surfaces — override shadcn light tokens on dark ink background */
 .kaido-app {
   --background: #141416;

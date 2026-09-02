@@ -5,6 +5,8 @@ import type { Metadata } from "next";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { GhostLink, PageEyebrow, PrimaryLink } from "@/components/app/kaido-ui";
+
 export const metadata: Metadata = {
   title: "Whitepaper · Kaido",
   description:
@@ -56,7 +58,7 @@ const mdComponents: Components = {
     return (
       <h2
         id={slugify(text)}
-        className="mt-20 scroll-mt-32 font-serif text-[2rem] leading-[1.05] tracking-[-0.02em] text-[#f3efe6] sm:text-[2.75rem]"
+        className="mt-20 scroll-mt-32 border-t border-white/[0.06] pt-12 font-serif text-[2rem] leading-[1.05] tracking-[-0.02em] text-[#f3efe6] sm:text-[2.75rem]"
       >
         {children}
       </h2>
@@ -92,7 +94,7 @@ const mdComponents: Components = {
   strong: ({ children }) => <strong className="font-medium text-[#f3efe6]">{children}</strong>,
   em: ({ children }) => <em className="italic text-white/85">{children}</em>,
   blockquote: ({ children }) => (
-    <blockquote className="mt-8 border-l-2 border-[#d8c69a] bg-[#d8c69a]/[0.04] px-6 py-4 font-serif text-[18px] italic leading-[1.55] text-[#f3efe6]">
+    <blockquote className="relative mt-8 overflow-hidden rounded-2xl border border-[#d8c69a]/15 border-l-[3px] border-l-[#d8c69a]/50 bg-[#d8c69a]/[0.05] px-6 py-5 font-serif text-[18px] italic leading-[1.55] text-[#f3efe6] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
       {children}
     </blockquote>
   ),
@@ -122,17 +124,21 @@ const mdComponents: Components = {
     );
   },
   pre: ({ children }) => (
-    <pre className="mt-6 overflow-x-auto border border-white/10 bg-[#08080a] p-6 font-mono text-[13px] leading-[1.7] text-white/85">
+    <pre className="mt-6 overflow-x-auto rounded-2xl border border-white/[0.06] bg-[#1c1c21] p-6 font-mono text-[13px] leading-[1.7] text-white/85 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
       {children}
     </pre>
   ),
-  hr: () => <hr className="mt-16 border-t border-white/10" />,
+  hr: () => (
+    <hr className="mt-16 border-0 bg-gradient-to-r from-transparent via-[#d8c69a]/25 to-transparent h-px" />
+  ),
   table: ({ children }) => (
-    <div className="mt-8 overflow-x-auto border border-white/10">
+    <div className="mt-8 overflow-x-auto rounded-2xl border border-white/[0.06] bg-[#1c1c21] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
       <table className="w-full border-collapse text-left">{children}</table>
     </div>
   ),
-  thead: ({ children }) => <thead className="border-b border-white/10 bg-[#08080a]">{children}</thead>,
+  thead: ({ children }) => (
+    <thead className="border-b border-white/[0.06] bg-[#141416]/80">{children}</thead>
+  ),
   tbody: ({ children }) => <tbody className="divide-y divide-white/5">{children}</tbody>,
   tr: ({ children }) => <tr className="transition-colors hover:bg-white/[0.02]">{children}</tr>,
   th: ({ children }) => (
@@ -188,48 +194,46 @@ export default async function WhitepaperPage() {
   const toc = extractToc(body);
 
   return (
-    <div className="kaido-landing relative min-h-screen w-full bg-[#0b0b0c] text-[#ece9e2]">
+    <div className="kaido-app relative min-h-screen w-full bg-[#141416] text-[#ece9e2]">
       {/* COVER */}
-      <section className="relative overflow-hidden border-b border-white/10 px-6 py-24 sm:px-10 lg:py-36">
-        <div className="pointer-events-none absolute -right-32 -top-32 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.12),transparent_60%)]" />
-        <div className="pointer-events-none absolute -bottom-32 -left-24 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.06),transparent_60%)]" />
+      <section className="relative overflow-hidden border-b border-white/[0.06] px-6 pb-24 pt-28 sm:px-10 lg:pb-36 lg:pt-32">
+        <div className="pointer-events-none absolute -right-32 -top-32 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.1),transparent_60%)]" />
+        <div className="pointer-events-none absolute -bottom-32 -left-24 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.05),transparent_60%)]" />
 
         <div className="relative mx-auto max-w-[1400px]">
-          <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.28em] text-[#d8c69a]">
-            <span className="inline-block h-px w-8 bg-[#d8c69a]" />
-            The whitepaper
-            <span className="text-white/30">·</span>
-            <span className="text-white/45">{version}</span>
-          </div>
+          <PageEyebrow>
+            The whitepaper · {version}
+          </PageEyebrow>
 
-          <h1 className="mt-10 font-serif text-[2.5rem] leading-[0.95] tracking-[-0.035em] text-[#f3efe6] sm:text-[4.5rem] lg:text-[6.5rem]">
+          <h1 className="mt-8 font-serif text-[2.5rem] leading-[0.95] tracking-[-0.035em] text-[#f3efe6] sm:text-[4.5rem] lg:text-[6rem]">
             {title}
           </h1>
 
-          <p className="mt-10 max-w-[60ch] font-serif text-[20px] italic leading-[1.35] text-white/70 sm:text-[26px]">
+          <p className="mt-8 max-w-[60ch] font-serif text-[20px] italic leading-[1.35] text-white/65 sm:text-[26px]">
             {tagline}
           </p>
 
-          <dl className="mt-14 grid max-w-[800px] grid-cols-1 divide-y divide-white/10 border-t border-white/10 pt-6 font-mono text-[10px] uppercase tracking-[0.22em] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <div className="py-4 sm:py-0 sm:pr-6">
-              <dt className="text-white/35">Author</dt>
-              <dd className="mt-1.5 font-serif text-base normal-case tracking-normal text-[#f3efe6]">
-                Kaido Labs
-              </dd>
+          <dl className="mt-12 grid max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-white/[0.06] bg-[#1c1c21]/80 px-4 py-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+              <dt className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">Author</dt>
+              <dd className="mt-1 font-serif text-base text-[#f3efe6]">Kaido Labs</dd>
             </div>
-            <div className="py-4 sm:px-6 sm:py-0">
-              <dt className="text-white/35">Sections</dt>
-              <dd className="mt-1.5 font-serif text-base normal-case tracking-normal text-[#f3efe6]">
+            <div className="rounded-xl border border-white/[0.06] bg-[#1c1c21]/80 px-4 py-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+              <dt className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">Sections</dt>
+              <dd className="mt-1 font-serif text-base text-[#f3efe6]">
                 {toc.filter((e) => e.level === 1).length} parts
               </dd>
             </div>
-            <div className="py-4 sm:py-0 sm:pl-6">
-              <dt className="text-white/35">Read time</dt>
-              <dd className="mt-1.5 font-serif text-base normal-case tracking-normal text-[#d8c69a]">
-                ~40 min
-              </dd>
+            <div className="rounded-xl border border-white/[0.06] bg-[#1c1c21]/80 px-4 py-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+              <dt className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">Read time</dt>
+              <dd className="mt-1 font-serif text-base text-[#d8c69a]">~40 min</dd>
             </div>
           </dl>
+
+          <div className="mt-10 flex flex-wrap items-center gap-4">
+            <PrimaryLink href="/markets">Enter markets</PrimaryLink>
+            <GhostLink href="/create">Create a market</GhostLink>
+          </div>
         </div>
       </section>
 
@@ -237,35 +241,41 @@ export default async function WhitepaperPage() {
       <div className="relative mx-auto max-w-[1400px] px-6 py-20 sm:px-10 lg:py-28">
         <div className="grid grid-cols-12 gap-x-10 gap-y-12">
           {/* TOC — collapsible on mobile, sticky on desktop */}
-          <aside className="col-span-12 lg:sticky lg:top-24 lg:col-span-3 lg:self-start">
-            <details
-              open
-              className="group border border-white/10 bg-[#0a0a0b] [&_summary::-webkit-details-marker]:hidden"
+          <aside className="col-span-12 lg:sticky lg:top-28 lg:col-span-3 lg:self-start">
+            <nav
+              aria-label="Table of contents"
+              className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#1c1c21] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
             >
-              <summary className="flex cursor-pointer list-none items-center justify-between p-6">
-                <span className="font-mono text-[10px] uppercase tracking-[0.28em] text-[#d8c69a]">
-                  Contents
-                </span>
-                <span className="font-mono text-[12px] tracking-[0.22em] text-white/40 transition-transform group-open:rotate-180">
-                  ▾
-                </span>
-              </summary>
-              <ol className="space-y-2.5 px-6 pb-6 font-mono text-[11px] uppercase tracking-[0.18em]">
-                {toc.map((entry) => (
-                  <li
-                    key={entry.slug}
-                    className={entry.level === 2 ? "pl-4 text-white/45" : "text-white/75"}
-                  >
-                    <a
-                      href={`#${entry.slug}`}
-                      className="transition-colors hover:text-[#d8c69a]"
+              <div
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-[3px] bg-[#d8c69a]/40"
+              />
+              <details open className="group [&_summary::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between border-b border-white/[0.06] p-5">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">
+                    Contents
+                  </span>
+                  <span className="font-mono text-[12px] text-white/40 transition-transform group-open:rotate-180">
+                    ▾
+                  </span>
+                </summary>
+                <ol className="scrollbar-none max-h-[min(70vh,32rem)] space-y-2 overflow-y-auto p-5 font-mono text-[11px] uppercase tracking-[0.16em]">
+                  {toc.map((entry) => (
+                    <li
+                      key={entry.slug}
+                      className={entry.level === 2 ? "pl-3 text-white/40" : "text-white/70"}
                     >
-                      {entry.text}
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </details>
+                      <a
+                        href={`#${entry.slug}`}
+                        className="block py-0.5 transition-colors hover:text-[#d8c69a]"
+                      >
+                        {entry.text}
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            </nav>
           </aside>
 
           {/* BODY */}
@@ -275,42 +285,43 @@ export default async function WhitepaperPage() {
             </ReactMarkdown>
 
             {/* end-of-paper card */}
-            <div className="mt-20 border-t border-white/10 pt-10">
-              <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-[#d8c69a]">
-                End of paper
-              </div>
-              <p className="mt-4 max-w-[58ch] font-serif text-[22px] leading-[1.3] tracking-[-0.01em] text-[#f3efe6]">
-                Built one curve at a time on Stellar.
-              </p>
-              <div className="mt-8 flex flex-wrap items-center gap-6">
-                <Link
-                  href="/markets"
-                  className="group inline-flex items-center gap-3 rounded-full bg-[#f3efe6] px-7 py-4 text-[12px] font-medium uppercase tracking-[0.2em] text-[#0b0b0c] transition-all hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0c]"
-                >
-                  Enter markets
-                  <span className="inline-block transition-transform group-hover:translate-x-1">
-                    →
-                  </span>
-                </Link>
-                <Link
-                  href="/"
-                  className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/55 transition-colors hover:text-white"
-                >
-                  Back to home ↑
-                </Link>
+            <div className="relative mt-20 overflow-hidden rounded-2xl border border-[#d8c69a]/15 bg-[#1c1c21] p-8 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] sm:p-10">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.1),transparent_65%)]"
+              />
+              <div className="relative">
+                <div className="flex items-center gap-3">
+                  <span className="h-px w-8 bg-[#d8c69a]/45" aria-hidden />
+                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">
+                    End of paper
+                  </p>
+                </div>
+                <p className="mt-4 max-w-[58ch] font-serif text-[22px] leading-[1.3] tracking-[-0.01em] text-[#f3efe6] sm:text-[26px]">
+                  Built one curve at a time on Stellar.
+                </p>
+                <div className="mt-8 flex flex-wrap items-center gap-6">
+                  <PrimaryLink href="/markets">Enter markets</PrimaryLink>
+                  <GhostLink href="/">Back to home</GhostLink>
+                </div>
               </div>
             </div>
           </article>
         </div>
       </div>
 
-      <footer className="border-t border-white/10 px-6 py-10 sm:px-10">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+      <footer className="border-t border-white/[0.06] px-6 py-10 sm:px-10">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="font-serif text-base italic text-white/85">Kaido</span>
-            <span className="text-white/25">街道</span>
+            <span className="font-serif text-base italic text-[#f3efe6]">Kaido</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
+              {version}
+            </span>
           </div>
-          <div>{version}</div>
+          <div className="flex flex-wrap items-center gap-6">
+            <GhostLink href="/markets">Markets</GhostLink>
+            <GhostLink href="/create">Create</GhostLink>
+          </div>
         </div>
       </footer>
     </div>
