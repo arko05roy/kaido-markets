@@ -28,25 +28,6 @@ const Navbar1 = () => {
         {/* paper inner highlight */}
         <div className="pointer-events-none absolute inset-x-6 top-px h-px bg-gradient-to-r from-transparent via-black/10 to-transparent" />
 
-        <Link href="/" className="group flex items-baseline gap-2">
-          <motion.span
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 0.61, 0.36, 1] }}
-            className="font-serif italic text-2xl leading-none tracking-tight text-[#0b0b0c]"
-          >
-            Kaido
-          </motion.span>
-          <motion.span
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.25 }}
-            className="hidden whitespace-nowrap text-[10px] tracking-[0.18em] text-[#0b0b0c]/40 sm:inline"
-          >
-            街道
-          </motion.span>
-        </Link>
-
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-7">
           {NAV_ITEMS.map((item, i) => {

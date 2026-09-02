@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, LogOut, Wallet, ChevronDown } from "lucide-react";
 
-import { SettlementWalletChip } from "./settlement-wallet-chip";
 import { useWallet } from "./provider";
 import type { WalletKind } from "./types";
 
@@ -66,7 +65,6 @@ export function NavbarWallet() {
   if (wallet) {
     return (
       <div className="flex items-center gap-1.5">
-        <SettlementWalletChip variant="light" />
         <span
           title={wallet.accountId}
           className="inline-flex h-9 items-center rounded-full bg-[#0b0b0c] px-3.5 font-mono text-[11px] uppercase tracking-[0.2em] text-[#f3efe6]"
