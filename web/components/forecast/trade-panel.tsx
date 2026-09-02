@@ -44,7 +44,7 @@ import { simulateTradeQuote, type TradeQuote } from "@/lib/trade-quote";
 import { USDC_FAUCET_URL } from "@/lib/stellar/usdc";
 import { clientSettlementAsset, SETTLEMENT_DECIMALS } from "@/lib/settlement-asset";
 import { DemoFaucetButton } from "@/components/wallet/demo-faucet-button";
-import { chartRangeForConfig, formatXTick, parseOutcomeConfig } from "@/lib/outcome-scale";
+import { chartRangeForConfig, formatCallLabel, parseOutcomeConfig } from "@/lib/outcome-scale";
 import type { LiveCrowdSnapshot } from "@/lib/use-live-crowd";
 import { cn } from "@/lib/utils";
 
@@ -294,7 +294,7 @@ export function TradePanel({
 
   const edge = edgeVsCrowd(yourMu, crowdMu);
   const conviction = convictionFromSigma(yourSigma, floorReal, sigmaMax);
-  const callLabel = market.kind === "scalar" ? formatXTick(outcomeConfig, yourMu) || formatOutcome(yourMu) : "Trajectory belief";
+  const callLabel = market.kind === "scalar" ? formatCallLabel(outcomeConfig, yourMu) || formatOutcome(yourMu) : "Trajectory belief";
   const convictionText = market.kind === "scalar" ? convictionLabel(conviction) : "—";
 
   useEffect(() => {

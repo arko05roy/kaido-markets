@@ -174,6 +174,35 @@ function divisionDisplayLabel(config: OutcomeConfig, v: number): string | null {
   return label || null;
 }
 
+export function nearestDivisionIndex(config: OutcomeConfig, v: number): number {
+  const { divisions } = config;
+  if (!divisions.length) return 0;
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < divisions.length; i++) {
+    const d = Math.abs(divisions[i] - v);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+export function snapToDivision(config: OutcomeConfig, v: number): number {
+  return config.divisions[nearestDivisionIndex(config, v)] ?? v;
+}
+
+/** User-facing call readout — nearest axis tick label, not a raw float. */
+export function formatCallLabel(config: OutcomeConfig | null, v: number): string {
+  if (!config || !Number.isFinite(v)) return "";
+  if (config.style === "binary") return formatXTick(config, v);
+  if (config.divisions.length >= 2) {
+    return formatXTickAt(config, nearestDivisionIndex(config, v));
+  }
+  return formatXTick(config, v);
+}
+
 export function formatXTickAt(config: OutcomeConfig | null, index: number): string {
   if (!config || index < 0 || index >= config.divisions.length) return "";
   const custom = config.divisionLabels?.[index]?.trim();

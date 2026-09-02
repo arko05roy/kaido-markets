@@ -7,9 +7,11 @@ import {
   evenDivisions,
   formatXTick,
   formatXTickAt,
+  formatCallLabel,
   interiorTicks,
   parseOutcomeConfig,
   parseTickLabels,
+  snapToDivision,
   tickLabelItems,
 } from "@/lib/outcome-scale";
 
@@ -88,6 +90,19 @@ describe("outcome-scale", () => {
       { value: 25, label: "Low" },
       { value: 75, label: "High" },
     ]);
+  });
+
+  it("snaps call readout to nearest axis label", () => {
+    const cfg = parseOutcomeConfig({
+      marketStyle: "kaido",
+      outcomeMin: 0,
+      outcomeMax: 100,
+      divisions: [16.67, 33.33, 50, 66.67, 83.33],
+      divisionLabels: ["PAW", "DIK", "EY", "KOR", "ID"],
+    })!;
+    expect(snapToDivision(cfg, 47)).toBe(50);
+    expect(formatCallLabel(cfg, 47)).toBe("EY");
+    expect(formatCallLabel(cfg, 83.33)).toBe("ID");
   });
 
   it("aligns divisionLabels length to divisions when loading metadata", () => {

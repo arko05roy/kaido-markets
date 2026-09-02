@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { BinaryOddsBar } from "@/components/forecast/binary-odds-bar";
-import { BeliefChart } from "@/components/forecast/belief-chart";
 import { RangeSlider } from "@/components/forecast/range-slider";
 import { SnappySlider } from "@/components/ui/snappy-slider";
 import {
@@ -21,7 +20,7 @@ import {
   type GaussianBelief,
 } from "@/lib/curve";
 import type { OutcomeConfig } from "@/lib/outcome-scale";
-import { defaultOpeningWidth, formatXTick, tickLabelItems, chartHeightForTickCount } from "@/lib/outcome-scale";
+import { defaultOpeningWidth, formatCallLabel, snapToDivision } from "@/lib/outcome-scale";
 import { cn } from "@/lib/utils";
 
 export interface ScalarBeliefInputProps {
@@ -48,6 +47,12 @@ export function ScalarBeliefInput({
   );
   const cMu = fromWad(consensus.muWad);
   const cSigma = Math.max(floorReal, fromWad(consensus.sigmaWad));
+  const snapMu = (v: number) =>
+    outcomeConfig?.style === "kaido" && outcomeConfig.divisions.length >= 2
+      ? snapToDivision(outcomeConfig, v)
+      : v;
+  const formatMu = (v: number) =>
+    outcomeConfig ? formatCallLabel(outcomeConfig, v) : formatOutcome(v);
 
   const chartRange = useMemo(
     () =>
@@ -64,14 +69,14 @@ export function ScalarBeliefInput({
   const sigmaMax = Math.max(span / 2, floorReal * 16);
   const sigmaStep = (sigmaMax - sigmaMin) / 100;
 
-  const [muReal, setMuReal] = useState(cMu);
+  const [muReal, setMuReal] = useState(() => snapMu(cMu));
   const [sigmaReal, setSigmaReal] = useState(cSigma);
 
   const [seededFrom, setSeededFrom] = useState(`${consensus.muWad}:${consensus.sigmaWad}`);
   const key = `${consensus.muWad}:${consensus.sigmaWad}`;
   if (seededFrom !== key) {
     setSeededFrom(key);
-    setMuReal(cMu);
+    setMuReal(snapMu(cMu));
     setSigmaReal(cSigma);
   }
 
@@ -130,30 +135,16 @@ export function ScalarBeliefInput({
 
   return (
     <div className="flex flex-col gap-5">
-      <BeliefChart
-        mode="scalar"
-        flat
-        height={chartHeightForTickCount(outcomeConfig?.divisions?.length ?? 0)}
-        market={market}
-        range={chartRange}
-        xTicks={outcomeConfig?.divisions}
-        xAxisItems={outcomeConfig ? tickLabelItems(outcomeConfig) : undefined}
-        formatXTick={outcomeConfig ? (v) => formatXTick(outcomeConfig, v) : undefined}
-        consensus={consensus}
-        you={belief}
-        anchorYToConsensus
-      />
-
       <div className="space-y-1">
         <RangeSlider
           label="Your call"
           value={muReal}
-          onChange={setMuReal}
+          onChange={(v) => setMuReal(snapMu(v))}
           min={win.min}
           max={win.max}
           step={muStep || 1}
           disabled={disabled}
-          format={(v) => (outcomeConfig ? formatXTick(outcomeConfig, v) : formatOutcome(v))}
+          format={formatMu}
           prominent
         />
         <p className="text-center font-mono text-xs text-white/45">
