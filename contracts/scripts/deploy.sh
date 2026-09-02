@@ -233,10 +233,24 @@ CP1="$(( T_NOW + 600 ))"; CP2="$(( T_NOW + 1200 ))"; CP3="$(( T_NOW + 1800 ))"
 TJ_RESOLVE="$(( CP3 + 60 ))"
 TJ_OPEN="${T_NOW}"; TJ_LOCK="$(( CP3 - 60 ))"
 CHECKPOINTS_JSON="[${CP1},${CP2},${CP3}]"
-# initial consensus: flat at μ = 50 (WAD), σ = 1 (WAD) per checkpoint — the
-# real curve gets traded in; this is just a non-degenerate seed.
-MUS0_JSON="[\"${MU0_18}\",\"${MU0_18}\",\"${MU0_18}\"]"
-SIGMAS0_JSON="[\"${WAD18}\",\"${WAD18}\",\"${WAD18}\"]"
+# Initial consensus: seed flat at ~the *live* BTC price (read off the same
+# Reflector feed the resolver uses), σ ≈ 0.1% of price — so the ChartGuessr
+# chart's y-axis sits around the real price instead of a meaningless μ=50.
+# Falls back to μ=50, σ=1 if the feed read fails (still a valid non-degenerate
+# seed; traders move the curve anyway).
+CG_BTC_DEC="$(stellar contract invoke --id "${REFLECTOR_FEED_ID}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- decimals 2>/dev/null | tr -dc 0-9 || true)"
+CG_BTC_RAW="$(stellar contract invoke --id "${REFLECTOR_FEED_ID}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
+  -- lastprice --asset "{\"Other\":\"${REFLECTOR_ASSET_SYMBOL}\"}" 2>/dev/null \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{try{const o=JSON.parse(s);process.stdout.write(o&&o.price?String(o.price):"")}catch{process.stdout.write("")}})' 2>/dev/null || true)"
+CG_MU="$(node -e "const r=BigInt('${CG_BTC_RAW:-0}'||'0'),d=parseInt('${CG_BTC_DEC:-14}',10)||14;const w=r<=0n?0n:(d<18?r*(10n**BigInt(18-d)):r/(10n**BigInt(d-18)));process.stdout.write(w>0n?w.toString():'${MU0_18}')" 2>/dev/null || echo "${MU0_18}")"
+CG_SIG="$(node -e "const m=BigInt('${CG_MU}'||'0');const s=m/1000n;const fl=${WAD18}n;process.stdout.write((s>fl?s:fl).toString())" 2>/dev/null || echo "${WAD18}")"
+if [[ "${CG_MU}" == "${MU0_18}" ]]; then
+  echo "   (live BTC price unavailable — seeding consensus at μ=50)" >&2
+else
+  echo "   seeding ChartGuessr consensus at μ ≈ ${CG_MU} WAD (≈ live BTC), σ ≈ ${CG_SIG} WAD"
+fi
+MUS0_JSON="[\"${CG_MU}\",\"${CG_MU}\",\"${CG_MU}\"]"
+SIGMAS0_JSON="[\"${CG_SIG}\",\"${CG_SIG}\",\"${CG_SIG}\"]"
 CHARTGUESSR_RESOLVER=""
 CHARTGUESSR_MARKET=""
 if CHARTGUESSR_RESOLVER="$(stellar contract deploy --wasm-hash "${HASH_resolver_reflector}" \
