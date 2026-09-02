@@ -120,6 +120,14 @@ set -e
 exec ./scripts/deploy.sh "$STELLAR_NETWORK"
 '''
 
+[tasks.deploy-mainnet]
+description = "Deploy the contract suite to Stellar mainnet after explicit confirmation."
+script_runner = "@shell"
+script = '''
+set -e
+exec ./scripts/deploy-mainnet.sh
+'''
+
 [tasks.clean]
 command = "cargo"
 args = ["clean"]

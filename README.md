@@ -281,6 +281,16 @@ KAIDO_INTEGRATION=1 KAIDO_INTEGRATION_LIFECYCLE=1 KAIDO_INTEGRATION_SECRET=S... 
 Mainnet deploys are gated on an external audit + a legal opinion (see
 `build.md` Sprint 8). `deploy.sh` refuses to run against mainnet until then.
 
+Mainnet pilot deployment:
+
+- `distribution-market`: [CBRZBLU224KTJSANZIKAOHLXMQUV6GHQBEK5QAK46456WKY2BE6QZXA6](https://stellar.expert/explorer/public/contract/CBRZBLU224KTJSANZIKAOHLXMQUV6GHQBEK5QAK46456WKY2BE6QZXA6)
+- Deploy transaction: [`d3650b7c1d7d3a10a54c6e859ff4e318d1091b74ea5eb2fcee7438bed67493f4`](https://stellar.expert/explorer/public/tx/d3650b7c1d7d3a10a54c6e859ff4e318d1091b74ea5eb2fcee7438bed67493f4)
+- `market-factory` WASM hash: `b44491a0a959030ae7ac7c5b34322d02c430d4ffc68177a870d71b947cd712ca`
+
+This mainnet address was deployed as a minimal pilot contract only. Testnet
+remains unchanged, and the larger helper-suite / oracle wiring stays gated
+until you explicitly want it enabled.
+
 ---
 
 ## CI

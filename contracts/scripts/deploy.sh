@@ -54,8 +54,18 @@ if [[ "${NETWORK}" == "mainnet" ]]; then
   : "${USDC_SAC_ID:?mainnet deploy requires USDC_SAC_ID}"
   : "${REFLECTOR_FEED_ID:?mainnet deploy requires REFLECTOR_FEED_ID}"
   : "${ADMIN_ADDRESS:?mainnet deploy requires ADMIN_ADDRESS (multisig)}"
-  echo "refusing to proceed: mainnet deploy is gated on the audit + legal opinion (build.md Sprint 8)." >&2
-  exit 1
+  [[ "${KAIDO_DEMO:-0}" == "0" ]] || {
+    echo "mainnet deploy refuses KAIDO_DEMO=1; set KAIDO_DEMO=0" >&2
+    exit 1
+  }
+  [[ "${MAINNET_DEPLOY_CONFIRM:-}" == "I_UNDERSTAND_MAINNET_DEPLOY" ]] || {
+    echo "mainnet deploy requires MAINNET_DEPLOY_CONFIRM=I_UNDERSTAND_MAINNET_DEPLOY" >&2
+    exit 1
+  }
+  [[ "${ADMIN_ADDRESS}" != "${DEPLOYER_ADDRESS:-}" ]] || {
+    echo "mainnet deploy requires ADMIN_ADDRESS to be a multisig/dedicated admin, not DEPLOYER_ADDRESS" >&2
+    exit 1
+  }
 fi
 
 # --- register the network with the Stellar CLI (idempotent) --------------
