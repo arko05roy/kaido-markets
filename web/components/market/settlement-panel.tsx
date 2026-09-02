@@ -520,7 +520,7 @@ export function SettlementPanel({
         : null;
 
   return (
-    <div className="flex flex-col gap-5 border border-white/10 bg-[#0a0a0b] p-6" data-positions-epoch={refreshKey}>
+    <div className="flex flex-col gap-5 rounded-2xl border border-white/[0.06] bg-[#1c1c21] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]" data-positions-epoch={refreshKey}>
       <div>
         <h2 className="kaido-section-title">
           {isResolved ? "Your payout" : "After trading closes"}

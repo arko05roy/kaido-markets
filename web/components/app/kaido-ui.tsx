@@ -1,10 +1,12 @@
 import Link from "next/link";
 
+import { cn } from "@/lib/utils";
+
 /** Shared shell for in-app pages — matches the landing ink + paper palette. */
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="kaido-app relative min-h-[100dvh] w-full bg-[#0b0b0c] text-[#ece9e2]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,rgba(216,198,154,0.06),transparent_70%)]" />
+    <div className="kaido-app relative min-h-[100dvh] w-full bg-[#141416] text-[#ece9e2]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,rgba(216,198,154,0.05),transparent_70%)]" />
       <div className="relative mx-auto w-full max-w-[1400px] px-6 pb-20 pt-28 sm:px-10">{children}</div>
     </div>
   );
@@ -28,7 +30,7 @@ export function PageTitle({
 }) {
   return (
     <header className="space-y-4">
-      <h1 className="font-serif text-[clamp(2.5rem,6vw,4.5rem)] leading-[0.95] tracking-[-0.03em] text-[#f3efe6]">
+      <h1 className="font-serif text-[clamp(2rem,5vw,3.25rem)] leading-[1.02] tracking-[-0.03em] text-[#f3efe6]">
         {title}
       </h1>
       {subtitle && (
@@ -46,7 +48,14 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <div className={`border border-white/10 bg-[#0a0a0b] ${className}`}>{children}</div>
+    <div
+      className={cn(
+        "rounded-2xl border border-white/[0.06] bg-[#1c1c21] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]",
+        className,
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -68,7 +77,7 @@ export function StatusPill({ label }: { label: string }) {
             ? "border-white/15 bg-white/5 text-white/55"
             : "border-white/10 bg-white/5 text-white/45";
   return (
-    <span className={`inline-flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] ${tone}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] ${tone}`}>
       {label === "Open" && (
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />

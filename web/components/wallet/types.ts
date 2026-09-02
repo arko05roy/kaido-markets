@@ -31,6 +31,8 @@ export interface WalletConnector {
   isAvailable(): Promise<boolean>;
   /** Establish a session. Rejects if the user cancels or the wallet is unavailable. */
   connect(opts: { networkPassphrase: string; network: string }): Promise<ConnectedWallet>;
+  /** Rehydrate an existing session without prompting (returns null if none). */
+  restoreSession(opts: { networkPassphrase: string; network: string }): Promise<ConnectedWallet | null>;
   /** Tear down any session state (best-effort). */
   disconnect(): Promise<void>;
 }

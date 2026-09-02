@@ -250,15 +250,15 @@ export function CreateMarketWizard({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-px bg-white/10">
-      <Panel className="px-6 py-5 sm:px-8">
-        <ol className="flex flex-wrap gap-x-6 gap-y-2">
+    <div className="space-y-4">
+      <Panel className="px-5 py-4 sm:px-6">
+        <ol className="flex flex-wrap gap-x-5 gap-y-2">
           {STEPS.map((step, i) => (
             <li key={step} className="flex items-center gap-2 text-sm">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#d8c69a]/40 font-mono text-[10px] text-[#d8c69a]">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#d8c69a]/35 bg-[#d8c69a]/10 font-mono text-[10px] text-[#d8c69a]">
                 {i + 1}
               </span>
-              <span className="text-white/55">{step}</span>
+              <span className="text-white/50">{step}</span>
             </li>
           ))}
         </ol>
@@ -280,7 +280,7 @@ export function CreateMarketWizard({
             />
           </Field>
           {question.trim() && (
-            <p className="rounded border border-white/10 bg-[#080809] px-4 py-3 font-serif text-lg leading-snug text-[#f3efe6]">
+            <p className="rounded-xl border border-white/[0.06] bg-[#141416] px-4 py-3 font-serif text-lg leading-snug text-[#f3efe6]">
               {question.trim()}
             </p>
           )}
@@ -612,7 +612,7 @@ function WizardSection({
           {step}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-serif text-xl tracking-[-0.02em] text-[#f3efe6]">{label}</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-[#f3efe6] sm:text-xl">{label}</h2>
           <div className="mt-4">{children}</div>
         </div>
       </div>
@@ -634,10 +634,10 @@ function ChoiceButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors",
+        "rounded-xl border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] transition-[border-color,background-color,color] duration-150",
         active
-          ? "border-[#d8c69a]/50 bg-[#d8c69a]/15 text-[#f3efe6]"
-          : "border-white/15 text-white/45 hover:border-white/30 hover:text-white/70",
+          ? "border-[#d8c69a]/40 bg-[#d8c69a]/12 text-[#f3efe6]"
+          : "border-white/[0.08] bg-[#141416]/50 text-white/45 hover:border-white/15 hover:text-white/70",
       )}
     >
       {children}
@@ -734,7 +734,7 @@ function Input({
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "w-full border border-white/15 bg-[#0b0b0c] px-3 py-2.5 text-sm text-[#f3efe6] outline-none transition-colors placeholder:text-white/25 focus-visible:border-[#d8c69a]/40 focus-visible:ring-1 focus-visible:ring-[#d8c69a]/30",
+        "w-full rounded-xl border border-white/[0.08] bg-[#141416] px-3 py-2.5 text-sm text-[#f3efe6] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-white/25 focus-visible:border-[#d8c69a]/40 focus-visible:ring-1 focus-visible:ring-[#d8c69a]/30",
         mono && "font-mono text-xs",
       )}
     />
@@ -758,7 +758,7 @@ function Textarea({
       placeholder={placeholder}
       rows={rows}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full resize-y border border-white/15 bg-[#0b0b0c] px-3 py-2.5 text-sm leading-relaxed text-[#f3efe6] outline-none transition-colors placeholder:text-white/25 focus-visible:border-[#d8c69a]/40 focus-visible:ring-1 focus-visible:ring-[#d8c69a]/30"
+      className="w-full resize-y rounded-xl border border-white/[0.08] bg-[#141416] px-3 py-2.5 text-sm leading-relaxed text-[#f3efe6] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-white/25 focus-visible:border-[#d8c69a]/40 focus-visible:ring-1 focus-visible:ring-[#d8c69a]/30"
     />
   );
 }

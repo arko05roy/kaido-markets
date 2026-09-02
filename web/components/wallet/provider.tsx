@@ -5,25 +5,33 @@
  *
  * Wrap the app (or a subtree) in `<WalletProvider network … networkPassphrase …>`
  * and call `useWallet()` to connect/disconnect and read the connected account +
- * `KaidoSigner`. The last-used connector kind is remembered in `localStorage` so
- * a refresh re-offers (but does not silently re-establish) the same wallet.
+ * `KaidoSigner`. The last-used connector is persisted in `localStorage` and
+ * restored silently on refresh when the wallet extension still authorizes this site.
  */
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { freighterConnector } from "./freighter";
 import type { ConnectedWallet, WalletConnector, WalletKind } from "./types";
 
-const LAST_KIND_KEY = "kaido.wallet.lastKind";
+export const LAST_KIND_KEY = "kaido.wallet.lastKind";
 
 const CONNECTORS: Record<WalletKind, WalletConnector> = {
   freighter: freighterConnector,
 };
+
+function readLastKind(): WalletKind | null {
+  if (typeof window === "undefined") return null;
+  const v = window.localStorage.getItem(LAST_KIND_KEY);
+  return v === "freighter" ? v : null;
+}
 
 interface WalletContextValue {
   /** The connected wallet, or `null` when disconnected. */
   wallet: ConnectedWallet | null;
   /** True while a connect() is in flight. */
   connecting: boolean;
+  /** True while a prior session is being restored after load. */
+  restoring: boolean;
   /** Last connect error message, if any (cleared on the next attempt). */
   error: string | null;
   /** Connectors available to offer in the UI. */
@@ -58,13 +66,32 @@ export function WalletProvider({
 }: WalletProviderProps) {
   const [wallet, setWallet] = useState<ConnectedWallet | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastKind, setLastKind] = useState<WalletKind | null>(readLastKind);
 
-  const lastKind = useMemo<WalletKind | null>(() => {
-    if (typeof window === "undefined") return null;
-    const v = window.localStorage.getItem(LAST_KIND_KEY);
-    return v === "freighter" ? v : null;
-  }, []);
+  useEffect(() => {
+    const kind = readLastKind();
+    if (!kind) return;
+
+    let cancelled = false;
+    void (async () => {
+      setRestoring(true);
+      try {
+        const connector = CONNECTORS[kind];
+        const restored = await connector.restoreSession({ network, networkPassphrase });
+        if (!cancelled && restored) {
+          setWallet((current) => current ?? restored);
+        }
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [network, networkPassphrase]);
 
   const connect = useCallback(
     async (kind: WalletKind) => {
@@ -78,6 +105,7 @@ export function WalletProvider({
         const w = await connector.connect({ network, networkPassphrase });
         setWallet(w);
         if (typeof window !== "undefined") window.localStorage.setItem(LAST_KIND_KEY, kind);
+        setLastKind(kind);
         return w;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to connect wallet";
@@ -99,12 +127,15 @@ export function WalletProvider({
       }
     }
     setWallet(null);
+    if (typeof window !== "undefined") window.localStorage.removeItem(LAST_KIND_KEY);
+    setLastKind(null);
   }, [wallet]);
 
   const value = useMemo<WalletContextValue>(
     () => ({
       wallet,
       connecting,
+      restoring,
       error,
       connectors: Object.values(CONNECTORS),
       lastKind,
@@ -114,7 +145,7 @@ export function WalletProvider({
       connect,
       disconnect,
     }),
-    [wallet, connecting, error, lastKind, rpcUrl, usdcSacId, networkPassphrase, connect, disconnect],
+    [wallet, connecting, restoring, error, lastKind, rpcUrl, usdcSacId, networkPassphrase, connect, disconnect],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

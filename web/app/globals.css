@@ -26,6 +26,14 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
 .dark {
@@ -47,6 +55,14 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
 @theme inline {
@@ -74,6 +90,14 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
 }
 
 @layer base {
@@ -124,29 +148,48 @@
 
 /* In-app surfaces — override shadcn light tokens on dark ink background */
 .kaido-app {
-  --background: #0b0b0c;
+  --background: #141416;
   --foreground: #f3efe6;
-  --card: #0a0a0b;
+  --card: #1c1c21;
   --card-foreground: #f3efe6;
-  --popover: #0a0a0b;
+  --popover: #1c1c21;
   --popover-foreground: #f3efe6;
   --primary: #d8c69a;
-  --primary-foreground: #0b0b0c;
-  --secondary: rgba(255, 255, 255, 0.06);
+  --primary-foreground: #141416;
+  --secondary: rgba(255, 255, 255, 0.05);
   --secondary-foreground: #f3efe6;
-  --muted: rgba(255, 255, 255, 0.06);
+  --muted: rgba(255, 255, 255, 0.05);
   --muted-foreground: rgba(255, 255, 255, 0.45);
-  --accent: rgba(255, 255, 255, 0.06);
+  --accent: rgba(255, 255, 255, 0.05);
   --accent-foreground: #f3efe6;
   --destructive: oklch(0.65 0.2 25);
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.08);
   --ring: #d8c69a;
+  --sidebar: #18181b;
+  --sidebar-foreground: #f3efe6;
+  --sidebar-primary: #d8c69a;
+  --sidebar-primary-foreground: #141416;
+  --sidebar-accent: rgba(216, 198, 154, 0.1);
+  --sidebar-accent-foreground: #d8c69a;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #d8c69a;
+  --radius: 1rem;
   color: #ece9e2;
 }
 
+.kaido-dashboard {
+  --background: #141416;
+  --sidebar: #141416;
+}
+
+/* shadcn inset sidebar wrapper — keep flush with page, not default light sidebar token */
+.group\/sidebar-wrapper.kaido-dashboard {
+  background-color: #141416;
+}
+
 .kaido-input {
-  @apply w-full border border-white/15 bg-[#0b0b0c] px-3 py-2.5 text-sm text-[#f3efe6] outline-none transition-colors placeholder:text-white/25 focus-visible:border-[#d8c69a]/40 focus-visible:ring-1 focus-visible:ring-[#d8c69a]/30;
+  @apply w-full rounded-xl border border-white/[0.08] bg-[#141416] px-3 py-2.5 text-sm text-[#f3efe6] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-white/25 focus-visible:border-[#d8c69a]/40 focus-visible:ring-1 focus-visible:ring-[#d8c69a]/30;
 }
 
 .kaido-section-title {

@@ -3,7 +3,8 @@
  */
 import { type KaidoConfig } from "@kaido/sdk";
 
-import { AppShell, ErrorState, PageEyebrow, PageTitle } from "@/components/app/kaido-ui";
+import { DashboardPageHeader } from "@/components/app/dashboard-page-header";
+import { ErrorState, Panel } from "@/components/app/kaido-ui";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 
@@ -11,15 +12,18 @@ import { CreateMarketWizard, type DefaultResolvers } from "./_wizard";
 
 export const dynamic = "force-dynamic";
 
-function ConfigNotice({ children }: { children: React.ReactNode }) {
+function ConfigNotice({ children, network }: { children: React.ReactNode; network: string }) {
   return (
-    <AppShell>
-      <div className="space-y-5">
-        <PageEyebrow>Launch</PageEyebrow>
-        <PageTitle title="Set up a market" />
+    <div className="mx-auto w-full max-w-3xl space-y-5">
+      <DashboardPageHeader
+        title="Create market"
+        description="Configure a new range market on Stellar."
+        network={network}
+      />
+      <Panel className="px-6 py-8">
         <ErrorState title="Configuration required" body={children} />
-      </div>
-    </AppShell>
+      </Panel>
+    </div>
   );
 }
 
@@ -28,7 +32,7 @@ export default function CreateMarketPage() {
   const networkId = activeNetworkId();
   if (!net.rpcUrl) {
     return (
-      <ConfigNotice>
+      <ConfigNotice network={networkId}>
         No Stellar RPC URL for network “{networkId}”. Set <code className="font-mono text-[#d8c69a]">RPC_URL</code>.
       </ConfigNotice>
     );
@@ -37,12 +41,12 @@ export default function CreateMarketPage() {
   try {
     deployed = deployedConfig();
   } catch (e) {
-    return <ConfigNotice>{e instanceof Error ? e.message : "Kaido contracts not configured."}</ConfigNotice>;
+    return <ConfigNotice network={networkId}>{e instanceof Error ? e.message : "Kaido contracts not configured."}</ConfigNotice>;
   }
   const usdcSacId = deployed.external.usdcSacId ?? process.env.NEXT_PUBLIC_KAIDO_USDC_SAC;
   if (!usdcSacId) {
     return (
-      <ConfigNotice>
+      <ConfigNotice network={networkId}>
         USDC SAC id not configured for network “{networkId}”. Set{" "}
         <code className="font-mono text-[#d8c69a]">external.usdcSacId</code> in{" "}
         <code className="font-mono text-[#d8c69a]">config/networks.{networkId}.json</code>.
@@ -65,21 +69,13 @@ export default function CreateMarketPage() {
   };
 
   return (
-    <AppShell>
-      <div className="space-y-10">
-        <div className="space-y-5">
-          <PageEyebrow>Launch · {networkId}</PageEyebrow>
-          <PageTitle
-            title={
-              <>
-                Set the <span className="text-white/40">question</span>
-              </>
-            }
-            subtitle="Pick what traders will call, seed where the crowd starts, and choose when trading opens and settles. No probability homework — just the market setup."
-          />
-        </div>
-        <CreateMarketWizard config={config} resolvers={resolvers} />
-      </div>
-    </AppShell>
+    <div className="mx-auto w-full max-w-3xl space-y-5">
+      <DashboardPageHeader
+        title="Create market"
+        description="Set the question, seed the crowd curve, and choose when trading opens and settles."
+        network={networkId}
+      />
+      <CreateMarketWizard config={config} resolvers={resolvers} />
+    </div>
   );
 }

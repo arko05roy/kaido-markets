@@ -4,10 +4,9 @@
 import { type KaidoConfig } from "@kaido/sdk";
 
 import { AdvancedBlock } from "@/components/app/advanced-block";
+import { DashboardPageHeader } from "@/components/app/dashboard-page-header";
 import {
-  AppShell,
   ErrorState,
-  GhostLink,
   Panel,
   StatusPill,
 } from "@/components/app/kaido-ui";
@@ -72,7 +71,7 @@ function fmtTime(unixSeconds: bigint): string {
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-white/10 py-2.5 last:border-0">
+    <div className="flex items-baseline justify-between gap-4 border-b border-white/[0.06] py-2.5 last:border-0">
       <dt className="text-xs text-white/40">{label}</dt>
       <dd className="text-right text-sm text-[#f3efe6]">{value}</dd>
     </div>
@@ -161,31 +160,27 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
   const savedQuestion = getSavedMarketQuestion(activeNetworkId(), id);
 
   return (
-    <AppShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-        <GhostLink href="/markets">← All markets</GhostLink>
-
-        {error || !data ? (
-          <div className="space-y-4">
-            <h1 className="font-serif text-3xl text-[#f3efe6]">Market unavailable</h1>
+    <div className="mx-auto w-full max-w-6xl space-y-5">
+      {error || !data ? (
+        <>
+          <DashboardPageHeader
+            back={{ href: "/markets", label: "← All markets" }}
+            title="Market unavailable"
+            description="This market could not be loaded from chain."
+          />
+          <Panel className="px-6 py-8">
             <ErrorState title="Couldn't read this market" body={error ?? "Unknown error."} />
-          </div>
-        ) : (
-          <MarketTradingLayout
-            header={
-              <header className="space-y-3">
-                <div className="flex flex-wrap items-start gap-3">
-                  <h1 className="min-w-0 flex-1 font-serif text-[clamp(1.5rem,4vw,2.25rem)] leading-tight tracking-tight text-[#f3efe6]">
-                    {displayMarketQuestion(data.params, data.crowdMuWad, savedQuestion)}
-                  </h1>
-                  <StatusPill label={statusLabel(data.state.status)} />
-                </div>
-                <p className="text-sm text-white/50">
-                  {marketSubtitle(data.params, data.crowdMuWad)}
-                </p>
-              </header>
-            }
-            vitals={
+          </Panel>
+        </>
+      ) : (
+        <>
+          <DashboardPageHeader
+            back={{ href: "/markets", label: "← All markets" }}
+            title={displayMarketQuestion(data.params, data.crowdMuWad, savedQuestion)}
+            titleClassName="font-serif text-xl font-normal leading-snug sm:text-2xl"
+            badge={<StatusPill label={statusLabel(data.state.status)} />}
+            description={marketSubtitle(data.params, data.crowdMuWad)}
+            footer={
               <MarketVitals
                 crowdTarget={crowdTargetLabel(data.crowdMuWad)}
                 closesAt={Number(data.params.window.lock)}
@@ -193,12 +188,16 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
                 blendBackedDepth7dp={data.blendBackedDepth7dp}
               />
             }
+          />
+          <MarketTradingLayout
             chartLabel="Payoff zone · crowd target"
             chart={
-              <ConsensusChart
-                view={data.view}
-                resolved={data.resolved.length ? data.resolved : undefined}
-              />
+              <Panel className="p-4 sm:p-5">
+                <ConsensusChart
+                  view={data.view}
+                  resolved={data.resolved.length ? data.resolved : undefined}
+                />
+              </Panel>
             }
             ticket={
               config ? (
@@ -209,10 +208,12 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
                   lpMarket={data.lpMarket}
                 />
               ) : (
-                <ErrorState
-                  title="Trading unavailable"
-                  body="This network isn't configured for trading yet."
-                />
+                <Panel className="px-6 py-8">
+                  <ErrorState
+                    title="Trading unavailable"
+                    body="This network isn't configured for trading yet."
+                  />
+                </Panel>
               )
             }
             below={
@@ -255,8 +256,8 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
               </AdvancedBlock>
             }
           />
-        )}
-      </div>
-    </AppShell>
+        </>
+      )}
+    </div>
   );
 }

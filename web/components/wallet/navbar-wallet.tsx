@@ -19,6 +19,7 @@ export function NavbarWallet() {
   const {
     wallet,
     connecting,
+    restoring,
     error,
     connectors,
     connect,
@@ -64,6 +65,15 @@ export function NavbarWallet() {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  if (restoring) {
+    return (
+      <span className="inline-flex h-9 items-center gap-2 rounded-full bg-[#0b0b0c]/10 px-3.5 font-mono text-[11px] uppercase tracking-[0.2em] text-[#0b0b0c]/50">
+        <Loader2 className="size-3.5 animate-spin" />
+        Wallet
+      </span>
+    );
+  }
 
   if (wallet) {
     return (

@@ -20,7 +20,7 @@ function loadDemoMarket(): string | null {
 
 test("markets index loads", async ({ page }) => {
   await page.goto("/markets");
-  await expect(page.getByRole("heading", { name: "Call the number" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Markets", level: 1 })).toBeVisible();
   const body = await page.locator("main").textContent();
   const hasList =
     body?.includes("Crowd target") ||

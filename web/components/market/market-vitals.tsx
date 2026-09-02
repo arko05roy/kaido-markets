@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { MetricChip } from "@/components/app/dashboard-page-header";
 import { formatCountdown, formatUsdc7dp } from "@/lib/market-display";
 
 export function MarketVitals({
@@ -26,22 +27,15 @@ export function MarketVitals({
   const resolved = statusTag === "Resolved" || statusTag === "ResolvedVec";
 
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-y border-white/10 py-4 font-mono text-[11px] uppercase tracking-[0.16em]">
-      {crowdTarget && (
-        <div>
-          <span className="text-white/35">Crowd </span>
-          <span className="text-[#d8c69a]">{crowdTarget}</span>
-        </div>
-      )}
-      <div>
-        <span className="text-white/35">{resolved ? "Resolved" : "Closes in"} </span>
-        <span className="text-[#f3efe6]">{resolved ? "—" : countdown}</span>
-      </div>
+    <div className="flex flex-wrap gap-2">
+      {crowdTarget && <MetricChip label="Crowd" value={crowdTarget} accent />}
+      <MetricChip label={resolved ? "Status" : "Closes in"} value={resolved ? "Settled" : countdown} />
       {blendBackedDepth7dp != null && blendBackedDepth7dp > 0n && (
-        <div>
-          <span className="text-white/35">Blend depth </span>
-          <span className="text-emerald-300/90">{formatUsdc7dp(blendBackedDepth7dp)} USDC</span>
-        </div>
+        <MetricChip
+          label="Blend depth"
+          value={`${formatUsdc7dp(blendBackedDepth7dp)}`}
+          className="min-w-[5.5rem]"
+        />
       )}
     </div>
   );

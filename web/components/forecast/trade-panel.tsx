@@ -59,7 +59,7 @@ function PayoutPreview({
   worstCase: number;
 }) {
   return (
-    <div className="space-y-2 border border-white/10 bg-[#080809] p-4">
+    <div className="space-y-2 rounded-xl border border-white/[0.06] bg-[#141416]/60 p-4">
       <div className="flex justify-between text-sm">
         <span className="text-white/45">You risk</span>
         <span className="font-mono tabular-nums text-[#f3efe6]">{riskUsdc} USDC</span>
@@ -78,7 +78,7 @@ function PayoutPreview({
         <span className="text-white/45">Worst case</span>
         <span className="font-mono tabular-nums text-red-300/90">−{worstCase.toFixed(2)} USDC</span>
       </div>
-      <p className="border-t border-white/8 pt-2 text-[10px] leading-relaxed text-white/35">
+      <p className="border-t border-white/[0.06] pt-2 text-[10px] leading-relaxed text-white/35">
         Estimated at current crowd. Final quote shown before signing.
       </p>
     </div>
@@ -242,14 +242,14 @@ export function TradePanel({
 
   if (!tradingOpen) {
     return (
-      <div className="border border-dashed border-white/15 px-5 py-4 text-sm text-white/50">
+      <div className="rounded-2xl border border-dashed border-white/[0.1] bg-[#1c1c21]/50 px-5 py-4 text-sm text-white/50">
         {tradingClosedReason(market.statusTag, { open: market.windowOpen, lock: market.windowLock }, nowSec)}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5 border border-white/10 bg-[#0a0a0b] p-5 sm:p-6">
+    <div className="flex flex-col gap-5 rounded-2xl border border-white/[0.06] bg-[#1c1c21] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] sm:p-6">
       <div>
         <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-[#d8c69a]">
           Call the number
@@ -311,7 +311,7 @@ export function TradePanel({
           <Button
             onClick={() => void submit()}
             disabled={submitting || (usdcBal != null && usdcBal <= 0n)}
-            className="min-h-11 w-full rounded-full bg-[#f3efe6] px-6 text-[12px] uppercase tracking-[0.16em] text-[#0b0b0c] hover:bg-white focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
+            className="min-h-11 w-full rounded-xl bg-[#f3efe6] px-6 text-[12px] uppercase tracking-[0.16em] text-[#141416] hover:bg-white focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1c1c21]"
           >
             {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
             {submitting ? "Placing…" : "Place belief"}

@@ -14,7 +14,7 @@ import type { WalletKind } from "./types";
  * button.
  */
 export function ConnectButton() {
-  const { wallet, connecting, error, connectors, connect, disconnect } = useWallet();
+  const { wallet, connecting, restoring, error, connectors, connect, disconnect } = useWallet();
   const [available, setAvailable] = useState<Record<WalletKind, boolean> | null>(null);
 
   useEffect(() => {
@@ -42,6 +42,15 @@ export function ConnectButton() {
           <LogOut className="size-4" />
         </Button>
       </div>
+    );
+  }
+
+  if (restoring) {
+    return (
+      <Button size="sm" variant="outline" disabled>
+        <Loader2 className="size-4 animate-spin" />
+        Wallet
+      </Button>
     );
   }
 

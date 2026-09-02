@@ -103,7 +103,7 @@ export async function RecentActivity({ marketId }: { marketId: string }) {
   // RPC returns oldest-first; reverse for "most recent first".
   const ordered = [...events].reverse();
   return (
-    <ul className="divide-y divide-white/10 border border-white/10 bg-[#0a0a0b]">
+    <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#1c1c21]">
       {ordered.map((e) => {
         const d = detail(e);
         return (

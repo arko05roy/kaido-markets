@@ -7,6 +7,10 @@ import {
 } from "@/components/market/mini-crowd-curve";
 import { ClosesIn } from "@/components/market/closes-in";
 import {
+  DashboardPageHeader,
+  MetricChip,
+} from "@/components/app/dashboard-page-header";
+import {
   Panel,
   PrimaryLink,
   StatusPill,
@@ -60,6 +64,65 @@ const FILTERS: { id: MarketFilter; label: string }[] = [
   { id: "new", label: "New" },
 ];
 
+function MarketsBoardHeader({
+  network,
+  marketsCount,
+  openCount,
+  filter,
+  onFilterChange,
+  filteredCount,
+  showFilters = true,
+}: {
+  network: string;
+  marketsCount: number;
+  openCount: number;
+  filter: MarketFilter;
+  onFilterChange: (f: MarketFilter) => void;
+  filteredCount: number;
+  showFilters?: boolean;
+}) {
+  return (
+    <DashboardPageHeader
+      title="Markets"
+      description="Range beliefs on-chain — pick your zone, press conviction, trade the crowd."
+      network={network}
+      trailing={
+        <>
+          <MetricChip label="Listed" value={marketsCount} />
+          <MetricChip label="Open" value={openCount} accent />
+        </>
+      }
+      footer={
+        showFilters ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-1 overflow-x-auto rounded-xl bg-[#141416]/60 p-1">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => onFilterChange(f.id)}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1c1c21] ${
+                    filter === f.id
+                      ? "bg-[#2a2a30] font-medium text-[#f3efe6] shadow-[0_1px_2px_rgba(0,0,0,0.25)]"
+                      : "text-white/45 hover:text-white/70"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {filteredCount !== marketsCount && (
+              <p className="shrink-0 font-mono text-[11px] text-white/35">
+                Showing {filteredCount} of {marketsCount}
+              </p>
+            )}
+          </div>
+        ) : undefined
+      }
+    />
+  );
+}
+
 function MarketCardItem({
   card,
   metadata,
@@ -77,18 +140,18 @@ function MarketCardItem({
 
   return (
     <Link href={`/markets/${address}`} className="group block">
-      <Panel className="flex h-full flex-col gap-4 p-5 transition-colors hover:border-[#d8c69a]/35 hover:bg-[#0e0e10] sm:p-6">
+      <Panel className="flex h-full flex-col gap-4 p-5 transition-[border-color,background-color] duration-200 hover:border-[#d8c69a]/25 hover:bg-[#222228] sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <StatusPill label={statusText} />
               {info.capped && (
-                <span className="border border-[#d8c69a]/25 bg-[#d8c69a]/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#d8c69a]">
+                <span className="rounded-md border border-[#d8c69a]/25 bg-[#d8c69a]/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#d8c69a]">
                   Capped
                 </span>
               )}
               {blendBackedDepth7dp != null && blendBackedDepth7dp > 0n && (
-                <span className="border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
+                <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
                   Blend · {formatUsdc7dp(blendBackedDepth7dp)} USDC
                 </span>
               )}
@@ -113,7 +176,7 @@ function MarketCardItem({
           )}
         </div>
 
-        <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-white/8 pt-4">
+        <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-white/[0.06] pt-4">
           <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
             <span>
               Closes in <ClosesIn at={closesAt} />
@@ -131,45 +194,44 @@ function MarketCardItem({
 export function MarketsBoard({
   markets,
   openCount,
+  network,
   metadataByMarket = {},
 }: {
   markets: MarketCard[];
   openCount: number;
+  network: string;
   metadataByMarket?: Record<string, SavedMarketMetadata>;
 }) {
   const [filter, setFilter] = useState<MarketFilter>("all");
   const filtered = useMemo(() => sortMarkets(markets, filter), [markets, filter]);
 
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => setFilter(f.id)}
-            className={`min-h-10 rounded-full border px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0c] ${
-              filter === f.id
-                ? "border-[#d8c69a]/50 bg-[#d8c69a]/15 text-[#d8c69a]"
-                : "border-white/10 bg-transparent text-white/45 hover:border-white/20 hover:text-white/70"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+  if (markets.length === 0) {
+    return (
+      <div className="space-y-5">
+        <MarketsBoardHeader
+          network={network}
+          marketsCount={0}
+          openCount={0}
+          filter={filter}
+          onFilterChange={setFilter}
+          filteredCount={0}
+          showFilters={false}
+        />
+        <MarketsEmpty />
       </div>
+    );
+  }
 
-      <div className="flex flex-wrap gap-6 border-y border-white/10 py-5 font-mono text-[10px] uppercase tracking-[0.22em]">
-        <div>
-          <span className="text-white/35">Live </span>
-          <span className="text-[#f3efe6]">{markets.length}</span>
-        </div>
-        <div>
-          <span className="text-white/35">Open now </span>
-          <span className="text-[#d8c69a]">{openCount}</span>
-        </div>
-        <div className="text-white/35">Call the number · fade the crowd</div>
-      </div>
+  return (
+    <div className="space-y-5">
+      <MarketsBoardHeader
+        network={network}
+        marketsCount={markets.length}
+        openCount={openCount}
+        filter={filter}
+        onFilterChange={setFilter}
+        filteredCount={filtered.length}
+      />
 
       {filtered.length === 0 ? (
         <Panel className="border-dashed px-8 py-12 text-center">

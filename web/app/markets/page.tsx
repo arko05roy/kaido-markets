@@ -1,13 +1,5 @@
 // Markets index — live board of range-trading opportunities.
-import {
-  AppShell,
-  EmptyState,
-  ErrorState,
-  GhostLink,
-  PageEyebrow,
-  PageTitle,
-  PrimaryLink,
-} from "@/components/app/kaido-ui";
+import { ErrorState, GhostLink } from "@/components/app/kaido-ui";
 import { MarketsBoard } from "@/components/market/markets-board";
 import { activeNetworkId } from "@/lib/stellar/networks";
 import { loadMarketMetadataStore } from "@/lib/market-metadata-store";
@@ -31,36 +23,22 @@ export default async function MarketsPage() {
   const metadataByMarket = loadMarketMetadataStore()[network] ?? {};
 
   return (
-    <AppShell>
-      <div className="space-y-12">
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-5">
-            <PageEyebrow>Live markets · {network}</PageEyebrow>
-            <PageTitle
-              title="Call the number"
-              subtitle="Pick your payoff zone, press your conviction, and trade your edge against the crowd — not just yes or no."
-            />
-          </div>
-          <PrimaryLink href="/create">Create a market</PrimaryLink>
-        </div>
+    <div className="mx-auto w-full max-w-[1400px] space-y-6">
+      {error ? (
+        <ErrorState title="Couldn't load markets" body={error} />
+      ) : (
+        <MarketsBoard
+          markets={markets ?? []}
+          openCount={openCount}
+          network={network}
+          metadataByMarket={metadataByMarket}
+        />
+      )}
 
-        {error ? (
-          <ErrorState title="Couldn't load markets" body={error} />
-        ) : markets && markets.length === 0 ? (
-          <EmptyState
-            title="No markets yet"
-            body="Be the first to open a range market. Pick an outcome, set the oracle, seed the crowd curve."
-            action={<PrimaryLink href="/create">Create a market</PrimaryLink>}
-          />
-        ) : markets ? (
-          <MarketsBoard markets={markets} openCount={openCount} metadataByMarket={metadataByMarket} />
-        ) : null}
-
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-8">
-          <GhostLink href="/leaderboard">Calibration leaderboard</GhostLink>
-          <GhostLink href="/whitepaper">How it works</GhostLink>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.06] pt-8">
+        <GhostLink href="/leaderboard">Calibration leaderboard</GhostLink>
+        <GhostLink href="/whitepaper">How it works</GhostLink>
       </div>
-    </AppShell>
+    </div>
   );
 }

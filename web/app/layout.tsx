@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-import { Navbar1 } from "@/components/ui/navbar-1";
+import { ConditionalNavbar } from "@/components/app/conditional-navbar";
 import { WalletProvider } from "@/components/wallet/provider";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
@@ -55,16 +55,14 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#0b0b0c] text-[#ece9e2]">
+      <body className="min-h-full flex flex-col bg-[#141416] text-[#ece9e2]">
         <WalletProvider
           network={networkId}
           networkPassphrase={net.networkPassphrase}
           rpcUrl={net.rpcUrl}
           usdcSacId={usdcSacId}
         >
-          <div className="absolute inset-x-0 top-0 z-30">
-            <Navbar1 />
-          </div>
+          <ConditionalNavbar />
           {children}
         </WalletProvider>
       </body>
