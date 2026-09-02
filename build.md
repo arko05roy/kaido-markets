@@ -2,11 +2,24 @@
 
 > Companion to `kaido-whitepaper.md`. This is the working delivery plan: monorepo layout, tech stack, sprint-by-sprint backlog, and the test strategy that gates each sprint.
 >
-> **Target:** ship the ChartGuessr-on-BTC wedge on Stellar testnet, then mainnet, with the permissionless distribution-market primitive underneath — mapped onto SCF Build Award tranches (10% / 20% / 30% / 40%).
+> **Target:** ship a **permissionless distribution-market primitive** on Stellar testnet, then mainnet — trade → resolve → claim on `/markets` + permissionless `/create` — mapped onto SCF Build Award tranches (10% / 20% / 30% / 40%).
 >
 > **Methodology:** 2‑week sprints, trunk-based-ish with short-lived feature branches, Definition of Done enforced by CI. Each sprint below lists *Goal → User stories → Engineering tasks → Tests/acceptance → Deliverable*.
 
-> **Pivot (2026-06):** ChartGuessr game layer removed. Product focus is a **simple distribution market** on `/markets` + `/create` (trade → resolve → claim). Trajectory markets stay on-chain; simplified trajectory UX is deferred. Uniswap-style LP is a future epic — minimal on-chain LP remains; HouseVault seeds liquidity for now.
+> **Pivot (2026-06):** ChartGuessr game layer **removed** from the product and repo. Product focus is a **simple distribution market** on `/markets` + `/create` (trade → resolve → claim). Trajectory markets stay on-chain; trajectory UX in the web app is deferred. Uniswap-style LP is a future epic — minimal on-chain LP remains; HouseVault seeds liquidity for now. Wallet: **Freighter only** (passkey deferred post-M1).
+
+### Current status (2026-06-14)
+
+| | |
+|---|---|
+| **Sprints done** | S0–S4 ✅ (~50% of core 10-sprint plan) |
+| **Milestone** | **M1 complete** — tag `v0.1.0-m1` |
+| **Next sprint** | **S5** — capped Gaussians, full LP economics, T3 resolver |
+| **Testnet ops** | `make deploy:testnet && make seed:testnet` restores fixtures; reset **2026-06-17** |
+
+**Working today (testnet):** `/markets` list + detail (trade, resolve, claim), `/create` wizard, `@kaido/sdk`, T0 Reflector resolver, HouseVault seeding, result card, on-chain position discovery, USDC balance reads.
+
+**Still stubs:** `resolver-attested` (T1), `resolver-optimistic` (T2), `resolver-designated` (T3), full LP fee engine, capped Gaussians, leaderboard (`/leaderboard` placeholder), `cargo-fuzz`, passkey wallet.
 
 ---
 
@@ -79,9 +92,9 @@ The plan is **Testnet-first, Mainnet at Sprint 8.** Concretely:
 | Phase | Network | Used for |
 |---|---|---|
 | Sprint 0 | **Local** — `stellar` CLI quickstart / local Soroban RPC | fast dev loop, deterministic integration tests, `make localnet` |
-| Sprints 1–7 | **Stellar Testnet** | all contract deploys, ChartGuessr, the Forecast Canvas, SDK, E2E, the external security review's reference deployment, soak tests |
+| Sprints 1–7 | **Stellar Testnet** | all contract deploys, distribution markets, SDK, E2E, external security review reference deployment, soak tests |
 | (optional) | **Futurenet** | only if we need a not-yet-on-Testnet protocol feature; otherwise skip |
-| Sprint 8 → | **Mainnet (Pubnet)** | the 1‑USDC launch, the first non-crypto market, the external-creator market — gated on the audit + the legal opinion |
+| Sprint 8 → | **Mainnet (Pubnet)** | first live distribution markets, first non-crypto market, external-creator market — gated on audit + legal opinion |
 
 Network config (source of truth: https://developers.stellar.org/docs/networks — keep `web/lib/stellar/networks.ts` and `contracts/.../network.toml` in sync with it):
 
@@ -94,7 +107,7 @@ Network config (source of truth: https://developers.stellar.org/docs/networks �
 
 **Per-network, never hardcode in contract logic** — resolve at deploy time and store in the contract's config: the **USDC SAC contract id**, the **Reflector feed contract id** (testnet ≠ mainnet; see Reflector `/oracles` tab), the **admin multisig**, and the **Launchtube** endpoint/JWT for passkey tx submission. All of this lives in `.env` + a checked-in `config/networks.json` consumed by both `web` and the deploy scripts.
 
-**⚠️ Testnet resets ~2–4×/year at 17:00 UTC, announced ≥2 weeks ahead — scheduled 2026 dates: June 17 and December 16.** A reset wipes all Testnet state (contracts, ledger, accounts). Build for it: (1) every deploy is scripted and idempotent (`make deploy:testnet` re-deploys the whole suite and rewrites `config/networks.json`), (2) no off-chain system assumes a Testnet contract id is permanent, (3) demo/test data is re-seedable from a fixtures script, (4) put the next reset date on the sprint calendar so a demo or SCF review never lands the day after a wipe. (Mainnet does not reset — this risk is Testnet-only.)
+**⚠️ Testnet resets ~2–4×/year at 17:00 UTC** — scheduled 2026 dates: **June 17** and **December 16**. A reset wipes all Testnet state. Build for it: (1) `make deploy:testnet` is scripted and idempotent and rewrites `config/networks.<network>.json`, (2) `make seed:testnet` restores HouseVault liquidity + `fixtures.lifecycleMarket`, (3) nothing off-chain treats a testnet contract id as permanent. Re-deploy before any demo or SCF review after a reset.
 
 ---
 
@@ -133,19 +146,18 @@ kaido/
 │  ├─ package.json
 │  ├─ next.config.ts
 │  ├─ app/
-│  │  ├─ (play)/chartguessr/    # the launch game
-│  │  ├─ markets/[id]/          # generic market page (distribution mode)
+│  │  ├─ markets/[id]/          # market page — trade, resolve, claim
 │  │  ├─ create/                # permissionless market creation wizard
-│  │  ├─ leaderboard/
-│  │  ├─ api/                   # route handlers: indexer reads, attested-poster webhook stubs
+│  │  ├─ leaderboard/           # stub — Sprint 6
+│  │  ├─ api/                   # route handlers (health; attested-poster stubs later)
 │  ├─ components/
 │  │  ├─ forecast/              # slider-driven belief input (μ,σ; per-checkpoint for trajectory) + recharts preview — replaced the freehand canvas
 │  │  ├─ market/                # market state, position cards, result card (screenshot-optimized)
-│  │  └─ wallet/                # passkey + Freighter connect
+│  │  └─ wallet/                # Freighter connect (passkey deferred)
 │  ├─ lib/
-│  │  ├─ stellar/               # rpc client, tx builders (wraps @stellar/stellar-sdk)
-│  │  ├─ curve/                 # path/hump → (μ,σ) params fit (MUST match kaido-math semantics exactly)
-│  │  └─ indexer/               # read market state from chain + cached events
+│  │  ├─ stellar/               # rpc client, deployed ids, USDC balance, HouseVault reads
+│  │  ├─ curve/                 # byte-exact port of kaido-math (conformance vectors)
+│  │  └─ indexer/               # RPC getEvents + wallet position discovery
 │  ├─ e2e/                      # Playwright
 │  └─ test/                     # Vitest unit/component tests
 │
@@ -181,18 +193,18 @@ Tooling: **pnpm** + **Turborepo** for JS; **cargo-make** (`Makefile.toml`) for R
 | # | Epic | Whitepaper ref | Spans sprints |
 |---|---|---|---|
 | E1 | Fixed-point math core (`kaido-math`) | Part II, §10–11 | S1–S2 |
-| E2 | `DistributionMarket` AMM contract (scalar, Gaussian + σ-floor, settlement) | §7–13 | S1–S4 |
-| E3 | `MarketFactory` + `Registry` (permissionless `create_market`) | §14–15 | S3–S5 |
-| E4 | `HouseVault` underwriter | §18 | S2–S4, S7 |
-| E5 | Oracle framework + 4 resolver tiers | §17 | S2 (T0) → S5–S6 (T1/T2/T3) |
-| E6 | Trajectory markets (checkpoint sampling, shared pool) | §16 | S2–S4 |
+| E2 | `DistributionMarket` AMM contract (scalar, Gaussian + σ-floor, settlement) | §7–13 | S1–S4 ✅ |
+| E3 | `MarketFactory` + `Registry` (permissionless `create_market`) | §14–15 | S3 ✅ partial; S5 (capped flag) |
+| E4 | `HouseVault` underwriter | §18 | S2–S4 ✅; S7 (mainnet caps) |
+| E5 | Oracle framework + 4 resolver tiers | §17 | S2 ✅ (T0) → S5–S6 (T1/T2/T3) |
+| E6 | Trajectory markets (checkpoint sampling, shared pool) | §16 | S2–S3 ✅ on-chain; trajectory web UX deferred |
 | E7 | Capped-Gaussian opt-in | §10 (2) | S5 |
 | E8 | LP flows (add/remove, fee split) | §12, §21 | S5–S6 |
-| E9 | TS SDK + generated bindings | §14 | S3 → S6+ |
-| E10 | Forecast Canvas — trajectory mode | §19 | S2–S4 |
-| E11 | Forecast Canvas — distribution mode | §19 | S5–S6 |
-| E12 | ChartGuessr game loop (45s build / 15s draw / reveal / auto-payout, play-vs-house) | §20 | S3–S4, S7 |
-| E13 | Passkey onboarding + wallet, result cards, leaderboards, streaks | §19 | S4–S6 |
+| E9 | TS SDK + generated bindings | §14 | S3–S4 ✅ alpha; S6 (1.0) |
+| E10 | Forecast Canvas — slider belief input | §19 | S3–S4 ✅ (scalar); trajectory UI deferred |
+| E11 | Distribution market UX polish | §19 | S4 ✅ partial; S5 (LP panel, capped) |
+| E12 | ~~ChartGuessr game loop~~ | §20 | **cancelled** (2026-06 pivot) |
+| E13 | Wallet + result cards + leaderboards | §19 | S4 ✅ (Freighter + result card); leaderboards S6; passkey deferred |
 | E14 | Security: fuzzing, property tests, audit prep, bug bounty, MEV mitigations | Part VI | S2, S6, S8 |
 | E15 | Regulatory posture: geofencing, disclosures, legal opinion gate, ToS | Part VII | S6, S8 |
 | E16 | DevEx: monorepo, CI/CD, testnet/mainnet deploy pipeline, docs site | — | S1, ongoing |
@@ -384,11 +396,13 @@ Engineering tasks:
 
 ---
 
-### Sprint 3 — Factory, Registry, trajectory markets, SDK alpha, bindings, ChartGuessr loop v0
+### Sprint 3 — Factory, Registry, trajectory markets, SDK alpha, bindings, `/markets` + `/create`
 
-**Goal:** anyone can `create_market`; trajectory markets work; the game loop runs against the chain on testnet (ugly but real).
+**Goal:** anyone can `create_market`; trajectory markets work on-chain; the web app lists markets and supports trading on testnet.
 
-> **Status: ✅ COMPLETE** (commits `d0d7ddc`, `c0f6b80`, `47246f3`, `3f835d7`, `13034a4`, `9516ed4`, `735c3ef`, + ConnectButton-in-layout). Factory/Registry, trajectory markets (contracts + `resolver-reflector` trajectory mode), TS bindings, `@kaido/sdk` write path, `web/lib/curve` + conformance, wallet (Freighter + passkey-kit/Launchtube), the ChartGuessr loop, the `/create` wizard, the `deploy.sh` ChartGuessr trajectory demo, and a global header with the wallet connector are all in. Two items deliberately carried into Sprint 4 (see below).
+> **Status: ✅ COMPLETE.** Factory/Registry, trajectory markets (contracts + `resolver-reflector` trajectory mode), TS bindings, `@kaido/sdk` write path, `web/lib/curve` + conformance, Freighter wallet, slider-driven belief input (`web/components/forecast/`), `/markets` + `/create`, deploy pipeline, and SDK integration test (read path) are all in.
+>
+> **Pivot (2026-06):** ChartGuessr routes and game loop **removed** from the product. The slider belief UI ships on `/markets/[id]` and `/create` instead. Passkey wallet code exists but is **gated off** (Turbopack can't bundle `passkey-kit`); deferred post-M1.
 > **Done:**
 > - **`Registry`** — real contract: `__constructor(admin, factory)`, factory-gated `register(MarketInfo)`, `set_factory` (admin), views `count`/`all`/`page`/`get`/`factory`/`admin`. `kaido-common` gained `MarketInfo` + the `MarketRegistered` event.
 > - **`MarketFactory`** — real contract: `__constructor(admin, dm_wasm_hash, registry, usdc)`; `create_market(...)` validates the tuple → `deploy_v2` a `DistributionMarket` from the pinned WASM hash → `init(...)` → `register`; `create_trajectory_market(...)`; `set_market_wasm` (admin). Uses **local `#[contractclient]` traits** for the dm/registry cross-calls rather than path-depping those crates (a path dep leaks their `#[contractimpl]` WASM exports → `__constructor` symbol collision — the CVE-2026-26267 footgun); the trait sigs must stay in sync with the real contracts.
@@ -401,20 +415,19 @@ Engineering tasks:
 > **Done (5/n, this session):**
 > - **`@kaido/sdk` write path** — `Kaido` client (one per network; `KaidoConfig` resolved from `config/networks.<network>.json` + env, nothing hardcoded): `createMarket`/`createTrajectoryMarket`, `trade`/`tradeTrajectory`, `addLiquidity`/`removeLiquidity`, `resolve`, `claim`/`claimTrajectory`, `getMarket`/`listMarkets`/`getMarketInfo`, `subscribeEvents` (RPC `getEvents` polling, ledger-cursor resumable). Pluggable `KaidoSigner` (Freighter/passkey-kit shape) + `keypairSigner(secret)` for scripts; build→simulate→sign→send→poll via the generated bindings. SDK tsconfig relaxes `noImplicitOverride` (the bindings generator omits `override`) — mirrors the contract-bindings package's own loose config.
 > - **`web/lib/curve`** — byte-exact port of `kaido-math` (`mulDiv`/`wmul`/`wdiv`/`sqrtWad`/`expWad`/`gaussianL2Norm`/`lambda`/`gaussianPdfScaled`/`sigmaFloor`, `toWad`/`fromWad`) + the fit (`fitGaussianFromHump`, `pathToCheckpointValues`, `fitTrajectory`, `renderGaussian` — renders the *exact* fitted curve back, ADR-8). `web/test/curve.conformance.test.ts` runs `docs/test-vectors/{exp,gaussian}.json` against the TS side (matches Rust within `tol_abs`).
-> - **Wallet** (`web/components/wallet/`): `WalletConnector` abstraction → `KaidoSigner`; **Freighter connector** (`@stellar/freighter-api`, fully working); **passkey connector** (`passkey-kit` — creates/connects the smart wallet, signs auth entries; Launchtube submission proxied through `web/app/api/launchtube/route.ts` so the JWT stays server-side); `WalletProvider`/`useWallet()` context (persists last connector kind); `ConnectButton`. The "play in ~10s" funding/sponsorship polish is still Sprint 4.
-> - **ChartGuessr loop** (`web/app/(play)/chartguessr/`): server page resolves config + reads the configured market (`NEXT_PUBLIC_CHARTGUESSR_MARKET`); client `_game.tsx` runs the watch (live BTC via `web/app/api/btc/route.ts` — real Reflector SEP-40 feed read, no mock) → draw (`ForecastCanvas` trajectory mode + `fitTrajectory`) → submit (`tradeTrajectory`, play-vs-house, connected wallet) → resolve + `claimTrajectory` → result phases. No-mock honesty: no configured market / no feed ⇒ the UI says so.
-> - **`web/components/canvas/forecast-canvas.tsx`** — pointer-drawing SVG surface with screen↔outcome mapping, context overlays (live price, consensus), checkpoint guides; returns `DrawnPoint[]` for `web/lib/curve`. `pnpm -r typecheck`/`lint`/`test` all green.
-> - **`/create` wizard** (`web/app/create/`): server page resolves config + the deployed default resolver address per tier; client `_wizard.tsx` — scalar vs trajectory, `k`/`b`/fee, resolver tier (deployed default pre-filled, any address accepted), open/lock/resolve window, initial belief (scalar μ/σ or per-checkpoint rows); previews `σ_min(k,b)`; validates window ordering + ascending checkpoints client-side; submits via `kaido.createMarket`/`createTrajectoryMarket` with the connected wallet and links to the new `/markets/[id]`. Human-unit inputs → WAD via `web/lib/curve` `toWad`.
+> - **Wallet** (`web/components/wallet/`): `WalletConnector` abstraction → `KaidoSigner`; **Freighter connector** (fully working); passkey connector scaffolded but gated off in `provider.tsx` (`isAvailable() === false`).
+> - **`/create` wizard** (`web/app/create/`): scalar vs trajectory, resolver tier, window, belief preview; submits via `kaido.createMarket`/`createTrajectoryMarket`.
+> - **Slider belief input** (ADR-8, revised): `web/components/forecast/` — `scalar-belief-input`, `consensus-chart`, `trade-panel`; wired into `/markets/[id]` and `/create`. Freehand canvas scrapped.
 > - **`resolver-reflector` trajectory mode** — the `__constructor` gained a `checkpoints: Vec<u64>` arg (empty ⇒ scalar mode as before; non-empty ⇒ trajectory mode: validates strictly-ascending + `resolve_time ≥ last`, then `status()` returns `ResolverStatus::ResolvedVec` with the SEP-40 `price(asset, cp)` at each checkpoint converted to WAD, falling back to `lastprice` for a momentarily-gappy feed; `resolve()` returns the last checkpoint value and caches the vector). Tests: `trajectory_resolves_per_checkpoint`, `non_ascending_checkpoints_rejected`; existing scalar tests updated to pass an empty checkpoint vec. ABI changed → TS bindings regenerated (`cargo make bindings`). Touched: `tests/tests/lifecycle.rs` (constructor call).
-> - **`deploy.sh` trajectory demo** — after the scalar `create_market` demo it deploys a *second* `resolver-reflector` in trajectory mode (3 BTC checkpoints) and `factory.create_trajectory_market` against it; records the new market + resolver ids in `config/networks.<network>.json` under `"demo"` and prints an `export NEXT_PUBLIC_CHARTGUESSR_MARKET=…` line. The scalar resolver ctor now passes `--checkpoints '[]'`. Web side: `web/lib/stellar/contracts.ts` parses `demo`; the ChartGuessr page reads `NEXT_PUBLIC_CHARTGUESSR_MARKET ?? deployedConfig().demo.chartGuessrMarket`.
-> - **`ConnectButton` in the global layout** — `web/app/layout.tsx` now wraps the whole app in `WalletProvider` and renders `web/components/site-header.tsx` (nav + active-route highlight + the wallet connect/disconnect control); the per-page `WalletProvider` wrappers on `/chartguessr` and `/create` were removed (the layout one covers them).
-> - **Pivot: freehand canvas → slider-driven belief input** (ADR-8, revised). The freehand `ForecastCanvas` (and `web/lib/curve`'s `fitTrajectory`/`fitGaussianFromHump`/`pathToCheckpointValues`) was scrapped — it produced inconsistent, nonsensical `(μ, σ)` on real data. Replaced by `web/components/forecast/`: `belief-chart.tsx` (recharts render — scalar bell curves / trajectory path + ±σ band, drawn from `renderGaussian`), `scalar-belief-input.tsx` & `trajectory-belief-input.tsx` (center+width sliders / per-checkpoint sliders; σ always clamped to `effectiveSigmaFloor`), `range-slider.tsx` (on `components/ui/slider.tsx`, Radix-backed → accessible), `consensus-chart.tsx` + `trade-panel.tsx`. Deps added: `recharts`, `@radix-ui/react-slider`. Wired into ChartGuessr (`_game.tsx` — set forecast with sliders, no draw phase), `/markets/[id]` (consensus chart + trade panel — the Sprint-5 "distribution mode"), and `/create` (live belief preview). `web/lib/curve` keeps the math/render exports and gained `clampSigma`/`gridOverRange`; `web/test/forecast-input.test.ts` covers the σ-floor clamp + render edge cases. `pnpm -r typecheck`/`lint`/`test` + `next build` green.
-> - **SDK integration test** (`packages/sdk/test/integration.test.ts`) — drives `@kaido/sdk` against a live RPC using the ids in `config/networks.<network>.json`: lists + reads every registered market (params/state/beliefs decode; trajectory belief-count == checkpoint-count), polls `subscribeEvents` without error, and (with a funded secret) `createMarket` → confirms it's in the registry → reads params back. Gated behind `KAIDO_INTEGRATION=1` (`pnpm --filter @kaido/sdk test:integration`; add `KAIDO_INTEGRATION_SECRET=S…` for the write path) so it stays out of the offline CI run. `getMarket` was hardened to always return `beliefs` as an array (`[state.belief]` for scalar markets).
-> **Carried into Sprint 4 (not blockers for the M1 deliverable):** the passkey login path is **gated off** for now — `web/components/wallet/passkey.ts` is complete and typechecks, but `passkey-kit` publishes a raw-`.ts` entry whose `passkey-kit-sdk` / `@stellar/stellar-sdk/minimal` chain Turbopack can't resolve in a `next build`, so `provider.tsx` ships a `passkeyFacade` that's `isAvailable() === false` and directs users to Freighter (`next.config.ts` has `transpilePackages` for passkey-kit ready; flip `NEXT_PUBLIC_ENABLE_PASSKEY=1` + re-add the dynamic `import("./passkey")` once it builds). Tied to this: the SDK's `signAndSend` always submits via RPC `sendTransaction`; passkey-signed smart-wallet txs need to route through `/api/launchtube` instead. Both land in Sprint 4's "~10s passkey onboarding" (E13). Playwright ChartGuessr happy path needs a seeded tight-window test market + a mocked clock. **Operational note:** `config/networks.testnet.json` on disk still holds the Sprint-1 (scaffold) ids — the live `/markets`, `/create` and ChartGuessr pages only return data after a `make deploy:testnet` re-deploy with `USDC_SAC_ID` / `REFLECTOR_FEED_ID` set in `.env` so `external.*` and `demo.*` get populated.
+> - **`deploy.sh` trajectory demo** — deploys a second `resolver-reflector` in trajectory mode and `factory.create_trajectory_market`; records ids in `config/networks.<network>.json` under `fixtures`.
+> - **`ConnectButton` in the global layout** — `WalletProvider` + `site-header` in `layout.tsx`.
+> - **Pivot: freehand canvas → slider-driven belief input** (ADR-8, revised). Replaced by `web/components/forecast/`; wired into `/markets/[id]` and `/create`.
+> - **SDK integration test** (`packages/sdk/test/integration.test.ts`) — read path against live RPC; write path gated `KAIDO_INTEGRATION=1`.
+> **Carried into Sprint 4:** passkey onboarding (deferred post-M1); `seed.sh` + fixtures; settlement UI polish; Playwright markets E2E.
 
 User stories:
-- *As a builder, I call `MarketFactory.create_market(OutcomeSpace, Parameterization, k, b, fee, Resolver, Window)` and get a live `DistributionMarket`.*
-- *As a player, I open ChartGuessr, watch 45s of BTC, draw a path, submit, and after 90s see the reveal and get auto-paid.*
+- *As a builder, I call `MarketFactory.create_market(...)` and get a live `DistributionMarket`.*
+- *As a trader, I open `/markets/[id]`, set a belief with sliders, trade with Freighter, and see consensus.*
 - *As a TS dev, I `import { Kaido } from '@kaido/sdk'` and create/trade/resolve markets.*
 
 Engineering tasks:
@@ -423,8 +436,8 @@ Engineering tasks:
 - **Trajectory markets:** generalize `distribution-market` to N checkpoints sharing one collateral pool (vector of per-checkpoint Gaussians; collateral = aggregate worst case). `OutcomeSpace::Trajectory { checkpoints: Vec<u64> }`.
 - Generate TS bindings for all contracts → `packages/contract-bindings` (committed; CI regenerates on contract diff and fails if stale).
 - `packages/sdk` alpha: `createMarket`, `trade`, `addLiquidity`, `resolve`, `getMarket`, `subscribeEvents`; wraps `@stellar/stellar-sdk` (build → simulate → sign → send → poll); pluggable signer (passkey-kit or Freighter).
-- `web/lib/curve`: deterministic path → checkpoint-values, and (preview) checkpoint-values → fitted Gaussian-per-checkpoint params; render the *fitted* curve back. Shares `docs/test-vectors/` with `kaido-math`.
-- `web/app/(play)/chartguessr`: live BTC chart (data via Reflector reads / a price stream), 45s build → 15s draw → submit (via SDK, play-vs-house) → 90s lock → reveal animation → result. No polish.
+- `web/lib/curve`: deterministic Gaussian math + `renderGaussian`; shares `docs/test-vectors/` with `kaido-math`.
+- `web/app/markets/[id]`: consensus chart + trade panel (slider belief input).
 - `web/lib/stellar`: RPC client, network config, USDC SAC handle, tx status UI.
 
 **Tests/acceptance:**
@@ -432,9 +445,8 @@ Engineering tasks:
 - Trajectory lifecycle test: 6-checkpoint BTC market; payouts scored by aggregate distance match hand calc; solvency holds.
 - Bindings staleness check in CI.
 - Curve conformance: TS `web/lib/curve` and Rust `kaido-math` agree on every vector (byte-exact on params after rounding rules).
-- Playwright: ChartGuessr happy path on testnet (mocked clock + a seeded test market) → user ends with a result card and a balance delta.
 
-**Deliverable:** "create any market from the SDK" + "playable ChartGuessr on testnet" demos.
+**Deliverable:** "create any market from the SDK" + tradeable `/markets` on testnet.
 
 ---
 
@@ -444,7 +456,9 @@ Engineering tasks:
 
 > **Pivot note:** ChartGuessr removed (2026-06). M1 deliverable reframed as **distribution market on testnet**, not a game wedge.
 
-> **Status: done (passkey deferred post-M1).** `seed.sh` + deploy `fixtures` block; HouseVault `deposit`/`set_cap`/`seed_market` in seed pipeline; on-chain position discovery from `Trade` events (`web/lib/indexer/wallet-positions.ts`); result card (`web/components/market/result-card.tsx`); USDC balance read + Circle faucet guidance; House exposure on market page; SDK lifecycle integration test (`KAIDO_INTEGRATION_LIFECYCLE=1`); Playwright markets read-path spec; nightly `integration-testnet.yml` workflow. Freighter-only wallet (no passkey). Tag `v0.1.0-m1`.
+> **Status: done (passkey deferred post-M1).** `seed.sh` + deploy `fixtures` block; HouseVault `deposit`/`set_cap`/`seed_market` in seed pipeline; on-chain position discovery from `Trade` events (`web/lib/indexer/wallet-positions.ts`); result card (`web/components/market/result-card.tsx`); USDC balance read + Circle faucet guidance; House exposure on market page; SDK lifecycle integration test (`KAIDO_INTEGRATION_LIFECYCLE=1`); Playwright markets read-path spec (`web/e2e/markets-read.spec.ts`); nightly `integration-testnet.yml` workflow. Freighter-only wallet. Tag `v0.1.0-m1`.
+>
+> **Post-ship fix (2026-06-14):** scalar market pages crashed on `checkpoints.map` — `get_checkpoints` RPC doesn't return a JS array for scalar markets. Fixed: derive checkpoint count from `params.outcome_space` (`checkpointsFromOutcomeSpace` in `web/lib/stellar/kaido.ts`); hardened `getCheckpoints`/`getBeliefs` to always return arrays; added `web/test/checkpoints.test.ts`.
 
 User stories:
 - *As a trader on `/markets`, I trade → wait for resolve → claim and see a screenshot-ready result card (curve, truth, P&L).*
@@ -458,15 +472,24 @@ Engineering tasks (completed):
 - SDK integration: trade → resolve (Reflector T0) → claim on testnet (`packages/sdk/test/integration.test.ts`).
 - Playwright: `web/e2e/markets-read.spec.ts` (live RPC read path).
 
-**Deferred (post-M1):** passkey onboarding; commit-reveal; ChartGuessr polish; `cargo-fuzz` nightly smoke.
+**Deferred (post-M1):** passkey onboarding; commit-reveal; `cargo-fuzz` nightly smoke.
+
+**Verification checklist (testnet):**
+1. `make deploy:testnet && make seed:testnet` (set `USDC_SAC_ID` + `REFLECTOR_FEED_ID` in `.env`)
+2. Open `/markets` — seeded markets visible
+3. Connect Freighter, add USDC trustline + testnet USDC (Circle faucet)
+4. Trade on a scalar market → wait for resolve window → claim → result card
+5. `KAIDO_INTEGRATION_LIFECYCLE=1 pnpm --filter @kaido/sdk test:integration` (optional, gated)
 
 **Deliverable:** **Milestone 1** — distribution market on testnet, full trade→resolve→claim loop, HouseVault v0 seeded, property tests green. Tag `v0.1.0-m1`.
 
 ---
 
-### Sprint 5 — Multi-market UX, distribution mode, capped Gaussians, full LP flows, fee splitting, T3 resolver
+### Sprint 5 — Capped Gaussians, full LP flows, fee splitting, T3 resolver — **NEXT**
 
-**Goal:** Kaido reads as a *platform*, not one game: scalar markets with the draw-a-hump UI, capped Gaussians, real LP economics, designated resolvers for fun markets.
+**Goal:** Kaido reads as a *platform*: capped Gaussians, real LP economics, designated resolvers for fun markets.
+
+> **Already shipped (from S3–S4, don't re-build):** slider belief input on `/markets/[id]`, `/create` wizard, scalar trade→resolve→claim, HouseVault seeding, result card. Sprint 5 adds **on-chain** capped Gaussians, **full** LP economics, T3 resolver, and LP panel UI.
 
 User stories:
 - *As a forecaster, on a scalar market I drag to set the center and pinch to set the width of my hump; I see the consensus hump faintly behind mine.*
@@ -479,8 +502,8 @@ Engineering tasks:
 - Full `add_liquidity`/`remove_liquidity`: `y·(b−f)` in, `y·L` shares out, `y·f` retained as own position; full collateralization invariant under LP entry/exit; fee accrual per share.
 - Fee engine: per-trade bps split → LP pool / treasury / creator; `claim_fees`.
 - `resolver-designated` (T3): single named party `report(value)` after `resolve_time`; tier badge surfaced everywhere.
-- `web/app/markets/[id]`: generic market page — distribution mode canvas (draw hump → `(μ,σ)`), live consensus overlay, position list, LP panel, resolver tier badge, window countdown. Uses Next 16 `params` Promise + `use cache` for reads.
-- `web/app/create`: market-creation wizard (pick outcome space scalar/trajectory, range, resolver tier, k/b/fee, window) → calls `MarketFactory` via SDK; preview of `σ_min`, max payout, fee.
+- `web/app/markets/[id]`: LP panel, resolver tier badge, window countdown (belief sliders already done).
+- `web/app/create`: already live — extend for capped-Gaussian flag when contract supports it.
 - SDK: add LP methods, fee claims, capped-Gaussian markets, T3 resolver helper.
 
 **Tests/acceptance:**
@@ -522,23 +545,23 @@ Engineering tasks:
 
 ---
 
-### Sprint 7 — Pre-mainnet hardening, conservative caps, MEV mitigations, ChartGuessr economics finalization, PvP design
+### Sprint 7 — Pre-mainnet hardening, conservative caps, MEV mitigations, fee economics, PvP design
 
 **Goal:** turn the testnet system into something safe to put real USDC behind.
 
 User stories:
 - *As the protocol, every market has conservative per-market risk caps in early mainnet rounds.*
 - *As a trader, my belief tx can't be trivially front-run.*
-- *As a player, the "1 USDC" entry, fees, and payouts are exactly as documented — visible rake, no hidden house edge.*
+- *As a trader, fees and payouts are exactly as documented — visible rake, no hidden house edge.*
 
 Engineering tasks:
 - Address audit findings (rolling — likely spans S7–S8); each fix gets a regression test.
 - Conservative caps: global + per-market `b` ceilings, HouseVault exposure ceilings, max position size, max σ-floor aggressiveness — all governance-set, all on-chain, all surfaced in UI.
 - MEV: ship commit-reveal for short-window games end to end; per-market trade-size limits (already implied by σ-scaling but enforce explicitly); document why Stellar's ordering model is less MEV-prone; add a fee floor to deter spam.
-- ChartGuessr economics: finalize fee bps, pool payout formula (closest-N gets paid from the pool), HouseVault P&L expectations, faucet → real-USDC switch; "what players pay for / where the value goes" copy matches §21.
+- Fee economics: finalize fee bps, HouseVault P&L expectations, faucet → real-USDC switch; "where the value goes" copy matches §21.
 - PvP pools design doc + skill-bracket matchmaking design (build is M4, but design now so the data model doesn't have to change later).
 - Mainnet deploy pipeline: deterministic WASM builds, `stellar contract build --meta`, deploy scripts with checksum verification, per-network config (USDC SAC, Reflector feed address, multisig admin), upgrade/admin keys behind a multisig, runbook.
-- Load/soak test on testnet: many concurrent ChartGuessr rounds + market creations; gas/footprint budgets confirmed.
+- Load/soak test on testnet: many concurrent market creations + trades; gas/footprint budgets confirmed.
 
 **Tests/acceptance:**
 - All P0/P1 audit findings closed with regression tests; P2s triaged.
@@ -556,7 +579,7 @@ Engineering tasks:
 **Goal:** **Milestone 3 — Mainnet / "UX readiness."** Ship it.
 
 User stories:
-- *As anyone, I can play 1-USDC ChartGuessr on Stellar mainnet.*
+- *As anyone, I can trade on a live distribution market on Stellar mainnet with real USDC.*
 - *As anyone, I can see at least one non-crypto market (election margin or box office) created and resolved end to end via a T1/T2 resolver on mainnet.*
 - *As an external party, I have created a market with my own resolver on mainnet.*
 - *As the team, we have a written legal opinion for the launch jurisdiction; geofencing + ToS are live.*
@@ -565,7 +588,7 @@ Engineering tasks:
 - **Legal opinion obtained (gating milestone, per whitepaper Part VII §6).** Implement whatever it requires: entity, ToS, KYC threshold logic if needed, geofence list, disclosures. **No mainnet launch until this is signed off.**
 - Final audit report published; all agreed findings fixed; publish the report.
 - Mainnet deploy: factory, registry, distribution-market WASM hash, house-vault, all four resolvers; verify checksums; admin multisig live; conservative caps on.
-- Launch ChartGuessr-on-BTC mainnet with real USDC (T0 Reflector resolver), play-vs-house.
+- Launch first **scalar distribution market** on mainnet with real USDC (T0 Reflector resolver).
 - Create + run to resolution at least one **non-crypto** market on mainnet via a T1 (attested) or T2 (optimistic) resolver — coordinate the data partner / poster service for real.
 - Onboard one external party to create a market with their own resolver (use the SDK + a guided session); document it as a case study.
 - Bug bounty live (Immunefi or similar) with scope = deployed contracts; triage process documented.
@@ -573,7 +596,7 @@ Engineering tasks:
 - Status page / monitoring / alerting for mainnet contracts and the indexer.
 
 **Tests/acceptance:**
-- Mainnet smoke suite: deploy verification (bytecode == audited build), a tiny real-USDC ChartGuessr round end to end, a real non-crypto market resolved correctly, fee splits land in the right accounts.
+- Mainnet smoke suite: deploy verification (bytecode == audited build), a tiny real-USDC trade→resolve→claim round end to end, a real non-crypto market resolved correctly, fee splits land in the right accounts.
 - Playwright against mainnet (read-only + a controlled small-stake account) green.
 - Legal: signed opinion on file; geofence verified (blocked jurisdictions actually blocked at the edge); ToS acceptance enforced before first trade.
 - External-party market resolved correctly; case study written.
@@ -616,7 +639,7 @@ Themes (groom into sprints as priorities settle):
 5. **Conformance / cross-language vectors** (`docs/test-vectors/*.json`) — the single source of truth for curve-fit and Gaussian math; executed by *both* Rust (`kaido-math`) and TS (`web/lib/curve`, `packages/sdk`). A mismatch fails CI on both sides. This is the contract that prevents "drew X, recorded Y" disputes.
 6. **SDK tests** (Vitest) — tx building/simulation/encoding against recorded RPC fixtures + a live-testnet integration tier (separate CI job, can be marked allowed-to-fail on RPC outages).
 7. **Web unit/component tests** (Vitest + Testing Library) — canvas math, curve preview, market state rendering, wallet flows (mocked signer).
-8. **E2E** (Playwright) — runs against testnet with seeded markets and a mocked clock: new-user passkey journey, ChartGuessr round, create-a-market wizard, distribution-mode trade, LP add/remove, T1/T2/T3 resolution flows, result card + leaderboard. A read-only subset runs against mainnet post-launch.
+8. **E2E** (Playwright) — runs against testnet with seeded markets: markets read path (✅ S4), create-a-market wizard, distribution-mode trade, LP add/remove, T1/T2/T3 resolution flows, result card + leaderboard. Passkey journey deferred. A read-only subset runs against mainnet post-launch.
 9. **Gas/footprint snapshots** — every contract fn has a recorded resource cost; CI flags regressions > threshold.
 10. **Security review & bug bounty** — external audit gated before mainnet (S6 kickoff → S8 close); Immunefi-style bounty live at launch; all findings → regression tests.
 11. **Manual exploratory + chaos** — soak tests (many concurrent rounds), oracle-failure drills (kill the mock oracle mid-market → market must pause/dispute, never mispay), reorg/forge-time drills on localnet.
@@ -644,11 +667,11 @@ Themes (groom into sprints as priorities settle):
 
 ## 8. Milestone ↔ deliverable summary (SCF mapping)
 
-- **M1 (~10%, on acceptance + first deliverable) — MVP/testnet:** `DistributionMarket` core AMM (single scalar, Gaussian + σ-floor, full collateralization, settlement), `HouseVault` v0, basic `MarketFactory`, ChartGuessr-on-BTC loop (45s/15s/reveal/auto-payout, play-vs-house, Reflector T0), property tests on invariants. → **End of Sprint 4.** Tag `v0.1.0-m1`.
-- **M2 (~20%) — Testnet feature-complete:** multi-market + permissionless `create_market`, trajectory + scalar markets, capped-Gaussian opt-in, oracle framework (T0 live, T1 adapter + first adapter, T2 optimistic basic, T3 designated) with tier badges, Forecast Canvas both modes polished, result cards, calibration leaderboards, passkey onboarding, LP flows + fee splitting, SDK alpha→1.0 + docs, external security review begun. → **End of Sprint 6.** Tag `v0.2.0-m2`.
-- **M3 (~30% + final 40%) — Mainnet / UX readiness:** audit complete, conservative per-market caps, bug bounty live; mainnet launch with 1-USDC ChartGuessr; ≥1 non-crypto market live and resolved via T1/T2; SDK 1.0 + docs + ≥1 external party created a market with their own resolver; legal opinion obtained; geofencing + ToS in place. → **End of Sprint 8.** Tag `v1.0.0`.
+- **M1 (~10%, on acceptance + first deliverable) — MVP/testnet:** `DistributionMarket` core AMM (scalar, Gaussian + σ-floor, full collateralization, settlement), `HouseVault` v0, `MarketFactory` + `Registry`, trade→resolve→claim on `/markets` (T0 Reflector), slider belief UI, result cards, property tests on invariants. → **End of Sprint 4.** Tag `v0.1.0-m1` ✅
+- **M2 (~20%) — Testnet feature-complete:** capped-Gaussian opt-in, full LP flows + fee splitting, oracle framework (T0 live, T1 adapter + first adapter, T2 optimistic basic, T3 designated) with tier badges, calibration leaderboards, passkey onboarding (optional), SDK alpha→1.0 + docs, external security review begun. → **End of Sprint 6.** Tag `v0.2.0-m2`.
+- **M3 (~30% + final 40%) — Mainnet / UX readiness:** audit complete, conservative per-market caps, bug bounty live; mainnet launch with live distribution markets; ≥1 non-crypto market live and resolved via T1/T2; SDK 1.0 + docs + ≥1 external party created a market with their own resolver; legal opinion obtained; geofencing + ToS in place. → **End of Sprint 8.** Tag `v1.0.0`.
 - **M4 (follow-on):** more T1 adapters + hardened T2; richer parameterizations (skewed, multi-modal); PvP pools with skill brackets + tournaments + embeddable widgets; partner integrations (parametric-insurance, sports, forecasting communities). → **Sprints 9–10+.**
 
 ---
 
-*Build plan v0.1 — working draft, paired with `kaido-whitepaper.md` v0.1. Re-baseline sprint scope after Sprint 0 once the SCF deliverable text is final and `kaido-math` complexity is measured. Open engineering questions tracked in `docs/adr/`: fixed-point scale & error bounds for `exp`/`erf`; capped-Gaussian λ-solve convergence in fixed point; correlation across trajectory checkpoints; T2 arbitration design; deterministic-build pipeline for audited bytecode.*
+*Build plan v0.2 — updated 2026-06-14 after Sprint 4 / M1 close and ChartGuessr pivot. Paired with `kaido-whitepaper.md` v0.1. Open engineering questions tracked in `docs/adr/`: fixed-point scale & error bounds for `exp`/`erf`; capped-Gaussian λ-solve convergence in fixed point; correlation across trajectory checkpoints; T2 arbitration design; deterministic-build pipeline for audited bytecode.*
