@@ -109,6 +109,8 @@ pub enum KaidoError {
     /// A fixed-point computation overflowed `i128` (a bug / out-of-envelope
     /// input — see `kaido_math::fp`).
     MathOverflow = 50,
+    /// A market parameter (`k`, `b`, `μ`, `σ`) is outside the protocol envelope.
+    OutOfEnvelope = 51,
 }
 
 // --------------------------------------------------------------------------- //

@@ -23,8 +23,9 @@ use kaido_common::{
     TrajectoryPositionData,
 };
 use kaido_math::{
-    capped_gaussian_pdf_scaled, capped_lambda, capped_worst_case_collateral,
-    gaussian_pdf_scaled, lambda as lambda_of, sigma_floor, worst_case_collateral, WAD as MATH_WAD,
+    b_in_envelope, capped_gaussian_pdf_scaled, capped_lambda, capped_worst_case_collateral,
+    gaussian_pdf_scaled, k_in_envelope, lambda as lambda_of, mu_in_envelope, sigma_floor,
+    sigma_in_envelope, worst_case_collateral, WAD as MATH_WAD,
 };
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
@@ -156,6 +157,7 @@ impl DistributionMarket {
         if b <= 0 {
             panic_with_error!(&env, KaidoError::InvalidB);
         }
+        check_kb_envelope(&env, k, b);
         if fee_bps > MAX_FEE_BPS {
             panic_with_error!(&env, KaidoError::FeeTooHigh);
         }
@@ -670,6 +672,7 @@ impl DistributionMarket {
         if b <= 0 {
             panic_with_error!(&env, KaidoError::InvalidB);
         }
+        check_kb_envelope(&env, k, b);
         if fee_bps > MAX_FEE_BPS {
             panic_with_error!(&env, KaidoError::FeeTooHigh);
         }
@@ -1011,6 +1014,20 @@ fn decode_tier(env: &Env, tier: u32) -> ResolverTier {
     }
 }
 
+/// `k` and `b` must lie in the protocol WAD envelope.
+fn check_kb_envelope(env: &Env, k: i128, b: i128) {
+    if !k_in_envelope(k) || !b_in_envelope(b) {
+        panic_with_error!(env, KaidoError::OutOfEnvelope);
+    }
+}
+
+/// `μ` and `σ` must lie in the protocol WAD envelope.
+fn check_belief_envelope(env: &Env, mu: i128, sigma: i128) {
+    if !mu_in_envelope(mu) || !sigma_in_envelope(sigma) {
+        panic_with_error!(env, KaidoError::OutOfEnvelope);
+    }
+}
+
 /// Validate `(μ, σ)` and build the [`Belief`] with the right `λ` (capped or not).
 fn make_belief(
     env: &Env,
@@ -1021,6 +1038,7 @@ fn make_belief(
     sigma: i128,
     capped: bool,
 ) -> Belief {
+    check_belief_envelope(env, mu, sigma);
     if sigma <= 0 {
         panic_with_error!(env, KaidoError::InvalidSigma);
     }

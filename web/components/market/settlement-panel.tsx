@@ -15,6 +15,7 @@ import {
   DisputeInfoModal,
 } from "@/components/modals/claim-modals";
 import { ResultCard } from "@/components/market/result-card";
+import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 import { useWallet } from "@/components/wallet/provider";
 import { fromWad, toWad } from "@/lib/curve";
 import { fetchWalletPositions } from "@/lib/indexer/wallet-positions";
@@ -107,7 +108,7 @@ export function SettlementPanel({
   const { wallet } = useWallet();
   const kaido = useMemo(() => new Kaido(config), [config]);
 
-  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  const { nowSec } = useLedgerNow();
   const [resolving, setResolving] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -182,11 +183,6 @@ export function SettlementPanel({
   const phase = derivePhase(market, nowSec);
   const canResolve = phase === "awaiting_resolve" || (phase === "locked" && nowSec >= market.windowResolve);
   const isResolved = phase === "resolved";
-
-  useEffect(() => {
-    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   const isT3 = market.resolverTier === distributionMarket.ResolverTier.Designated;
   const isT1 = market.resolverTier === distributionMarket.ResolverTier.Attested;

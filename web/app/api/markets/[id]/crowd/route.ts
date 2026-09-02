@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getMarketState } from "@/lib/stellar/kaido";
+import { getBeliefs, getMarketState } from "@/lib/stellar/kaido";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +10,24 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const { state } = await getMarketState(id);
+    const { params: mp, state } = await getMarketState(id);
+    if (mp.outcome_space.tag === "Trajectory") {
+      const beliefs = await getBeliefs(id);
+      if (beliefs.length === 0) {
+        return NextResponse.json({
+          kind: "trajectory",
+          musWad: [state.belief.mu.toString()],
+          sigmasWad: [state.belief.sigma.toString()],
+        });
+      }
+      return NextResponse.json({
+        kind: "trajectory",
+        musWad: beliefs.map((b) => b.mu.toString()),
+        sigmasWad: beliefs.map((b) => b.sigma.toString()),
+      });
+    }
     return NextResponse.json({
+      kind: "scalar",
       muWad: state.belief.mu.toString(),
       sigmaWad: state.belief.sigma.toString(),
     });

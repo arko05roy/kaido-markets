@@ -63,16 +63,38 @@ export function statusLabel(status: MarketStatus | null): string {
 
 export type MarketWindow = { open: bigint | number; lock: bigint | number };
 
+export type TradingPhase = "before_open" | "open" | "after_lock";
+
+/** Where we are in the trading window relative to ledger time. */
+export function tradingPhase(
+  statusTag: string | null | undefined,
+  window: MarketWindow,
+  nowSec = Math.floor(Date.now() / 1000),
+): TradingPhase {
+  if (statusTag !== "Open") return "after_lock";
+  const open = Number(window.open);
+  const lock = Number(window.lock);
+  if (nowSec < open) return "before_open";
+  if (nowSec >= lock) return "after_lock";
+  return "open";
+}
+
 /** Mirrors `DistributionMarket::trade` — status Open and ledger time inside [open, lock). */
 export function isTradingWindowOpen(
   statusTag: string | null | undefined,
   window: MarketWindow,
   nowSec = Math.floor(Date.now() / 1000),
 ): boolean {
-  if (statusTag !== "Open") return false;
-  const open = Number(window.open);
-  const lock = Number(window.lock);
-  return nowSec >= open && nowSec < lock;
+  return tradingPhase(statusTag, window, nowSec) === "open";
+}
+
+/** True when the window has ended but on-chain status may still read Open (pre-sync_status). */
+export function isTradingWindowStale(
+  statusTag: string | null | undefined,
+  window: MarketWindow,
+  nowSec = Math.floor(Date.now() / 1000),
+): boolean {
+  return statusTag === "Open" && tradingPhase(statusTag, window, nowSec) === "after_lock";
 }
 
 export function tradingClosedReason(

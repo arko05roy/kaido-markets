@@ -4,9 +4,11 @@ import "./globals.css";
 
 import { ConditionalNavbar } from "@/components/app/conditional-navbar";
 import { FirstVisitGate } from "@/components/modals/first-visit-modal";
+import { LedgerTimeProvider } from "@/components/providers/ledger-time-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { WalletProvider } from "@/components/wallet/provider";
 import { deployedConfig } from "@/lib/stellar/contracts";
+import { fetchLedgerNowSec } from "@/lib/stellar/ledger";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 
 const geistSans = Geist({
@@ -38,13 +40,14 @@ export const metadata: Metadata = {
     "Kaido — permissionless distribution markets for any number. Trade beliefs; settle on-chain. Built on Stellar.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const networkId = activeNetworkId();
   const net = activeNetwork();
+  const initialLedgerSec = net.rpcUrl ? await fetchLedgerNowSec(net.rpcUrl) : null;
   let usdcSacId: string | null = null;
   try {
     usdcSacId =
@@ -65,11 +68,13 @@ export default function RootLayout({
           horizonUrl={net.horizonUrl}
           usdcSacId={usdcSacId}
         >
-          <ToastProvider>
-            <ConditionalNavbar />
-            {children}
-            <FirstVisitGate />
-          </ToastProvider>
+          <LedgerTimeProvider rpcUrl={net.rpcUrl} initialSec={initialLedgerSec}>
+            <ToastProvider>
+              <ConditionalNavbar />
+              {children}
+              <FirstVisitGate />
+            </ToastProvider>
+          </LedgerTimeProvider>
         </WalletProvider>
       </body>
     </html>

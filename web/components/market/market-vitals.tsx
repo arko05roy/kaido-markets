@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { MetricChip } from "@/components/app/dashboard-page-header";
+import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 import { formatCountdown, formatUsdc7dp } from "@/lib/market-display";
 
 export function MarketVitals({
@@ -20,13 +19,7 @@ export function MarketVitals({
   volumeUsdc?: number;
   crowdMovedPct?: number;
 }) {
-  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
-
-  useEffect(() => {
-    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
-    return () => clearInterval(t);
-  }, []);
-
+  const { nowSec } = useLedgerNow();
   const countdown = formatCountdown(closesAt, nowSec);
   const resolved = statusTag === "Resolved" || statusTag === "ResolvedVec";
 

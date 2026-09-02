@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 
 function fmtCountdown(targetSec: number, nowSec: number): string {
   const delta = Math.max(0, targetSec - nowSec);
@@ -26,12 +26,7 @@ export function WindowCountdown({
   windowResolve: number;
   statusTag: string;
 }) {
-  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
-
-  useEffect(() => {
-    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
-    return () => clearInterval(t);
-  }, []);
+  const { nowSec } = useLedgerNow();
 
   if (statusTag === "Resolved" || statusTag === "ResolvedVec") {
     return (

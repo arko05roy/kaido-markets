@@ -4,8 +4,8 @@ import { type KaidoConfig } from "@kaido/sdk";
 import { useState } from "react";
 
 import { AdvancedBlock } from "@/components/app/advanced-block";
-import { isTradingWindowOpen } from "@/lib/market-display";
-import { useLedgerNowSec } from "@/lib/use-ledger-now";
+import { tradingPhase } from "@/lib/market-display";
+import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 import {
   MobileTradeBar,
   TradePanel,
@@ -14,6 +14,7 @@ import {
 import { LpPanel, type LpMarketView } from "@/components/market/lp-panel";
 import { SettlementPanel, type SettlementMarketView } from "@/components/market/settlement-panel";
 import type { GaussianBelief } from "@/lib/curve";
+import type { LiveCrowdSnapshot } from "@/lib/use-live-crowd";
 import {
   Sheet,
   SheetContent,
@@ -36,33 +37,34 @@ export function MarketActions({
   lpMarket: LpMarketView;
   marketTitle?: string;
   onBeliefChange?: (belief: GaussianBelief) => void;
-  onPositionOpened?: () => void;
+  onPositionOpened?: (consensus: LiveCrowdSnapshot) => void;
 }) {
   const [positionRefresh, setPositionRefresh] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [call, setCall] = useState("—");
   const [multiple, setMultiple] = useState(1);
 
-  const nowSec = useLedgerNowSec(config.rpcUrl);
-  const tradingOpen = isTradingWindowOpen(
+  const { nowSec } = useLedgerNow();
+  const phase = tradingPhase(
     tradeMarket.statusTag,
     { open: tradeMarket.windowOpen, lock: tradeMarket.windowLock },
     nowSec,
   );
+  const showTradeTicket = phase === "open" || phase === "before_open";
   const enrichedMarket: TradeMarketView = {
     ...tradeMarket,
     marketTitle: marketTitle ?? tradeMarket.marketTitle,
   };
 
-  const bumpPosition = () => {
+  const bumpPosition = (consensus: LiveCrowdSnapshot) => {
     setPositionRefresh((n) => n + 1);
-    onPositionOpened?.();
+    onPositionOpened?.(consensus);
   };
 
   return (
     <>
       <div className="space-y-6">
-        {tradingOpen && (
+        {showTradeTicket && (
           <div className="hidden lg:block">
             <TradePanel
               config={config}
@@ -72,12 +74,12 @@ export function MarketActions({
                 setCall(c);
                 setMultiple(m);
               }}
-              onPositionOpened={() => bumpPosition()}
+              onPositionOpened={(id, consensus) => bumpPosition(consensus)}
             />
           </div>
         )}
 
-        {!tradingOpen && (
+        {!showTradeTicket && (
           <SettlementPanel
             config={config}
             market={settlementMarket}
@@ -90,7 +92,7 @@ export function MarketActions({
         </AdvancedBlock>
       </div>
 
-      {tradingOpen && (
+      {showTradeTicket && (
         <>
           <MobileTradeBar call={call} multiple={multiple} onOpen={() => setMobileOpen(true)} />
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -108,8 +110,8 @@ export function MarketActions({
                     setCall(c);
                     setMultiple(m);
                   }}
-                  onPositionOpened={() => {
-                    bumpPosition();
+                  onPositionOpened={(_id, consensus) => {
+                    bumpPosition(consensus);
                     setMobileOpen(false);
                   }}
                 />

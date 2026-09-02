@@ -7,6 +7,7 @@ import { type KaidoConfig } from "@kaido/sdk";
 
 import { MetricChip, NetworkBadge } from "@/components/app/dashboard-page-header";
 import { PageEyebrow, Panel, PrimaryLink, SectionLabel } from "@/components/app/kaido-ui";
+import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 import { ClosesIn } from "@/components/market/closes-in";
 import { MiniCrowdCurve } from "@/components/market/mini-crowd-curve";
 import { AdjustCallSheet } from "@/components/modals/adjust-call-sheet";
@@ -27,6 +28,7 @@ import {
   formatOutcome,
   isTradingWindowOpen,
   statusLabel,
+  tradingPhase,
 } from "@/lib/market-display";
 import { clientSettlementAsset } from "@/lib/settlement-asset";
 import { tradeViewFromMarketCard } from "@/lib/market-card-trade-view";
@@ -474,6 +476,7 @@ export function PositionsBoard({
   config: KaidoConfig | null;
 }) {
   const { wallet, connecting, connect } = useWallet();
+  const { nowSec } = useLedgerNow();
   const [tab, setTab] = useState<Tab>("all");
   const [walletGate, setWalletGate] = useState(false);
   const [detail, setDetail] = useState<PositionDetailData | null>(null);
@@ -495,7 +498,12 @@ export function PositionsBoard({
     const openMarkets = [
       ...new Set(
         rows
-          .filter((r) => !isRowSettled(r) && statusLabel(r.market.status) === "Open")
+          .filter(
+            (r) =>
+              !isRowSettled(r) &&
+              (isTradingWindowOpen(r.market.status?.tag, r.market.info.window, nowSec) ||
+                tradingPhase(r.market.status?.tag, r.market.info.window, nowSec) === "before_open"),
+          )
           .map((r) => r.marketId),
       ),
     ];
@@ -505,19 +513,20 @@ export function PositionsBoard({
       openMarkets.map(async (id) => {
         try {
           const res = await fetch(`/api/markets/${id}/crowd`);
-          const body = (await res.json()) as { muWad?: string };
-          if (body.muWad) next[id] = body.muWad;
+          const body = (await res.json()) as { muWad?: string; musWad?: string[] };
+          const mu = body.musWad?.[0] ?? body.muWad;
+          if (mu) next[id] = mu;
         } catch {
           /* skip */
         }
       }),
     );
     if (Object.keys(next).length) setLiveCrowdMuWad((prev) => ({ ...prev, ...next }));
-  }, [rows]);
+  }, [rows, nowSec]);
 
   useEffect(() => {
     void refreshCrowd();
-    const t = setInterval(() => void refreshCrowd(), 30_000);
+    const t = setInterval(() => void refreshCrowd(), 12_000);
     return () => clearInterval(t);
   }, [refreshCrowd]);
 
@@ -622,7 +631,11 @@ export function PositionsBoard({
           !!detailRow &&
           !!config &&
           statusLabel(detailRow.market.status) === "Open" &&
-          isTradingWindowOpen(detailRow.market.status?.tag, detailRow.market.info.window)
+          isTradingWindowOpen(
+            detailRow.market.status?.tag,
+            detailRow.market.info.window,
+            nowSec,
+          )
         }
         onAdjustCall={() => {
           setDetailOpen(false);
@@ -666,7 +679,7 @@ export function PositionsBoard({
           open={adjustOpen}
           onOpenChange={setAdjustOpen}
           config={config}
-          market={tradeViewFromMarketCard(detailRow.market)}
+          market={tradeViewFromMarketCard(detailRow.market, nowSec)}
           marketTitle={detailRow.title}
         />
       )}

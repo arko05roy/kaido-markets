@@ -6,13 +6,11 @@ import type { Metadata } from "next";
 import { ErrorState, Panel } from "@/components/app/kaido-ui";
 import { type TradeMarketView } from "@/components/forecast/trade-panel";
 import { MarketDetailHeader } from "@/components/market/market-detail-header";
-import { MarketDetailClient } from "@/components/market/market-detail-client";
+import { MarketLivePage } from "@/components/market/market-live-page";
 import { type SettlementMarketView } from "@/components/market/settlement-panel";
 import {
-  crowdTargetLabel,
   formatUsdc7dp,
   isTradingWindowOpen,
-  marketSubtitle,
 } from "@/lib/market-display";
 import { displayMarketQuestion } from "@/lib/market-metadata";
 import { getSavedMarketMetadata, getSavedMarketQuestion } from "@/lib/market-metadata-store";
@@ -20,6 +18,7 @@ import { getMarketEvents } from "@/lib/indexer";
 import { aggregateMarketStats24h } from "@/lib/market-stats";
 
 import { buildKaidoConfig } from "@/lib/kaido-config";
+import { getLedgerNowSec } from "@/lib/stellar/ledger";
 import { activeNetworkId } from "@/lib/stellar/networks";
 import {
   getBeliefs,
@@ -78,13 +77,15 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
         resolved: string[];
         crowdMuWad: bigint;
         blendBackedDepth7dp: bigint;
+        ledgerNowSec: number | null;
       }
     | null = null;
   let error: string | null = null;
   try {
-    const [, { params: mp, state }] = await Promise.all([
+    const [, { params: mp, state }, ledgerNowSec] = await Promise.all([
       getMarketInfo(id),
       getMarketState(id),
+      getLedgerNowSec(),
     ]);
     const blendBackedDepth7dp = await getBlendBackedDepth(id);
     const isTraj = mp.outcome_space.tag === "Trajectory";
@@ -115,7 +116,11 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       consensusSigmasWad,
       checkpoints,
       statusTag: state.status.tag,
-      tradingOpen: isTradingWindowOpen(state.status.tag, mp.window),
+      tradingOpen: isTradingWindowOpen(
+        state.status.tag,
+        mp.window,
+        ledgerNowSec ?? undefined,
+      ),
       windowOpen: Number(mp.window.open),
       windowLock: Number(mp.window.lock),
       capped: mp.capped,
@@ -147,7 +152,17 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       canAdd: state.status.tag === "Open",
       canRemove: state.status.tag === "Open" || state.status.tag === "Resolved" || state.status.tag === "ResolvedVec",
     };
-    data = { params: mp, state, view, settlement, resolved, lpMarket, crowdMuWad, blendBackedDepth7dp };
+    data = {
+      params: mp,
+      state,
+      view,
+      settlement,
+      resolved,
+      lpMarket,
+      crowdMuWad,
+      blendBackedDepth7dp,
+      ledgerNowSec,
+    };
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -191,66 +206,68 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
               <ErrorState title="Couldn't read this market" body={error ?? "Unknown error."} />
             </Panel>
           </>
+        ) : config ? (
+          <MarketLivePage
+            config={config}
+            marketId={id}
+            view={data.view}
+            settlement={data.settlement}
+            lpMarket={data.lpMarket}
+            marketTitle={marketTitle}
+            resolved={data.resolved.length ? data.resolved : undefined}
+            stats24h={stats24h ?? undefined}
+            detailRows={[
+              {
+                label: "Market type",
+                value: data.view.kind === "trajectory" ? "Trajectory" : "Scalar",
+              },
+              { label: "Fee", value: `${data.params.fee_bps / 100}%` },
+              ...(data.blendBackedDepth7dp > 0n
+                ? [
+                    {
+                      label: "Blend depth",
+                      value: `${formatUsdc7dp(data.blendBackedDepth7dp)} USDC`,
+                    },
+                  ]
+                : []),
+              { label: "Oracle", value: tierLabel(data.params.tier) },
+              { label: "Trading opens", value: fmtTime(data.params.window.open) },
+              { label: "Trading locks", value: fmtTime(data.params.window.lock) },
+              { label: "Resolves", value: fmtTime(data.params.window.resolve) },
+              {
+                label: "Contract",
+                value: (
+                  <span className="font-mono text-xs">
+                    {id.slice(0, 8)}…{id.slice(-8)}
+                  </span>
+                ),
+              },
+            ]}
+            header={{
+              status: statusLabel(data.state.status),
+              closesAt: Number(data.params.window.lock),
+              statusTag: data.state.status.tag,
+              blendBackedDepth7dp: data.blendBackedDepth7dp,
+              volumeUsdc: stats24h?.volumeUsdc ?? undefined,
+              crowdMovedPct: stats24h?.crowdMovedPct ?? undefined,
+              params: data.params,
+            }}
+          />
         ) : (
           <>
             <MarketDetailHeader
-              title={displayMarketQuestion(data.params, data.crowdMuWad, savedQuestion)}
-              subtitle={marketSubtitle(data.params, data.crowdMuWad)}
+              title={marketTitle || "Market"}
+              subtitle="Trading is not configured for this network."
               status={statusLabel(data.state.status)}
-              crowdTarget={crowdTargetLabel(data.crowdMuWad)}
               closesAt={Number(data.params.window.lock)}
               statusTag={data.state.status.tag}
-              blendBackedDepth7dp={data.blendBackedDepth7dp}
-              volumeUsdc={stats24h?.volumeUsdc ?? undefined}
-              crowdMovedPct={stats24h?.crowdMovedPct ?? undefined}
             />
-            {config ? (
-              <MarketDetailClient
-                config={config}
-                view={data.view}
-                settlement={data.settlement}
-                lpMarket={data.lpMarket}
-                marketTitle={marketTitle}
-                resolved={data.resolved.length ? data.resolved : undefined}
-                stats24h={stats24h ?? undefined}
-                marketId={id}
-                crowdMuWad={data.crowdMuWad}
-                detailRows={[
-                {
-                  label: "Market type",
-                  value: data.view.kind === "trajectory" ? "Trajectory" : "Scalar",
-                },
-                { label: "Fee", value: `${data.params.fee_bps / 100}%` },
-                ...(data.blendBackedDepth7dp > 0n
-                  ? [
-                      {
-                        label: "Blend depth",
-                        value: `${formatUsdc7dp(data.blendBackedDepth7dp)} USDC`,
-                      },
-                    ]
-                  : []),
-                { label: "Oracle", value: tierLabel(data.params.tier) },
-                { label: "Trading opens", value: fmtTime(data.params.window.open) },
-                { label: "Trading locks", value: fmtTime(data.params.window.lock) },
-                { label: "Resolves", value: fmtTime(data.params.window.resolve) },
-                {
-                  label: "Contract",
-                  value: (
-                    <span className="font-mono text-xs">
-                      {id.slice(0, 8)}…{id.slice(-8)}
-                    </span>
-                  ),
-                },
-                ]}
-              />
-            ) : (
             <Panel className="px-6 py-8">
               <ErrorState
                 title="Trading unavailable"
                 body="This network isn't configured for trading yet."
               />
             </Panel>
-          )}
           </>
         )}
       </div>

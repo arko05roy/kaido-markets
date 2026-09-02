@@ -22,6 +22,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub mod bounds;
 pub mod capped;
 pub mod consts;
 pub mod erf;
@@ -37,6 +38,7 @@ pub use capped::{
     capped_gaussian_pdf_scaled, capped_l2_norm, capped_l2_norm_squared, capped_lambda,
     capped_worst_case_collateral,
 };
+pub use bounds::{b_in_envelope, k_in_envelope, mu_in_envelope, sigma_in_envelope};
 pub use gaussian::{
     gaussian_l2_norm, gaussian_pdf_scaled, lambda, sigma_floor, worst_case_collateral,
 };

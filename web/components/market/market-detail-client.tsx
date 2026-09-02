@@ -3,7 +3,7 @@
 import { type KaidoConfig } from "@kaido/sdk";
 import { useMemo, useState } from "react";
 
-import { useLedgerNowSec } from "@/lib/use-ledger-now";
+import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 
 import { AdvancedBlock } from "@/components/app/advanced-block";
 import { Panel } from "@/components/app/kaido-ui";
@@ -20,7 +20,8 @@ import { type SettlementMarketView } from "@/components/market/settlement-panel"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { GaussianBelief } from "@/lib/curve";
 import type { MarketStats24h } from "@/lib/market-stats";
-import { isTradingWindowOpen } from "@/lib/market-display";
+import { isTradingWindowStale } from "@/lib/market-display";
+import type { LiveCrowdSnapshot } from "@/lib/use-live-crowd";
 import { cn } from "@/lib/utils";
 
 import { MarketActions } from "@/app/markets/[id]/market-actions";
@@ -45,6 +46,8 @@ export function MarketDetailClient({
   marketId,
   detailRows,
   crowdMuWad,
+  positionRefresh,
+  onPositionOpened,
 }: {
   config: KaidoConfig;
   view: TradeMarketView;
@@ -56,17 +59,15 @@ export function MarketDetailClient({
   marketId: string;
   crowdMuWad: bigint;
   detailRows: { label: string; value: React.ReactNode }[];
+  positionRefresh: number;
+  onPositionOpened: (consensus: LiveCrowdSnapshot) => void;
 }) {
   const [yourBelief, setYourBelief] = useState<GaussianBelief | null>(null);
-  const [positionRefresh, setPositionRefresh] = useState(0);
-  const nowSec = useLedgerNowSec(config.rpcUrl);
+  const { nowSec, ledgerSynced } = useLedgerNow();
 
-  const tradingOpen = isTradingWindowOpen(
-    view.statusTag,
-    { open: view.windowOpen, lock: view.windowLock },
-    nowSec,
-  );
-  const staleDeepLink = !tradingOpen && view.statusTag === "Open";
+  const staleDeepLink =
+    ledgerSynced &&
+    isTradingWindowStale(view.statusTag, { open: view.windowOpen, lock: view.windowLock }, nowSec);
 
   const enrichedView: TradeMarketView = useMemo(
     () => ({ ...view, marketTitle }),
@@ -123,7 +124,7 @@ export function MarketDetailClient({
                 lpMarket={lpMarket}
                 marketTitle={marketTitle}
                 onBeliefChange={setYourBelief}
-                onPositionOpened={() => setPositionRefresh((n) => n + 1)}
+                onPositionOpened={onPositionOpened}
               />
             }
           />

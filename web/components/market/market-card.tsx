@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { ClosesIn } from "@/components/market/closes-in";
 import { MarketCardMetadata } from "@/components/market/market-card-metadata";
 import { MarketCardStats } from "@/components/market/market-card-stats";
+import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 import { fromWad, sigmaFloor } from "@/lib/curve";
 import {
   convictionFromSigma,
@@ -43,18 +43,9 @@ function closingUrgency(lockSec: number, nowSec: number): "hot" | "warm" | null 
 }
 
 function useClosingUrgency(lockSec: number, enabled: boolean): "hot" | "warm" | null {
-  const [urgency, setUrgency] = useState<"hot" | "warm" | null>(null);
-  useEffect(() => {
-    if (!enabled) {
-      setUrgency(null);
-      return;
-    }
-    const tick = () => setUrgency(closingUrgency(lockSec, Math.floor(Date.now() / 1000)));
-    tick();
-    const t = setInterval(tick, 30_000);
-    return () => clearInterval(t);
-  }, [lockSec, enabled]);
-  return urgency;
+  const { nowSec } = useLedgerNow();
+  if (!enabled) return null;
+  return closingUrgency(lockSec, nowSec);
 }
 
 function crowdConviction(card: MarketCard): string | null {

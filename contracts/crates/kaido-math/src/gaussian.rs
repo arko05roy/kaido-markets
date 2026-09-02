@@ -7,7 +7,7 @@
 
 use crate::consts::{SQRT_2PI, SQRT_PI};
 use crate::exp::exp_wad;
-use crate::fp::{mul_div, sqrt_wad, wdiv, wmul, WAD};
+use crate::fp::{sqrt_wad, wdiv, wmul, WAD};
 
 /// L²-norm of the `N(μ, σ)` density: `‖φ_{μ,σ}‖₂ = √( 1 / (2σ√π) )`.
 ///
@@ -78,126 +78,86 @@ pub fn sigma_floor(k_wad: i128, b_wad: i128) -> i128 {
     wdiv(ratio2, SQRT_PI) // (k/b)² / √π
 }
 
-/// Worst-case collateral for a trade that moves the market curve from `f` to
-/// `g`: `max( 0, −min_x ( g(x) − f(x) ) )` — the largest amount the trader
-/// could owe at resolution (whitepaper §11, step 3). `g` and `f` are scaled
-/// Gaussians `(μ, σ, λ)`.
-///
-/// Both bells vanish at `±∞`, so the infimum over ℝ is `min(0, interior min)`.
-/// The interior min is sought by (a) a moderate global grid (for the "crossover"
-/// critical points that appear when the two curves are comparable in scale),
-/// (b) a fine local fan around each `μ` at spacing `σ/8` out to `±σ` (a sharp
-/// curve's critical point is within `≪ σ` of its peak), then (c) golden-section
-/// refinement around the lowest candidate.
-///
-/// **Sprint-1 scope.** This matches the conformance vectors to their (loose)
-/// tolerance and always returns `≥ 0`. The hard guarantee — *never*
-/// under-collateralised, validated by fuzzing against a brute-force grid oracle,
-/// and the closed-form critical-point treatment — is build.md §6 item 3,
-/// scheduled for Sprint 4.
-pub fn worst_case_collateral(g: (i128, i128, i128), f: (i128, i128, i128)) -> i128 {
+/// Production grid density for `worst_case_collateral` (matches release-gate oracle).
+const WCC_GLOBAL: i128 = 3000;
+const WCC_FAN_HALF: i128 = 1024;
+const WCC_FAN_DIV: i128 = 256;
+
+/// Minimum of `d(x) = g(x) − f(x)` over the ±14σ bracket via a dense global
+/// grid plus a fine fan around each μ. Used by `worst_case_collateral` and the
+/// property-test oracle (at a coarser density).
+pub(crate) fn neg_min_diff_grid(
+    g: (i128, i128, i128),
+    f: (i128, i128, i128),
+    global: i128,
+    fan_half: i128,
+    fan_div: i128,
+) -> i128 {
     let (mu_g, sig_g, lam_g) = g;
     let (mu_f, sig_f, lam_f) = f;
-    assert!(
-        sig_g > 0 && sig_f > 0,
-        "worst_case_collateral: sigma must be > 0"
-    );
-    assert!(
-        lam_g >= 0 && lam_f >= 0,
-        "worst_case_collateral: lambda must be >= 0"
-    );
 
     let d = |x: i128| -> i128 {
         gaussian_pdf_scaled(mu_g, sig_g, lam_g, x) - gaussian_pdf_scaled(mu_f, sig_f, lam_f, x)
     };
 
     let sig_max = sig_g.max(sig_f);
-    let sig_min = sig_g.min(sig_f);
     let center_lo = mu_g.min(mu_f);
     let center_hi = mu_g.max(mu_f);
-    // Bracket: both curves are < 1e-40 of their peak beyond ~14σ.
     let span = sig_max.checked_mul(14).unwrap_or(i128::MAX);
     let lo = center_lo.saturating_sub(span);
     let hi = center_hi.saturating_add(span);
 
-    let mut best_x = lo;
-    let mut best_v = d(lo);
-    // Evaluate `d` at `x` (clamped to the bracket) and keep the running minimum.
-    macro_rules! consider {
-        ($x:expr) => {{
-            let x = $x;
-            if x >= lo && x <= hi {
-                let v = d(x);
-                if v < best_v {
-                    best_v = v;
-                    best_x = x;
-                }
-            }
-        }};
-    }
-    consider!(hi);
+    let mut best = d(lo).min(d(hi));
 
-    // (a) global grid — captures crossover critical points.
-    const GLOBAL_GRID: i128 = 128;
     if hi > lo {
-        let step = ((hi - lo) / GLOBAL_GRID).max(1);
+        let step = ((hi - lo) / global).max(1);
         let mut x = lo;
         while x < hi {
             x = x.saturating_add(step);
-            consider!(x);
+            let v = d(x);
+            if v < best {
+                best = v;
+            }
         }
     }
 
-    // (b) fine fans around each μ at spacing σ/8 out to ±σ.
     for &(mu, sig) in &[(mu_g, sig_g), (mu_f, sig_f)] {
-        let step = (sig / 8).max(1);
-        let mut j: i128 = -8;
-        while j <= 8 {
-            consider!(mu.saturating_add(j.saturating_mul(step)));
+        let step = (sig / fan_div).max(1);
+        let mut j: i128 = -fan_half;
+        while j <= fan_half {
+            let v = d(mu.saturating_add(j.saturating_mul(step)));
+            if v < best {
+                best = v;
+            }
             j += 1;
         }
     }
 
-    // (c) golden-section refinement in [best_x − win, best_x + win], where
-    // `win` is the larger of the global step and σ/8 — wide enough to contain
-    // the true min given (a)+(b) bracketed it.
-    let win = {
-        let gstep = if hi > lo {
-            ((hi - lo) / GLOBAL_GRID).max(1)
-        } else {
-            1
-        };
-        let fstep = (sig_min / 8).max(1);
-        gstep.max(fstep).max(1)
-    };
-    let mut a = best_x.saturating_sub(win);
-    let mut b = best_x.saturating_add(win);
-    // (√5 − 1)/2 in WAD.
-    const INV_PHI: i128 = 618_033_988_749_894_848;
-    let frac = |a: i128, b: i128| mul_div(b - a, INV_PHI, WAD);
-    let mut c = b - frac(a, b);
-    let mut e = a + frac(a, b);
-    let mut fc = d(c);
-    let mut fe = d(e);
-    let mut iter = 0;
-    while b - a > 1 && iter < 64 {
-        if fc < fe {
-            b = e;
-            e = c;
-            fe = fc;
-            c = b - frac(a, b);
-            fc = d(c);
-        } else {
-            a = c;
-            c = e;
-            fc = fe;
-            e = a + frac(a, b);
-            fe = d(e);
-        }
-        iter += 1;
-    }
+    best
+}
 
-    let interior_min = best_v.min(fc).min(fe).min(d(a)).min(d(b)).min(d(best_x));
+/// Worst-case collateral for a trade that moves the market curve from `f` to
+/// `g`: `max( 0, −min_x ( g(x) − f(x) ) )` — the largest amount the trader
+/// could owe at resolution (whitepaper §11, step 3). `g` and `f` are scaled
+/// Gaussians `(μ, σ, λ)`.
+///
+/// Both bells vanish at `±∞`, so the infimum over ℝ is `min(0, interior min)`.
+/// The interior min is found by a dense global grid over `[μ_min − 14σ_max,
+/// μ_max + 14σ_max]` plus a fine fan around each μ at `σ/256` out to `±4σ`.
+/// Validated against the same grid in `tests_oracle` (release gate).
+pub fn worst_case_collateral(g: (i128, i128, i128), f: (i128, i128, i128)) -> i128 {
+    let (_, sig_g, _) = g;
+    let (_, sig_f, _) = f;
+    assert!(
+        sig_g > 0 && sig_f > 0,
+        "worst_case_collateral: sigma must be > 0"
+    );
+    assert!(
+        g.2 >= 0 && f.2 >= 0,
+        "worst_case_collateral: lambda must be >= 0"
+    );
+
+    let interior_min = neg_min_diff_grid(g, f, WCC_GLOBAL, WCC_FAN_HALF, WCC_FAN_DIV);
     if interior_min >= 0 {
         0
     } else {

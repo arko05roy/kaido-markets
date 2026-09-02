@@ -7,6 +7,7 @@ import { GhostLink } from "@/components/app/kaido-ui";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 import { loadMarketMetadataStore } from "@/lib/market-metadata-store";
 import { isTradingWindowOpen } from "@/lib/market-display";
+import { getLedgerNowSec } from "@/lib/stellar/ledger";
 import { listMarkets } from "@/lib/stellar/kaido";
 import type { MarketStats24h } from "@/lib/market-stats";
 
@@ -15,15 +16,20 @@ export const dynamic = "force-dynamic";
 export default async function MarketsPage() {
   const network = activeNetworkId();
   let markets = null as Awaited<ReturnType<typeof listMarkets>> | null;
+  let ledgerNowSec: number | null = null;
   let error: string | null = null;
   try {
-    markets = await listMarkets();
+    const [listed, ledger] = await Promise.all([listMarkets(), getLedgerNowSec()]);
+    markets = listed;
+    ledgerNowSec = ledger;
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
 
   const openCount =
-    markets?.filter((m) => isTradingWindowOpen(m.status?.tag, m.info.window)).length ?? 0;
+    markets?.filter((m) =>
+      isTradingWindowOpen(m.status?.tag, m.info.window, ledgerNowSec ?? undefined),
+    ).length ?? 0;
   const metadataByMarket = loadMarketMetadataStore()[network] ?? {};
 
   const statsByMarket: Record<string, MarketStats24h> = {};

@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { useLedgerNowSec } from "@/lib/use-ledger-now";
+import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 
 import { ScalarBeliefInput } from "@/components/forecast/scalar-belief-input";
 import {
@@ -45,6 +45,7 @@ import { USDC_FAUCET_URL } from "@/lib/stellar/usdc";
 import { clientSettlementAsset, SETTLEMENT_DECIMALS } from "@/lib/settlement-asset";
 import { DemoFaucetButton } from "@/components/wallet/demo-faucet-button";
 import { chartRangeForConfig, formatXTick, parseOutcomeConfig } from "@/lib/outcome-scale";
+import type { LiveCrowdSnapshot } from "@/lib/use-live-crowd";
 import { cn } from "@/lib/utils";
 
 export interface TradeMarketView {
@@ -197,7 +198,7 @@ export function TradePanel({
 }: {
   config: KaidoConfig;
   market: TradeMarketView;
-  onPositionOpened?: (positionId: bigint) => void;
+  onPositionOpened?: (positionId: bigint, consensus: LiveCrowdSnapshot) => void;
   onBeliefChange?: (belief: GaussianBelief) => void;
   onPreviewChange?: (call: string, multiple: number) => void;
   compact?: boolean;
@@ -239,7 +240,7 @@ export function TradePanel({
   const [quote, setQuote] = useState<TradeQuote | null>(null);
   const [positionId, setPositionId] = useState<bigint | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const nowSec = useLedgerNowSec(config.rpcUrl);
+  const { nowSec } = useLedgerNow();
 
   const tradingOpen = isTradingWindowOpen(
     market.statusTag,
@@ -383,7 +384,17 @@ export function TradePanel({
           ? { muWad: scalarBelief.muWad, sigmaWad: scalarBelief.sigmaWad, collateral7dp: maxCollateral7dp }
           : { collateral7dp: maxCollateral7dp }),
       });
-      onPositionOpened?.(id);
+      const consensus: LiveCrowdSnapshot =
+        market.kind === "scalar"
+          ? {
+              consensusMusWad: [scalarBelief.muWad.toString()],
+              consensusSigmasWad: [scalarBelief.sigmaWad.toString()],
+            }
+          : {
+              consensusMusWad: trajBelief.musWad.map((m) => m.toString()),
+              consensusSigmasWad: trajBelief.sigmasWad.map((s) => s.toString()),
+            };
+      onPositionOpened?.(id, consensus);
       toast({
         title: "Belief is live",
         description: `Position #${id.toString()} — view in Positions`,
