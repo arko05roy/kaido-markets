@@ -8,20 +8,22 @@
 
 > **Pivot (2026-06):** ChartGuessr game layer **removed** from the product and repo. Product focus is a **simple distribution market** on `/markets` + `/create` (trade → resolve → claim). Trajectory markets stay on-chain; trajectory UX in the web app is deferred. Uniswap-style LP is a future epic — minimal on-chain LP remains; HouseVault seeds liquidity for now. Wallet: **Freighter only** (passkey deferred post-M1).
 
-### Current status (2026-06-14)
+### Current status (2026-06-21)
 
 | | |
 |---|---|
-| **Sprints done** | S0–S5 ✅ (~60% of core 10-sprint plan) |
-| **Milestone** | **M1 complete** — tag `v0.1.0-m1`; **M2 in progress** (capped Gaussians + full LP + T3 shipped) |
-| **Next sprint** | **S6** — T1 attested + T2 optimistic resolvers, leaderboards, SDK 1.0, audit kickoff |
-| **Testnet ops** | `make deploy:testnet && make seed:testnet` restores fixtures; last deploy **2026-06-14**; reset **2026-06-17** |
+| **Sprints done** | S0–S5 ✅ |
+| **Active sprint** | **S6 in progress** (~65%) — T1/T2 contracts + UI shipped; SDK 1.0, audit, E2E, geofencing outstanding |
+| **Milestone** | **M1 complete** — tag `v0.1.0-m1`; **M2 in progress** (target: end of S6, tag `v0.2.0-m2`) |
+| **Testnet ops** | Single-wallet deploy via `kaido-wallet` (`GBKVUN…`); last deploy **2026-06-20**; testnet reset **2026-06-17** (re-deployed after); next reset **2026-12-16** |
 
-**Working today (testnet):** `/markets` list + detail (trade, LP add/remove at scale, resolve, claim, fee claims, T3 report UI), `/create` wizard (scalar + capped flag + T3 tier), `@kaido/sdk` (scaled LP, capped markets, designated `report`), T0 Reflector + **T3 designated** resolver, HouseVault seeding (needs deployer USDC trustline), result card, on-chain position discovery, USDC balance reads, window countdown.
+**Working today (testnet):** all prior S5 flows plus **T1 attested** + **T2 optimistic** resolver contracts (deployed, unit-tested), settlement UI for T1/T2, `/api/attested/sign` poster (reads `stellar keys secret` via `DEPLOYER_KEY_NAME` / `ATTESTED_POSTER_KEY_NAME`), `/leaderboard` (live RPC calibration scores — empty until resolved markets with trades), `@kaido/sdk` T1/T2 write helpers + `attested.ts` signing utils. Demo market HouseVault seeded **20 USDC** (manual; default `seed.sh` deposits 50 USDC).
 
-**Still stubs:** `resolver-attested` (T1), `resolver-optimistic` (T2), leaderboard (`/leaderboard` placeholder), capped-Gaussian conformance vectors in `docs/test-vectors/`, Sprint 5 Playwright E2E, `cargo-fuzz`, passkey wallet.
+**S6 still outstanding:** SDK **1.0** publish + `examples/`; first real T1 data adapter (sports/box-office API); audit scope doc + auditor kickoff; geofencing + ToS draft; Playwright T1/T2/LP E2E; leaderboard reference vectors + result-card rank link; T1 API integration test; T2 lazy-watcher scenario test; end-to-end T1/T2 market demo on testnet; `cargo-fuzz`; capped-Gaussian conformance vectors (`docs/test-vectors/`); passkey wallet.
 
-**Testnet contract ids** (from `config/networks.testnet.json`, redeployed 2026-06-14): factory `CAOFY5S3HS7Y6774PSXI6IHGSKRSZVZ7JX75HTB4TDYAJ5AGKVTMQNJR`, registry `CBJ4JC5PJHL3XQUKQSLWFFBSIWA4JUV52DHOQTI6APVIXYH5MRA3DE23`, T3 designated `CBZC7PEFNAGHMPXCKKOKLWJ5SUQ73S64VPBWAICHZSYDA4B2Z43OYOE3`, demo market `CBHL635VI2KRNRTMPNHONMPXJKUSI5HU4FBEM4IGTSUUXYYL5CQPSOWM`, lifecycle market `CCSWLXCFK2IGEWGN2Y5E6NMMKO4CEPRZF27P4IZTQNF5SIUDB2OU34D7` (5 min lock / 10 min resolve).
+**Dev wallet / deployer:** import recovery phrase once with `stellar keys add kaido-wallet --seed-phrase`; set `DEPLOYER_KEY_NAME=kaido-wallet` and `ADMIN_ADDRESS=GBKVUNMQ534SFSPQXYDNK2F4LFLL2534NYOBXVPDC3JFYLFA7YRBLWBI` in `.env`. Fund USDC (Circle testnet faucet) before `make seed:testnet` (needs ≥50 USDC per market for default seed, or seed manually with a lower amount).
+
+**Testnet contract ids** (from `config/networks.testnet.json`, redeployed 2026-06-20): factory `CBGIKGF6D522NW7KBFCWL5S6JG3A2UPJ6AGFPM6KWRGRZ22HAWXTTQ5A`, registry `CCOTMBVO7IGZNTB4Q2RRSWNQN2AIRNQF2C3YGE5KD744WS2HFIESEVNA`, T0 reflector `CA52NJO74EHXCTZDFPMZLG3CJ57TFFW74UOV4NVGMT6BDUZ3FIY7EY2V`, **T1 attested** `CAAKVVC6YZVRHCHCNSE7OOWDM4KD3SGPGEHIACXODKORRVMFMPI2UGGP`, **T2 optimistic** `CCEVTHDTVHWZG2E6HFDUQXY35KHKP2M3MF7X27MWMQMMCWNXASASX623`, T3 designated `CDSU7AULNUKK6HG4LUSJIW2XHEUNZGRL4TWGWEM3QHYUQ4LNDGBPNIWF`, house-vault `CCHABSAKYR2Y56DBIF5JST7PIBBXBNLELFQG23ZMPJ7UUA7KW7GYN5NY`, demo market `CDFZPVBQWUVIXVASW5YJON5UKD4PHU44H2XXDWYMJR354VKMEYHLWOCV`, lifecycle market `CC7GHZLLIUSQ4GA4PW3WEGQV3657UZCYYTWYCUCDEW6ZCGZZGB5JE72Q` (5 min lock / 10 min resolve).
 
 **WASM build note:** unset `CARGO_TARGET_DIR` before `cargo make bindings` or `make deploy:testnet` — Cursor's sandbox cache can leave stale May-era WASM in `contracts/target/` and regenerate bindings against the old ABI (`amount_7dp` instead of `scale_y`).
 
@@ -152,8 +154,8 @@ kaido/
 │  ├─ app/
 │  │  ├─ markets/[id]/          # market page — trade, resolve, claim
 │  │  ├─ create/                # permissionless market creation wizard
-│  │  ├─ leaderboard/           # stub — Sprint 6
-│  │  ├─ api/                   # route handlers (health; attested-poster stubs later)
+│  │  ├─ leaderboard/           # calibration leaderboard (S6 — live RPC reads)
+│  │  ├─ api/                   # route handlers (health; `/api/attested/sign` T1 poster)
 │  ├─ components/
 │  │  ├─ forecast/              # slider-driven belief input (μ,σ; per-checkpoint for trajectory) + recharts preview — replaced the freehand canvas
 │  │  ├─ market/                # market state, LP panel, settlement, result card
@@ -161,6 +163,7 @@ kaido/
 │  ├─ lib/
 │  │  ├─ stellar/               # rpc client, deployed ids, USDC balance, HouseVault reads
 │  │  ├─ curve/                 # byte-exact port of kaido-math (conformance vectors)
+│  │  ├─ leaderboard/           # calibration scores from live RPC (S6)
 │  │  └─ indexer/               # RPC getEvents + wallet position discovery
 │  ├─ e2e/                      # Playwright
 │  └─ test/                     # Vitest unit/component tests
@@ -200,17 +203,17 @@ Tooling: **pnpm** + **Turborepo** for JS; **cargo-make** (`Makefile.toml`) for R
 | E2 | `DistributionMarket` AMM contract (scalar, Gaussian + σ-floor, settlement) | §7–13 | S1–S4 ✅ |
 | E3 | `MarketFactory` + `Registry` (permissionless `create_market`) | §14–15 | S3 ✅; S5 ✅ (`capped_flag`, treasury) |
 | E4 | `HouseVault` underwriter | §18 | S2–S4 ✅; S5 ✅ (seed capped at free collateral); S7 (mainnet caps) |
-| E5 | Oracle framework + 4 resolver tiers | §17 | S2 ✅ (T0) → S5 ✅ (T3); S6 (T1/T2) |
+| E5 | Oracle framework + 4 resolver tiers | §17 | S2 ✅ (T0) → S5 ✅ (T3); S6 🔄 (T1/T2 contracts + UI; adapter + E2E demo outstanding) |
 | E6 | Trajectory markets (checkpoint sampling, shared pool) | §16 | S2–S3 ✅ on-chain; trajectory web UX deferred |
 | E7 | Capped-Gaussian opt-in | §10 (2) | S5 ✅ |
-| E8 | LP flows (add/remove, fee split) | §12, §21 | S5 ✅ (scale `y`, fee split, claims); S6 (polish) |
-| E9 | TS SDK + generated bindings | §14 | S3–S4 ✅ alpha; S5 ✅ (scaled LP, capped, T3, fee claims); S6 (1.0) |
+| E8 | LP flows (add/remove, fee split) | §12, §21 | S5 ✅ (scale `y`, fee split, claims) |
+| E9 | TS SDK + generated bindings | §14 | S3–S5 ✅ alpha; S6 🔄 (T1/T2 helpers shipped; 1.0 publish + examples outstanding) |
 | E10 | Forecast Canvas — slider belief input | §19 | S3–S4 ✅ (scalar); S5 ✅ (capped preview); trajectory UI deferred |
 | E11 | Distribution market UX polish | §19 | S4 ✅ partial; S5 ✅ (LP panel, capped create, countdown) |
 | E12 | ~~ChartGuessr game loop~~ | §20 | **cancelled** (2026-06 pivot) |
-| E13 | Wallet + result cards + leaderboards | §19 | S4 ✅ (Freighter + result card); leaderboards S6; passkey deferred |
-| E14 | Security: fuzzing, property tests, audit prep, bug bounty, MEV mitigations | Part VI | S2, S6, S8 |
-| E15 | Regulatory posture: geofencing, disclosures, legal opinion gate, ToS | Part VII | S6, S8 |
+| E13 | Wallet + result cards + leaderboards | §19 | S4 ✅ (Freighter + result card); S6 🔄 (leaderboard live; rank on result card outstanding); passkey deferred |
+| E14 | Security: fuzzing, property tests, audit prep, bug bounty, MEV mitigations | Part VI | S2, S6 🔄 (audit kickoff outstanding), S8 |
+| E15 | Regulatory posture: geofencing, disclosures, legal opinion gate, ToS | Part VII | S6 🔄 (outstanding), S8 |
 | E16 | DevEx: monorepo, CI/CD, testnet/mainnet deploy pipeline, docs site | — | S1, ongoing |
 | E17 | PvP pools + skill brackets + tournaments (follow-on) | §20, Part VIII M4 | post-M3 |
 | E18 | Richer parameterizations (skew, multi-modal) (follow-on) | Part VIII M4 | post-M3 |
@@ -533,9 +536,13 @@ Engineering tasks (completed):
 
 ---
 
-### Sprint 6 — T1 attested adapter + T2 optimistic oracle, leaderboards/calibration, SDK 1.0, security review kickoff
+### Sprint 6 — T1 attested adapter + T2 optimistic oracle, leaderboards/calibration, SDK 1.0, security review kickoff — 🔄 IN PROGRESS (2026-06-21)
 
 **Goal:** the trustless/economically-secured frontier — T1 and T2 — plus the social loop; SDK frozen for external use; external audit begins.
+
+> **Status: in progress (~65%).** `resolver-attested` (T1): Ed25519 signed reports with EIP-191-style domain prefix, `submit_report` / `dispute` / `finalize`, `resolve` / `status`; unit tests (happy path, bad signature, dispute→Stale). `resolver-optimistic` (T2): `propose` / `dispute` / `finalize` / `arbitrate` with USDC bonds + committee; unit tests (finalize, dispute+arbitrate). `deploy.sh` wires T1/T2 constructors (poster pubkey from deployer `G` address). TS bindings regenerated. `@kaido/sdk`: `submitAttestedReport`, `finalizeAttestedReport`, `disputeAttestedReport`, `proposeOptimisticOutcome`, etc. + `packages/sdk/src/attested.ts`. **Web:** settlement T1/T2 panels; `/leaderboard` (`web/lib/leaderboard/scores.ts` — live RPC, Brier-like score, streaks); `/api/attested/sign` (server poster via `stellar keys secret`). Testnet redeployed 2026-06-20 under single wallet `GBKVUN…` (`kaido-wallet`); all four resolver tiers live. Demo market HouseVault manually seeded 20 USDC.
+>
+> **Outstanding:** SDK 1.0 semver + npm + `examples/embed-a-market`; first T1 external data adapter; audit scope doc; geofencing + ToS; Playwright T1/T2 E2E; leaderboard reference tests + result-card rank link; T1 API integration test; T2 lazy-watcher scenario test; end-to-end T1/T2 market resolved on testnet; `cargo-fuzz`; capped conformance vectors; tag `v0.2.0-m2`.
 
 User stories:
 - *As a data partner, I post a signed report (sports result, box-office number, CPI print) via a permissioned poster; there's a challenge window.*
@@ -544,21 +551,29 @@ User stories:
 - *As an external dev, I install `@kaido/sdk@1.0` and embed a Kaido market in my app.*
 
 Engineering tasks:
-- `resolver-attested` (T1): EIP-191-style signed report verified on-chain against a registered provider key; permissioned poster role; challenge window; `dispute()` freezes resolution pending arbitration; build the first adapter (pick one: a sports API or box-office tracker) with an off-chain poster service (a `web/app/api` route handler or a tiny standalone worker — keep the signing key out of the browser).
-- `resolver-optimistic` (T2): `propose(value, bond)`, `dispute(bond)`, escalation to a vote/arbitration module (v1: a multisig/committee), bond slashing, finalization after window; basic UI for the dispute game.
-- Calibration scoring: off-chain computation over resolved positions → leaderboard tables; streaks; identity tie-in; result cards link to leaderboard rank.
-- SDK 1.0: stabilize public API, semver, full TS docs, examples (`examples/embed-a-market`, `examples/custom-resolver`), publish to npm (or a private registry until mainnet).
-- **Engage external auditor**; freeze the AMM math API; hand over `kaido-math` + `distribution-market` + `market-factory` + `house-vault` + invariants doc + fuzz corpus.
-- Geofencing scaffolding + honest disclosures + ToS draft in the frontend (Part VII items 3–4); resolver tier badges audited for prominence.
+- `resolver-attested` (T1): ✅ contract + tests; ✅ generic poster via `/api/attested/sign`; ⬜ first domain adapter (sports/box-office API fixture).
+- `resolver-optimistic` (T2): ✅ contract + tests + settlement UI; ⬜ Playwright dispute-game E2E.
+- Calibration scoring: ✅ `/leaderboard` from on-chain resolved markets; ⬜ reference vectors; ⬜ result cards link to rank.
+- SDK 1.0: 🔄 T1/T2 API surface shipped; ⬜ semver bump, docs, `examples/`, npm publish.
+- **Engage external auditor**; ⬜ scope doc; ⬜ invariants handoff package.
+- Geofencing scaffolding + honest disclosures + ToS draft: ⬜.
 
 **Tests/acceptance:**
-- T1: signed-report happy path + bad-signature/expired-report/disputed-then-overturned tests; the off-chain poster has its own integration test against a recorded API fixture.
-- T2: propose/dispute/escalate/slash lifecycle tests; "lazy honest watcher" scenario (one dispute is enough to prevent a bad finalization).
-- Leaderboard: calibration score matches a reference implementation on a fixed resolved-market dataset.
-- SDK: a sample external app (in `examples/`) builds and runs against testnet in CI.
-- Audit kickoff meeting held; scope doc accepted.
+- T1: ✅ signed-report + bad-signature + dispute unit tests; ⬜ off-chain poster integration test with API fixture.
+- T2: ✅ propose/finalize + dispute/arbitrate unit tests; ⬜ lazy-honest-watcher scenario test.
+- Leaderboard: ✅ live RPC page; ⬜ reference implementation vectors in CI.
+- SDK: ⬜ `examples/` app builds against testnet in CI.
+- Audit: ⬜ kickoff meeting + scope doc accepted.
 
-**Deliverable:** all four resolver tiers live on testnet with tier badges; SDK 1.0 published; leaderboards live; audit in progress. **≈ Milestone 2 deliverable submitted** (repo tag `v0.2.0-m2`).
+**Verification checklist (testnet, single wallet):**
+1. `stellar keys add kaido-wallet --seed-phrase` → address `GBKVUN…`; `.env`: `DEPLOYER_KEY_NAME=kaido-wallet`, `ADMIN_ADDRESS=GBKVUN…`
+2. Fund USDC (Circle faucet) → `unset CARGO_TARGET_DIR && make deploy:testnet` (full seed needs ≥50 USDC/market; or manual HouseVault deposit)
+3. `/markets` — demo + lifecycle markets listed
+4. `/create` → T1 or T2 tier → trade → resolve flow via settlement panel
+5. T1: **Get signed report** → **Submit on-chain** → wait challenge window → **Finalize** → **Resolve** → **Claim**
+6. `/leaderboard` — populates after resolved markets with trades
+
+**Deliverable:** all four resolver tiers live on testnet with tier badges; SDK 1.0 published; leaderboards live; audit in progress. **≈ Milestone 2 deliverable submitted** (repo tag `v0.2.0-m2`). **Not yet submitted.**
 
 ---
 
@@ -656,7 +671,7 @@ Themes (groom into sprints as priorities settle):
 5. **Conformance / cross-language vectors** (`docs/test-vectors/*.json`) — the single source of truth for curve-fit and Gaussian math; executed by *both* Rust (`kaido-math`) and TS (`web/lib/curve`, `packages/sdk`). A mismatch fails CI on both sides. This is the contract that prevents "drew X, recorded Y" disputes.
 6. **SDK tests** (Vitest) — tx building/simulation/encoding against recorded RPC fixtures + a live-testnet integration tier (separate CI job, can be marked allowed-to-fail on RPC outages).
 7. **Web unit/component tests** (Vitest + Testing Library) — canvas math, curve preview, market state rendering, wallet flows (mocked signer).
-8. **E2E** (Playwright) — runs against testnet with seeded markets: markets read path (✅ S4), create-a-market wizard, distribution-mode trade, LP add/remove (S5 UI shipped; E2E S6), T3 resolution flow (S5 UI shipped; E2E S6), result card + leaderboard. Passkey journey deferred. A read-only subset runs against mainnet post-launch.
+8. **E2E** (Playwright) — runs against testnet with seeded markets: markets read path (✅ S4), create-a-market wizard (⬜), distribution-mode trade (⬜), LP add/remove (⬜ S5 UI shipped), T3 resolution flow (⬜ S5 UI shipped), T1/T2 flows (⬜ S6), result card + leaderboard (⬜). Passkey journey deferred. A read-only subset runs against mainnet post-launch.
 9. **Gas/footprint snapshots** — every contract fn has a recorded resource cost; CI flags regressions > threshold.
 10. **Security review & bug bounty** — external audit gated before mainnet (S6 kickoff → S8 close); Immunefi-style bounty live at launch; all findings → regression tests.
 11. **Manual exploratory + chaos** — soak tests (many concurrent rounds), oracle-failure drills (kill the mock oracle mid-market → market must pause/dispute, never mispay), reorg/forge-time drills on localnet.
@@ -685,10 +700,10 @@ Themes (groom into sprints as priorities settle):
 ## 8. Milestone ↔ deliverable summary (SCF mapping)
 
 - **M1 (~10%, on acceptance + first deliverable) — MVP/testnet:** `DistributionMarket` core AMM (scalar, Gaussian + σ-floor, full collateralization, settlement), `HouseVault` v0, `MarketFactory` + `Registry`, trade→resolve→claim on `/markets` (T0 Reflector), slider belief UI, result cards, property tests on invariants. → **End of Sprint 4.** Tag `v0.1.0-m1` ✅
-- **M2 (~20%) — Testnet feature-complete:** capped-Gaussian opt-in ✅, full LP flows + fee splitting ✅, oracle framework (T0 live ✅, T3 designated ✅, T1 adapter + T2 optimistic basic — S6), calibration leaderboards, passkey onboarding (optional), SDK alpha→1.0 + docs, external security review begun. → **End of Sprint 6.** Tag `v0.2.0-m2`.
+- **M2 (~20%) — Testnet feature-complete:** capped-Gaussian opt-in ✅, full LP flows + fee splitting ✅, oracle framework (T0 ✅, T3 ✅, T1/T2 contracts + UI 🔄), calibration leaderboard 🔄 (page live; tests outstanding), SDK alpha→1.0 🔄, external security review ⬜. → **End of Sprint 6.** Tag `v0.2.0-m2` (not yet cut).
 - **M3 (~30% + final 40%) — Mainnet / UX readiness:** audit complete, conservative per-market caps, bug bounty live; mainnet launch with live distribution markets; ≥1 non-crypto market live and resolved via T1/T2; SDK 1.0 + docs + ≥1 external party created a market with their own resolver; legal opinion obtained; geofencing + ToS in place. → **End of Sprint 8.** Tag `v1.0.0`.
 - **M4 (follow-on):** more T1 adapters + hardened T2; richer parameterizations (skewed, multi-modal); PvP pools with skill brackets + tournaments + embeddable widgets; partner integrations (parametric-insurance, sports, forecasting communities). → **Sprints 9–10+.**
 
 ---
 
-*Build plan v0.3 — updated 2026-06-14 after Sprint 5 close (capped Gaussians, full LP economics, T3 designated resolver, testnet redeploy). Paired with `kaido-whitepaper.md` v0.1. Open engineering questions tracked in `docs/adr/`: fixed-point scale & error bounds for `exp`/`erf`; correlation across trajectory checkpoints; T2 arbitration design; capped-Gaussian conformance vectors; deterministic-build pipeline for audited bytecode.*
+*Build plan v0.4 — updated 2026-06-21 during Sprint 6 (T1/T2 resolvers, leaderboard, single-wallet testnet deploy). Paired with `kaido-whitepaper.md` v0.1. Open engineering questions tracked in `docs/adr/`: fixed-point scale & error bounds for `exp`/`erf`; correlation across trajectory checkpoints; T2 arbitration design; capped-Gaussian conformance vectors; deterministic-build pipeline for audited bytecode.*
