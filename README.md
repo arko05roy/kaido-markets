@@ -23,9 +23,14 @@ Bet on where a number lands — not whether it crosses a line.
 
 ---
 
+## Demo Video
 
+- [Product walkthrough — voiceover](https://youtu.be/OgPWWf3nyto)
+- [Product walkthrough — no voice](https://youtu.be/ILiez9hhDGY)
 
-#User Excel Sheet (60+ users)
+---
+
+# User Excel Sheet (60+ users)
 
 Sheet - https://docs.google.com/spreadsheets/d/1YQnSM6HBn1tFuu6D_6AYoWhP4ogM74c3DbehD4FayIg/edit?usp=sharing
 
@@ -235,7 +240,4 @@ Anyone can create a market and anyone can take a position. The protocol earns a 
 
 ---
 
-## Demo Video
 
-- [Product walkthrough — voiceover](https://youtu.be/OgPWWf3nyto)
-- [Product walkthrough — no voice](https://youtu.be/ILiez9hhDGY)
