@@ -10,8 +10,8 @@ are actually made:
 |----|-------|--------|
 | 0  | [Monorepo & toolchain](0000-monorepo-and-toolchain.md) | Accepted |
 | 1  | [Fixed-point representation](0001-fixed-point-representation.md) | Accepted |
-| 2  | Belief representation on-chain (params, not arrays) | TODO (Sprint 1) |
-| 3  | σ-floor by default; capped-Gaussian opt-in | TODO (Sprint 1–2) |
+| 2  | [Belief representation on-chain (params, not arrays)](0002-belief-representation-on-chain.md) | Accepted |
+| 3  | [σ-floor by default; capped-Gaussian opt-in](0003-sigma-floor-default-capped-opt-in.md) | Accepted |
 | 4  | Trajectory market = product of per-checkpoint markets | TODO (Sprint 2) |
 | 5  | [Resolver is an interface, not a contract](0005-resolver-interface.md) | Accepted |
 | 6  | HouseVault is a Layer-1 participant | TODO (Sprint 2) |

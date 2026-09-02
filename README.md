@@ -10,9 +10,16 @@ auto-paid against the truth.
   test strategy, SCF tranche mapping)
 - **Decisions:** [`docs/adr/`](docs/adr/)
 
-> Status: **Sprint 0 complete** (2026-05-11) — skeleton in place; develops/deploys
-> against Stellar Testnet. The contracts are still no-op scaffolds and the web app
-> is a shell. **Sprint 1 (math core + AMM walking skeleton) is next.**
+> Status: **Sprint 1 in progress** (math core + AMM walking skeleton; build.md §5).
+> Done so far: `kaido-math` — deterministic WAD (1e18) fixed-point `exp`/`erf`/`erfc`,
+> Gaussian L²-norm, λ-scaling, scaled PDF, σ-floor, worst-case collateral, all `no_std`
+> and float-free, verified against 50-digit `mpmath` reference vectors in
+> [`docs/test-vectors/`](docs/test-vectors/) and `proptest` invariants; `kaido-common`
+> — the market tuple / belief / error / event types; `distribution-market` — storage,
+> `init(params, μ₀, σ₀)`, `get_params`/`get_state`, the `MarketCreated` event, σ-floor
+> and solvency validation (no trading/LP/resolution yet — Sprint 2), deployed and
+> seeded with a demo scalar Gaussian market on Testnet. ADRs 1–3 written. The other 7
+> contract crates are still scaffolds; the web app is a shell.
 
 ## Repo layout
 

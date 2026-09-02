@@ -249,9 +249,45 @@ Tasks:
 
 ---
 
-### Sprint 1 — Math core + AMM walking skeleton
+### Sprint 1 — Math core + AMM walking skeleton — ✅ COMPLETE (2026-05-11)
 
 **Goal:** `kaido-math` does Gaussian L²-norm / λ-scaling / worst-case collateral correctly; `DistributionMarket` can be deployed and holds a Gaussian curve.
+
+> **Status: done.** Decision: internal fixed-point scale = **1e18 WAD** (ADR-1
+> updated; ADR-2, ADR-3 written). `kaido-math` ships `exp_wad` (range reduction +
+> degree-8 Taylor, ≤1e-9 rel., domain x ≤ 46·WAD), `erf_wad`/`erfc_wad`
+> (Maclaurin |x|≤4 / Laplace continued fraction |x|<7 / saturate beyond — only
+> *used* by capped Gaussians in Sprint 5 but implemented now), and
+> `gaussian_l2_norm` / `lambda` / `gaussian_pdf_scaled` / `sigma_floor` /
+> `worst_case_collateral` — all `no_std`, **float-free**, on a self-contained
+> audited 256-bit `mul_div`/`isqrt` (the script3 `soroban-fixed-point-math`
+> 256-bit path needs an `Env`, which a pure crate can't have — documented in
+> ADR-1). Verified against 50-digit `mpmath` reference vectors in
+> `docs/test-vectors/` (regenerate: `python3 docs/test-vectors/generate.py`) plus
+> `proptest` invariants. `kaido-common` carries `MarketParams`/`Belief`/
+> `PositionData`/`MarketStatus`/`MarketState`/`KaidoError`/`MarketCreated`
+> (`#[contractevent]`). `distribution-market` has real logic — instance storage,
+> `init(k, b, fee_bps, resolver, tier, window_open, window_lock, window_resolve,
+> mu0, sigma0)` (flat primitives — the Stellar CLI can't build a `#[contracttype]`
+> struct arg with a unit enum inside; `MarketFactory` will call it the same way),
+> `get_params`/`get_state`/`wad`, the σ-floor + `peak ≤ b` solvency re-check,
+> `MarketCreated` event. **Deviation from the literal task wording:** the
+> constructor is `init(...)` taking flat primitives rather than `init(params)` /
+> `__constructor` — `OutcomeSpace::Scalar`/`Parameterization::Gaussian`/`capped:
+> false` are hard-coded for v1. `worst_case_collateral` is a grid +
+> golden-section search now; the "never under-collateralised" fuzz vs a
+> brute-force grid + closed-form critical points stays Sprint 4 (§6 item 3). All
+> 8 contract crates deployed to **Stellar Testnet** and the distribution-market
+> seeded with a demo scalar Gaussian market (`make deploy:testnet` →
+> `scripts/deploy.sh testnet`, idempotent — re-deploys + re-seeds + verifies
+> `get_params`/`get_state`); gas/footprint snapshots in
+> `contracts/contracts/distribution-market/test_snapshots/`. `cargo make ci`
+> (fmt + clippy `-D warnings` + `cargo test --workspace` + wasm build) green. The
+> conformance-vector cross-check on the TS side lands with `web/lib/curve` in
+> Sprint 3 (ADR-8); the integration `tests/` crate so far only smoke-tests linking
+> + `distribution-market` init — full multi-contract lifecycles are Sprint 2–3.
+> Outstanding (later sprints, not Sprint 1): TS bindings for the new
+> `distribution-market` ABI (Sprint 3); trading/LP/resolution (Sprint 2).
 
 User stories:
 - *As a contract dev, I can compute `‖p‖₂`, `λ = k√(2σ√π)`, peak height, and `σ_min` for a market deterministically in fixed point.*

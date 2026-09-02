@@ -1,0 +1,233 @@
+{
+  "_generated_by": "docs/test-vectors/generate.py",
+  "_wad": "1000000000000000000",
+  "fn": "worst_case_collateral(g,f) = max(0, -min_x (g(x)-f(x)))",
+  "note": "g,f are scaled Gaussians (mu,sigma,lambda); lambda defaults to k*sqrt(2*sigma*sqrt(pi)) with k=100. Looser tol \u2014 numeric search; Sprint-4 fuzz vs brute-force grid is the hard guarantee.",
+  "vectors": [
+    {
+      "label": "identical (g==f) \u21d2 0",
+      "g": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "expected_wad": "0",
+      "tol_abs": "10000"
+    },
+    {
+      "label": "g sharper, same mean (taller at center, but f wins in the tails)",
+      "g": {
+        "mu_wad": "0",
+        "sigma_wad": "5000000000000000000",
+        "lambda_wad": "421005207913811444730"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "expected_wad": "9998053710589410298",
+      "tol_abs": "999805371058942"
+    },
+    {
+      "label": "g wider, same mean (g shorter at center; min is at the center)",
+      "g": {
+        "mu_wad": "0",
+        "sigma_wad": "20000000000000000000",
+        "lambda_wad": "842010415827622889459"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "expected_wad": "6956997521831459913",
+      "tol_abs": "695699752183146"
+    },
+    {
+      "label": "g shifted right, same width",
+      "g": {
+        "mu_wad": "30000000000000000000",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "expected_wad": "23500946330717213552",
+      "tol_abs": "2350094633071722"
+    },
+    {
+      "label": "g shifted left, same width",
+      "g": {
+        "mu_wad": "-25000000000000000000",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "expected_wad": "22826699941195877824",
+      "tol_abs": "2282669994119588"
+    },
+    {
+      "label": "g sharper and shifted",
+      "g": {
+        "mu_wad": "12000000000000000000",
+        "sigma_wad": "3000000000000000000",
+        "lambda_wad": "326109231783356543538"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "expected_wad": "23738848063998577638",
+      "tol_abs": "2373884806399858"
+    },
+    {
+      "label": "g wider and shifted",
+      "g": {
+        "mu_wad": "8000000000000000000",
+        "sigma_wad": "40000000000000000000",
+        "lambda_wad": "1190782549722833661680"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "expected_wad": "12118853533119329494",
+      "tol_abs": "1211885353311933"
+    },
+    {
+      "label": "far apart, similar width",
+      "g": {
+        "mu_wad": "100000000000000000000",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "f": {
+        "mu_wad": "-100000000000000000000",
+        "sigma_wad": "12000000000000000000",
+        "lambda_wad": "652218463566713087077"
+      },
+      "expected_wad": "21683126764601937958",
+      "tol_abs": "2168312676460194"
+    },
+    {
+      "label": "nearly delta g vs broad f",
+      "g": {
+        "mu_wad": "0",
+        "sigma_wad": "50000000000000000",
+        "lambda_wad": "42100520791381144473"
+      },
+      "f": {
+        "mu_wad": "1000000000000000000",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "expected_wad": "23752675292432982842",
+      "tol_abs": "2375267529243299"
+    },
+    {
+      "label": "broad g vs nearly delta f",
+      "g": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "595391274861416830840"
+      },
+      "f": {
+        "mu_wad": "500000000000000000",
+        "sigma_wad": "50000000000000000",
+        "lambda_wad": "42100520791381144473"
+      },
+      "expected_wad": "312190552467020552660",
+      "tol_abs": "31219055246702056"
+    },
+    {
+      "label": "tiny shift, sharp curves",
+      "g": {
+        "mu_wad": "10000000000000000",
+        "sigma_wad": "100000000000000000",
+        "lambda_wad": "59539127486141683084"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "100000000000000000",
+        "lambda_wad": "59539127486141683084"
+      },
+      "expected_wad": "14394727211061863279",
+      "tol_abs": "1439472721106187"
+    },
+    {
+      "label": "arbitrary \u03bb, g taller everywhere not possible (different \u03bc)",
+      "g": {
+        "mu_wad": "5000000000000000000",
+        "sigma_wad": "2000000000000000000",
+        "lambda_wad": "50000000000000000000"
+      },
+      "f": {
+        "mu_wad": "-5000000000000000000",
+        "sigma_wad": "8000000000000000000",
+        "lambda_wad": "80000000000000000000"
+      },
+      "expected_wad": "3989385705035951397",
+      "tol_abs": "398938570503596"
+    },
+    {
+      "label": "market starts flat-ish, trader sharpens at a new center",
+      "g": {
+        "mu_wad": "200000000000000000000",
+        "sigma_wad": "8000000000000000000",
+        "lambda_wad": "532534145520155885119"
+      },
+      "f": {
+        "mu_wad": "150000000000000000000",
+        "sigma_wad": "60000000000000000000",
+        "lambda_wad": "1458404820715640405058"
+      },
+      "expected_wad": "9696988994611015153",
+      "tol_abs": "969698899461102"
+    },
+    {
+      "label": "big numbers",
+      "g": {
+        "mu_wad": "1000000000000000000000",
+        "sigma_wad": "200000000000000000000",
+        "lambda_wad": "2662670727600779425595"
+      },
+      "f": {
+        "mu_wad": "1200000000000000000000",
+        "sigma_wad": "180000000000000000000",
+        "lambda_wad": "2526031247482868668378"
+      },
+      "expected_wad": "3084636068028567885",
+      "tol_abs": "308463606802857"
+    },
+    {
+      "label": "g identical shape, smaller \u03bb \u21d2 d\u22640, min at \u03bc",
+      "g": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "30000000000000000000"
+      },
+      "f": {
+        "mu_wad": "0",
+        "sigma_wad": "10000000000000000000",
+        "lambda_wad": "90000000000000000000"
+      },
+      "expected_wad": "2393653682408596068",
+      "tol_abs": "239365368240860"
+    }
+  ]
+}

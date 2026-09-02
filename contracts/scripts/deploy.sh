@@ -12,8 +12,9 @@
 #     contracts' own config at deploy time;
 #   * the *exact* same script is used for testnet and the mainnet dry-run.
 #
-# Sprint 0 status: deploys the scaffold contracts (no constructors, no real
-# logic yet) so the upload→deploy→record pipeline is exercised end to end.
+# Status: Sprint 1 — `distribution-market` has real logic (storage, `init`,
+# `get_params`/`get_state`, `MarketCreated`), and is deployed *and* seeded with a
+# demo scalar Gaussian market here; the other 7 crates are still scaffolds.
 # Factory WASM-hash install, registry wiring and house-vault seeding land in
 # Sprints 2–3.
 set -euo pipefail
@@ -109,15 +110,48 @@ for c in ${CONTRACTS}; do
   echo "-- ${c} --------------------------------"
   hash="$(stellar contract upload --wasm "${wasm}" --network "${NETWORK}" "${SOURCE_ARG[@]}")"
   echo "   wasm hash : ${hash}"
-  # Scaffold contracts have no __constructor -> deploy with no args.
+  # All contracts deploy with no constructor args; `distribution-market` has an
+  # explicit `init(params, mu0, sigma0)` invoked below.
   id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}")"
   echo "   contract  : ${id}"
   key="$(to_camel "${c}")"
   [[ -n "${CONTRACTS_JSON}" ]] && CONTRACTS_JSON="${CONTRACTS_JSON},"
   CONTRACTS_JSON="${CONTRACTS_JSON}
     \"${key}\": { \"id\": \"${id}\", \"wasmHash\": \"${hash}\" }"
+  # Remember each id under its snake_case name for the steps below.
+  eval "ID_$(echo "${c}" | tr '-' '_')=${id}"
   N=$(( N + 1 ))
 done
+
+# --- seed + verify the distribution-market (Sprint 1 deliverable) ---------
+# Initialise the just-deployed scalar Gaussian market with a small demo curve:
+# k = 1, b = 100, μ₀ = 50, σ₀ = 1 (all WAD-scaled, 1e18; ADR-1/ADR-2), 0.30%
+# fee, tier 0 (Reflector / T0), resolver = the (still-scaffold) resolver-reflector
+# contract (only *called* at resolve() time — Sprint 2 — so any valid address
+# does), window now / +1h / +2h. Then read `get_params` / `get_state` back to
+# prove the round-trip. This market is a demo seed; a fresh one is deployed on
+# every run (testnet resets ~2-4×/yr — build.md §0a).
+WAD18="1000000000000000000"            # 1e18
+B18="100000000000000000000"            # 100 * 1e18
+MU0_18="50000000000000000000"          # 50 * 1e18
+NOW="$(date +%s)"
+W_OPEN="${NOW}"; W_LOCK="$(( NOW + 3600 ))"; W_RESOLVE="$(( NOW + 7200 ))"
+echo "-- distribution-market: init + verify ----"
+if stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+     -- init \
+        --k "${WAD18}" --b "${B18}" --fee-bps 30 \
+        --resolver "${ID_resolver_reflector}" --tier 0 \
+        --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
+        --mu0 "${MU0_18}" --sigma0 "${WAD18}"; then
+  echo "   get_params ->"
+  stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
+    -- get_params || true
+  echo "   get_state  ->"
+  stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
+    -- get_state || true
+else
+  echo "   (init invoke failed — the contract is deployed; re-run init manually with the same args)" >&2
+fi
 
 json_or_null() { [[ -n "$1" ]] && printf '"%s"' "$1" || printf 'null'; }
 

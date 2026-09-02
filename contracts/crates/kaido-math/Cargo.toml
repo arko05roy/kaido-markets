@@ -11,5 +11,17 @@ repository.workspace = true
 crate-type = ["rlib"]
 
 [dependencies]
-# Fixed-point primitives land here in Sprint 1 (soroban-fixed-point-math).
-# Kept dependency-free in Sprint 0 so the empty crate stays trivially no_std.
+# Intentionally dependency-free at runtime: kaido-math carries its own small,
+# audited 256-bit `mul_div` / `isqrt` (module `fp`) rather than the script3
+# `soroban-fixed-point-math` crate, because the script3 256-bit path
+# (`SorobanFixedPoint`) requires a Soroban `Env` that this pure crate does not
+# have. See ADR-1 ("kaido-math rounding & 256-bit intermediates"). The script3
+# crate remains the dependency of record on the *contract* side for the money
+# boundary.
+
+[dev-dependencies]
+# Property tests for the AMM invariants (build.md §4, §6 item 2).
+proptest = "1"
+# Parse the cross-language conformance vectors in docs/test-vectors/*.json.
+# (Tests always link std, so these std-only deps are fine for a no_std crate.)
+serde_json = "1"

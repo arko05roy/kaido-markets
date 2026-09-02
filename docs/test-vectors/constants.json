@@ -1,0 +1,14 @@
+{
+  "_generated_by": "docs/test-vectors/generate.py",
+  "_wad": "1000000000000000000",
+  "note": "WAD-scaled constants used by kaido-math; round-half-away-from-zero of the exact value.",
+  "constants": {
+    "WAD": "1000000000000000000",
+    "LN2": "693147180559945309",
+    "SQRT_PI": "1772453850905516027",
+    "SQRT_2PI": "2506628274631000502",
+    "TWO_SQRT_PI": "3544907701811032055",
+    "TWO_OVER_SQRT_PI": "1128379167095512574",
+    "PI": "3141592653589793238"
+  }
+}
