@@ -60,6 +60,53 @@ export function statusLabel(status: MarketStatus | null): string {
   }
 }
 
+export type MarketWindow = { open: bigint | number; lock: bigint | number };
+
+/** Mirrors `DistributionMarket::trade` — status Open and ledger time inside [open, lock). */
+export function isTradingWindowOpen(
+  statusTag: string | null | undefined,
+  window: MarketWindow,
+  nowSec = Math.floor(Date.now() / 1000),
+): boolean {
+  if (statusTag !== "Open") return false;
+  const open = Number(window.open);
+  const lock = Number(window.lock);
+  return nowSec >= open && nowSec < lock;
+}
+
+export function tradingClosedReason(
+  statusTag: string | null | undefined,
+  window: MarketWindow,
+  nowSec = Math.floor(Date.now() / 1000),
+): string {
+  if (statusTag && statusTag !== "Open") {
+    return `Trading is closed — market status is ${statusLabel({ tag: statusTag } as MarketStatus)}.`;
+  }
+  const open = Number(window.open);
+  const lock = Number(window.lock);
+  if (nowSec < open) {
+    return `Trading opens ${fmtResolveDateLong(open)}.`;
+  }
+  if (nowSec >= lock) {
+    return `Trading locked ${fmtResolveDateLong(lock)} — re-seed testnet fixtures or create a new market.`;
+  }
+  return "Trading is closed for this market.";
+}
+
+/** Map Soroban contract error codes from failed simulations to readable copy. */
+export function formatContractTradeError(message: string): string {
+  if (message.includes("Error(Contract, #30)") || message.includes("MarketNotOpen")) {
+    return "Trading window is not open — the market may have locked or testnet fixtures expired. Run `KAIDO_RESEED_LIFECYCLE=1 make seed:testnet` or create a new market.";
+  }
+  if (message.includes("Error(Contract, #34)") || message.includes("SlippageExceeded")) {
+    return "Slippage guard tripped — raise your max USDC risk amount.";
+  }
+  if (message.includes("Error(Contract, #15)") || message.includes("SigmaBelowFloor")) {
+    return "Conviction is too tight — widen σ above the market floor.";
+  }
+  return message;
+}
+
 /** Format a real-unit outcome for display (prices, scores, etc.). */
 export function formatOutcome(v: number): string {
   if (!Number.isFinite(v)) return "—";

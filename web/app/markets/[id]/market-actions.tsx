@@ -21,6 +21,7 @@ export function MarketActions({
 }) {
   const [positionRefresh, setPositionRefresh] = useState(0);
   const tradingOpen = tradeMarket.tradingOpen;
+  // TradePanel re-checks the window client-side; settlement shows when trading is closed.
 
   return (
     <div className="space-y-6">

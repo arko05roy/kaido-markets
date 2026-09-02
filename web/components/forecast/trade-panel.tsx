@@ -5,7 +5,7 @@
  */
 import { Kaido, type KaidoConfig } from "@kaido/sdk";
 import { Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ScalarBeliefInput } from "@/components/forecast/scalar-belief-input";
 import {
@@ -20,8 +20,11 @@ import {
   convictionLabel,
   edgeVsCrowd,
   estimatePayoutPreview,
+  formatContractTradeError,
   formatOutcome,
+  isTradingWindowOpen,
   peakAtMu,
+  tradingClosedReason,
 } from "@/lib/market-display";
 import { effectiveSigmaFloor, fromWad, type GaussianBelief } from "@/lib/curve";
 import { savePosition } from "@/lib/positions";
@@ -35,7 +38,10 @@ export interface TradeMarketView {
   consensusMusWad: string[];
   consensusSigmasWad: string[];
   checkpoints: number[];
+  statusTag: string;
   tradingOpen: boolean;
+  windowOpen: number;
+  windowLock: number;
   capped?: boolean;
 }
 
@@ -157,6 +163,18 @@ export function TradePanel({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [positionId, setPositionId] = useState<bigint | null>(null);
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const tradingOpen = isTradingWindowOpen(
+    market.statusTag,
+    { open: market.windowOpen, lock: market.windowLock },
+    nowSec,
+  );
 
   const riskUsdc = Number(maxUsdc);
   const crowdMu = fromWad(consensusScalar.muWad);
@@ -215,16 +233,17 @@ export function TradePanel({
         onPositionOpened?.(id);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Trade failed");
+      const raw = e instanceof Error ? e.message : "Trade failed";
+      setError(formatContractTradeError(raw));
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!market.tradingOpen) {
+  if (!tradingOpen) {
     return (
       <div className="border border-dashed border-white/15 px-5 py-4 text-sm text-white/50">
-        Trading is closed for this market.
+        {tradingClosedReason(market.statusTag, { open: market.windowOpen, lock: market.windowLock }, nowSec)}
       </div>
     );
   }

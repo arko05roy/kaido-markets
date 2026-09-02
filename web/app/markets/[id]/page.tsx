@@ -17,7 +17,12 @@ import { MarketTradingLayout } from "@/components/market/market-trading-layout";
 import { MarketVitals } from "@/components/market/market-vitals";
 import { RecentActivity } from "@/components/market/recent-activity";
 import { type SettlementMarketView } from "@/components/market/settlement-panel";
-import { crowdTargetLabel, marketQuestion, marketSubtitle } from "@/lib/market-display";
+import {
+  crowdTargetLabel,
+  isTradingWindowOpen,
+  marketQuestion,
+  marketSubtitle,
+} from "@/lib/market-display";
 
 import { MarketActions } from "./market-actions";
 import { deployedConfig } from "@/lib/stellar/contracts";
@@ -116,7 +121,10 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       consensusMusWad,
       consensusSigmasWad,
       checkpoints,
-      tradingOpen: state.status.tag === "Open",
+      statusTag: state.status.tag,
+      tradingOpen: isTradingWindowOpen(state.status.tag, mp.window),
+      windowOpen: Number(mp.window.open),
+      windowLock: Number(mp.window.lock),
       capped: mp.capped,
     };
     const settlement: SettlementMarketView = {
