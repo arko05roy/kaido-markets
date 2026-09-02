@@ -21,6 +21,9 @@ Bet on where a number lands — not whether it crosses a line.
 
 [Whitepaper](./kaido-whitepaper.md) · [Build plan](./build.md) · [ADRs](./docs/adr/)
 
+User feedback and product observations are collected in
+[`docs/user-feedback.md`](./docs/user-feedback.md).
+
 ## Demo videos
 
 - [Product walkthrough — no voice](https://youtu.be/ILiez9hhDGY)
@@ -261,6 +264,33 @@ Per-network contract ids (USDC SAC, Reflector feed, Kaido contracts, admin
 multisig, Launchtube) are never hardcoded. They're resolved at deploy time and
 written by `contracts/scripts/deploy.sh` into `config/networks.<network>.json`.
 
+### Testnet contract addresses
+
+The following addresses are from the current deployment recorded in
+[`config/networks.testnet.json`](./config/networks.testnet.json). Testnet state
+can be reset, so treat these as deployment references rather than permanent
+production addresses.
+
+| Component | Address |
+| --- | --- |
+| Distribution Market WASM instance | `CDG5RANX2PTBBL2QLCEB3UBISPSRLRBDJZU2ENU2TMOEYSXUBTA5MWHT` |
+| Market Factory | `CC36IZ5JOYDPX5NVMSRFQ6VEWAUJI45HUKCKLPA2YP37OQNG6OSJE5LJ` |
+| Registry | `CC4X5KUWXUVBMCKVKCL7ZCBCNA5U5FMSN23TUHBAZICGHVZ4TE543OKX` |
+| Reflector Resolver (T0) | `CCP7QJ2RHZYVMLU2V3OSCM5FYZAAXVLMEX6ZFMWFCBXSCUU3QSCZY77Q` |
+| Attested Resolver (T1) | `CDC3GJFJLHQZCU5QF22AD42YFNFDOTVL7GMEF32HT7FRP6ILZLPWK6ZO` |
+| Optimistic Resolver (T2) | `CDT2HGDU7WG5L4OHNHIG65G2MTU32M5JBRZBSFR6ALDPX4DH3IICCXYM` |
+| Designated Resolver (T3) | `CBBDJQGJDWPYCUTUSPTZXJLPKOUGKJ6DN3XW5TFIMJ3IQCY47S2AE6DR` |
+| USDC Stellar Asset Contract | `CDDOIWSIV7BQ4D22LQ5O2XVDJRXTN23NODNVG7JXZUJO3ZNOLOQXLQ5I` |
+| Reflector feed | `CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63` |
+| Kaido issuer / admin | `GBKVUNMQ534SFSPQXYDNK2F4LFLL2534NYOBXVPDC3JFYLFA7YRBLWBI` |
+| Demo market fixture | `CDL6GFSLNZZX3KR7EELFHGSEFZEFIYTOAQIWIAYV5GEIFK3CGLBCXCVG` |
+| Lifecycle market fixture | `CAVFSDBWDPSA5GPJ36TJ37SMOPR5MLKHULI7D23T5PCYB2656QQBLAFQ` |
+| Lifecycle resolver fixture | `CB7ERA2ZJ4TOHTQCWFJ7S5WOG5FYRJPSXLUJGRW7YIWMNXK243FTCW42` |
+
+For the current wallet set and activity links, see
+[`docs/wallets.testnet.md`](./docs/wallets.testnet.md) and
+[`docs/wallet-activity.testnet.md`](./docs/wallet-activity.testnet.md).
+
 > ⚠️ Testnet resets ~2–4×/year at 17:00 UTC (next: **2026-06-17**,
 > **2026-12-16**) and wipes all state. Every deploy is scripted and idempotent;
 > fixtures are re-seedable; nothing off-chain treats a testnet contract id as
@@ -278,7 +308,7 @@ make seed:testnet        # BlendTap authorize + optional lifecycle fixture (KAID
 
 After seeding, optional env hints are printed (`NEXT_PUBLIC_KAIDO_DEMO_MARKET`, `NEXT_PUBLIC_KAIDO_LIFECYCLE_MARKET`).
 
-Gated SDK lifecycle test (real testnet, no mocks):
+Gated SDK lifecycle test against the live testnet:
 
 ```bash
 KAIDO_INTEGRATION=1 KAIDO_INTEGRATION_LIFECYCLE=1 KAIDO_INTEGRATION_SECRET=S... pnpm --filter @kaido/sdk test
