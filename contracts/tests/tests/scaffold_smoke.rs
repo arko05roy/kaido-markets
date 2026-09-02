@@ -52,24 +52,8 @@ fn scaffold_contracts_link() {
         assert_eq!(f.count(), 0);
         assert_eq!(f.registry(), reg.address);
     }
-    // house-vault and resolver-reflector now have real Sprint-2 logic (no
-    // `scaffold_version`) — they're exercised by their own crates' tests and
-    // by `lifecycle.rs`.
-    check_scaffold!(
-        "resolver-attested",
-        resolver_attested::ResolverAttested,
-        resolver_attested::ResolverAttestedClient
-    );
-    check_scaffold!(
-        "resolver-optimistic",
-        resolver_optimistic::ResolverOptimistic,
-        resolver_optimistic::ResolverOptimisticClient
-    );
-    check_scaffold!(
-        "resolver-designated",
-        resolver_designated::ResolverDesignated,
-        resolver_designated::ResolverDesignatedClient
-    );
+    // house-vault, resolver-reflector, and T1–T3 resolvers have real logic —
+    // exercised by their crate tests and `lifecycle.rs`.
 }
 
 #[test]

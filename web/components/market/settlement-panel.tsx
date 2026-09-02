@@ -3,7 +3,7 @@
 /**
  * Post-trade lifecycle on /markets/[id]: window phase, resolve, claim payouts.
  */
-import { Kaido, type KaidoConfig, distributionMarket } from "@kaido/sdk";
+import { Kaido, type KaidoConfig, distributionMarket, resolverAttested, resolverOptimistic } from "@kaido/sdk";
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -110,6 +110,16 @@ export function SettlementPanel({
   const [positionsEpoch, bumpPositionsEpoch] = useState(0);
   const [reportValue, setReportValue] = useState("");
   const [reporting, setReporting] = useState(false);
+  const [attestedSig, setAttestedSig] = useState<{
+    valueWad: bigint;
+    reportedAt: bigint;
+    signature: Buffer;
+  } | null>(null);
+  const [attestedPhase, setAttestedPhase] = useState<number | null>(null);
+  const [optPhase, setOptPhase] = useState<number | null>(null);
+  const [optBond, setOptBond] = useState("1");
+  const [optAltValue, setOptAltValue] = useState("");
+  const [resolverBusy, setResolverBusy] = useState<string | null>(null);
   const [feeBusy, setFeeBusy] = useState<"treasury" | "creator" | null>(null);
   const [pendingFees, setPendingFees] = useState<{ treasury: bigint; creator: bigint } | null>(null);
   const [lastClaim, setLastClaim] = useState<{
@@ -166,12 +176,67 @@ export function SettlementPanel({
   }, []);
 
   const isT3 = market.resolverTier === distributionMarket.ResolverTier.Designated;
+  const isT1 = market.resolverTier === distributionMarket.ResolverTier.Attested;
+  const isT2 = market.resolverTier === distributionMarket.ResolverTier.Optimistic;
   const canReportT3 =
     wallet &&
     isT3 &&
     market.resolver &&
     !isResolved &&
     nowSec >= market.windowResolve;
+
+  useEffect(() => {
+    if (!market.resolver || !isT1) {
+      setAttestedPhase(null);
+      return;
+    }
+    let cancelled = false;
+    void new resolverAttested.Client({
+      contractId: market.resolver,
+      networkPassphrase: config.networkPassphrase,
+      rpcUrl: config.rpcUrl,
+      allowHttp: config.rpcUrl.startsWith("http://"),
+    })
+      .phase()
+      .then((t) => {
+        if (!cancelled) setAttestedPhase(Number(t.result));
+      })
+      .catch(() => {
+        if (!cancelled) setAttestedPhase(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [market.resolver, isT1, config, refreshKey, positionsEpoch]);
+
+  useEffect(() => {
+    if (!market.resolver || !isT2) {
+      setOptPhase(null);
+      return;
+    }
+    let cancelled = false;
+    void new resolverOptimistic.Client({
+      contractId: market.resolver,
+      networkPassphrase: config.networkPassphrase,
+      rpcUrl: config.rpcUrl,
+      allowHttp: config.rpcUrl.startsWith("http://"),
+    })
+      .phase()
+      .then((t) => {
+        if (!cancelled) setOptPhase(Number(t.result));
+      })
+      .catch(() => {
+        if (!cancelled) setOptPhase(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [market.resolver, isT2, config, refreshKey, positionsEpoch]);
+
+  const canT1Actions =
+    wallet && isT1 && market.resolver && !isResolved && nowSec >= market.windowResolve;
+  const canT2Actions =
+    wallet && isT2 && market.resolver && !isResolved && nowSec >= market.windowResolve;
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +274,149 @@ export function SettlementPanel({
       setReporting(false);
     }
   }, [wallet, market.resolver, reportValue, kaido]);
+
+  const fetchAttestedSignature = useCallback(async () => {
+    if (!market.resolver) return;
+    const v = Number(reportValue.trim());
+    if (!Number.isFinite(v)) {
+      setError("enter a numeric outcome");
+      return;
+    }
+    setResolverBusy("sign");
+    setError(null);
+    try {
+      const res = await fetch("/api/attested/sign", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ resolverId: market.resolver, value: v }),
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        valueWad?: string;
+        reportedAt?: number;
+        signature?: string;
+      };
+      if (!res.ok) throw new Error(json.error ?? "sign failed");
+      setAttestedSig({
+        valueWad: BigInt(json.valueWad!),
+        reportedAt: BigInt(json.reportedAt!),
+        signature: Buffer.from(json.signature!, "hex"),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "sign failed");
+    } finally {
+      setResolverBusy(null);
+    }
+  }, [market.resolver, reportValue]);
+
+  const submitAttested = useCallback(async () => {
+    if (!wallet || !market.resolver || !attestedSig) return;
+    setResolverBusy("submit");
+    setError(null);
+    try {
+      await kaido.submitAttestedReport(
+        market.resolver,
+        attestedSig.valueWad,
+        attestedSig.reportedAt,
+        attestedSig.signature,
+        wallet.signer,
+      );
+      setAttestedSig(null);
+      setReportValue("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "submit failed");
+    } finally {
+      setResolverBusy(null);
+    }
+  }, [wallet, market.resolver, attestedSig, kaido]);
+
+  const finalizeAttested = useCallback(async () => {
+    if (!wallet || !market.resolver) return;
+    setResolverBusy("finalize");
+    setError(null);
+    try {
+      await kaido.finalizeAttestedReport(market.resolver, wallet.signer);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "finalize failed");
+    } finally {
+      setResolverBusy(null);
+    }
+  }, [wallet, market.resolver, kaido]);
+
+  const disputeAttested = useCallback(async () => {
+    if (!wallet || !market.resolver) return;
+    setResolverBusy("dispute");
+    setError(null);
+    try {
+      await kaido.disputeAttestedReport(market.resolver, wallet.signer);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "dispute failed");
+    } finally {
+      setResolverBusy(null);
+    }
+  }, [wallet, market.resolver, kaido]);
+
+  const proposeOptimistic = useCallback(async () => {
+    if (!wallet || !market.resolver) return;
+    const v = Number(reportValue.trim());
+    const bond = Number(optBond.trim());
+    if (!Number.isFinite(v) || !Number.isFinite(bond) || bond <= 0) {
+      setError("enter outcome and bond (USDC)");
+      return;
+    }
+    setResolverBusy("propose");
+    setError(null);
+    try {
+      await kaido.proposeOptimisticOutcome(
+        market.resolver,
+        toWad(v),
+        BigInt(Math.round(bond * 1e7)),
+        wallet.signer,
+      );
+      setReportValue("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "propose failed");
+    } finally {
+      setResolverBusy(null);
+    }
+  }, [wallet, market.resolver, reportValue, optBond, kaido]);
+
+  const disputeOptimistic = useCallback(async () => {
+    if (!wallet || !market.resolver) return;
+    const v = Number(optAltValue.trim());
+    const bond = Number(optBond.trim());
+    if (!Number.isFinite(v) || !Number.isFinite(bond) || bond <= 0) {
+      setError("enter alternative outcome and bond");
+      return;
+    }
+    setResolverBusy("opt-dispute");
+    setError(null);
+    try {
+      await kaido.disputeOptimisticOutcome(
+        market.resolver,
+        toWad(v),
+        BigInt(Math.round(bond * 1e7)),
+        wallet.signer,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "dispute failed");
+    } finally {
+      setResolverBusy(null);
+    }
+  }, [wallet, market.resolver, optAltValue, optBond, kaido]);
+
+  const finalizeOptimistic = useCallback(async () => {
+    if (!wallet || !market.resolver) return;
+    setResolverBusy("opt-finalize");
+    setError(null);
+    try {
+      await kaido.finalizeOptimisticOutcome(market.resolver, wallet.signer);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "finalize failed");
+    } finally {
+      setResolverBusy(null);
+    }
+  }, [wallet, market.resolver, kaido]);
 
   const claimFees = useCallback(
     async (which: "treasury" | "creator") => {
@@ -360,6 +568,104 @@ export function SettlementPanel({
                 {feeBusy === "creator" ? "Claiming…" : "Claim creator fees"}
               </Button>
             )}
+          </div>
+        </div>
+      )}
+
+      {canT1Actions && (
+        <div className="flex flex-col gap-2 rounded-md border border-dashed px-3 py-2 text-sm">
+          <span className="font-medium">T1 attested resolver</span>
+          {attestedPhase != null && (
+            <span className="text-xs text-muted-foreground">phase: {attestedPhase}</span>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1">
+              <span>Outcome value</span>
+              <input
+                type="text"
+                value={reportValue}
+                onChange={(e) => setReportValue(e.target.value)}
+                className="w-40 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+              />
+            </label>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={resolverBusy != null || !reportValue.trim()}
+              onClick={() => void fetchAttestedSignature()}
+            >
+              {resolverBusy === "sign" ? "Signing…" : "Get signed report"}
+            </Button>
+            <Button
+              size="sm"
+              disabled={resolverBusy != null || !attestedSig}
+              onClick={() => void submitAttested()}
+            >
+              {resolverBusy === "submit" ? "Submitting…" : "Submit on-chain"}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={resolverBusy != null}
+              onClick={() => void finalizeAttested()}
+            >
+              Finalize
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={resolverBusy != null}
+              onClick={() => void disputeAttested()}
+            >
+              Dispute
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {canT2Actions && (
+        <div className="flex flex-col gap-2 rounded-md border border-dashed px-3 py-2 text-sm">
+          <span className="font-medium">T2 optimistic resolver</span>
+          {optPhase != null && (
+            <span className="text-xs text-muted-foreground">phase: {optPhase}</span>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1">
+              <span>Proposed outcome</span>
+              <input
+                type="text"
+                value={reportValue}
+                onChange={(e) => setReportValue(e.target.value)}
+                className="w-36 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>Bond (USDC)</span>
+              <input
+                type="text"
+                value={optBond}
+                onChange={(e) => setOptBond(e.target.value)}
+                className="w-24 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+              />
+            </label>
+            <Button size="sm" disabled={resolverBusy != null} onClick={() => void proposeOptimistic()}>
+              Propose
+            </Button>
+            <label className="flex flex-col gap-1">
+              <span>Dispute value</span>
+              <input
+                type="text"
+                value={optAltValue}
+                onChange={(e) => setOptAltValue(e.target.value)}
+                className="w-36 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+              />
+            </label>
+            <Button size="sm" variant="secondary" disabled={resolverBusy != null} onClick={() => void disputeOptimistic()}>
+              Dispute
+            </Button>
+            <Button size="sm" variant="outline" disabled={resolverBusy != null} onClick={() => void finalizeOptimistic()}>
+              Finalize
+            </Button>
           </div>
         </div>
       )}

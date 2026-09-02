@@ -16,6 +16,8 @@ import {
   registry,
   distributionMarket,
   resolverDesignated,
+  resolverAttested,
+  resolverOptimistic,
 } from "@kaido/contract-bindings";
 import {
   Keypair,
@@ -303,6 +305,80 @@ export class Kaido {
     await settle(tx, signer, this.config, { force: true });
   }
 
+  /** T1 attested: submit a poster-signed report (anyone may relay the tx). */
+  async submitAttestedReport(
+    resolverId: string,
+    valueWad: bigint,
+    reportedAt: bigint,
+    signature: Buffer,
+    signer: KaidoSigner,
+  ): Promise<void> {
+    const tx = await new resolverAttested.Client(
+      clientOptions(this.config, resolverId, signer),
+    ).submit_report({ value: valueWad, reported_at: reportedAt, signature });
+    await settle(tx, signer, this.config, { force: true });
+  }
+
+  /** T1: open a challenge during the window (market becomes disputable). */
+  async disputeAttestedReport(resolverId: string, signer: KaidoSigner): Promise<void> {
+    const tx = await new resolverAttested.Client(
+      clientOptions(this.config, resolverId, signer),
+    ).dispute({ disputer: signer.accountId });
+    await settle(tx, signer, this.config, { force: true });
+  }
+
+  /** T1: finalize after the challenge window elapses without dispute. */
+  async finalizeAttestedReport(resolverId: string, signer: KaidoSigner): Promise<void> {
+    const tx = await new resolverAttested.Client(clientOptions(this.config, resolverId, signer)).finalize();
+    await settle(tx, signer, this.config, { force: true });
+  }
+
+  /** T2 optimistic: propose an outcome with a USDC bond (7dp). */
+  async proposeOptimisticOutcome(
+    resolverId: string,
+    valueWad: bigint,
+    bond7dp: bigint,
+    signer: KaidoSigner,
+  ): Promise<void> {
+    const tx = await new resolverOptimistic.Client(
+      clientOptions(this.config, resolverId, signer),
+    ).propose({ proposer: signer.accountId, value: valueWad, bond: bond7dp });
+    await settle(tx, signer, this.config, { force: true });
+  }
+
+  /** T2: dispute the active proposal (bond ≥ proposer's). */
+  async disputeOptimisticOutcome(
+    resolverId: string,
+    valueWad: bigint,
+    bond7dp: bigint,
+    signer: KaidoSigner,
+  ): Promise<void> {
+    const tx = await new resolverOptimistic.Client(
+      clientOptions(this.config, resolverId, signer),
+    ).dispute({ disputer: signer.accountId, value: valueWad, bond: bond7dp });
+    await settle(tx, signer, this.config, { force: true });
+  }
+
+  /** T2: finalize an undisputed proposal after the dispute window. */
+  async finalizeOptimisticOutcome(resolverId: string, signer: KaidoSigner): Promise<void> {
+    const tx = await new resolverOptimistic.Client(
+      clientOptions(this.config, resolverId, signer),
+    ).finalize();
+    await settle(tx, signer, this.config, { force: true });
+  }
+
+  /** T2 committee: pick the winning value after a dispute. */
+  async arbitrateOptimisticOutcome(
+    resolverId: string,
+    valueWad: bigint,
+    signer: KaidoSigner,
+  ): Promise<void> {
+    const tx = await new resolverOptimistic.Client(
+      clientOptions(this.config, resolverId, signer),
+    ).arbitrate({ arbiter: signer.accountId, value: valueWad });
+    await settle(tx, signer, this.config, { force: true });
+  }
+
   // --- resolution / claims ------------------------------------------------
 
   /** Pull the outcome from the market's resolver and finalize it. */
@@ -408,4 +484,5 @@ export class Kaido {
   }
 }
 
-export { distributionMarket, marketFactory, registry };
+export { distributionMarket, marketFactory, registry, resolverAttested, resolverOptimistic };
+export * from "./attested";

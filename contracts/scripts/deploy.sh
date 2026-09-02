@@ -156,6 +156,30 @@ for c in ${CONTRACTS}; do
       CTOR_ARGS=(-- --designated "${ADMIN}" \
         --resolve-time "$(( $(date +%s) + 7200 ))")
       ;;
+    resolver-attested)
+      # Poster pubkey: 32-byte Ed25519 hex (defaults to deployer's raw pubkey).
+      POSTER_G="${ATTESTED_POSTER_G:-${DEPLOYER_ADDR}}"
+      POSTER_PUBKEY_HEX="${ATTESTED_POSTER_PUBKEY_HEX:-$(
+        pnpm --dir "${ROOT}/web" exec node -e "
+          const { Keypair } = require('@stellar/stellar-sdk');
+          const kp = Keypair.fromPublicKey(process.argv[1]);
+          process.stdout.write(kp.rawPublicKey().toString('hex'));
+        " "${POSTER_G}" 2>/dev/null || echo ''
+      )}"
+      [[ -n "${POSTER_PUBKEY_HEX}" && "${#POSTER_PUBKEY_HEX}" -eq 64 ]] || {
+        echo "set ATTESTED_POSTER_PUBKEY_HEX (32-byte hex) or ATTESTED_POSTER_G (G-address)" >&2
+        exit 1
+      }
+      CTOR_ARGS=(-- --poster-pubkey "${POSTER_PUBKEY_HEX}" \
+        --resolve-time "$(( $(date +%s) + 7200 ))" \
+        --challenge-window-secs "${ATTESTED_CHALLENGE_WINDOW_SECS:-3600}")
+      ;;
+    resolver-optimistic)
+      CTOR_ARGS=(-- --usdc "${USDC_SAC_ID}" --committee "${ADMIN}" \
+        --resolve-time "$(( $(date +%s) + 7200 ))" \
+        --dispute-window-secs "${OPTIMISTIC_DISPUTE_WINDOW_SECS:-600}" \
+        --min-bond "${OPTIMISTIC_MIN_BOND:-1000000}")
+      ;;
   esac
   # `${arr[@]+...}` so an empty CTOR_ARGS doesn't trip `set -u` on bash 3.2 (macOS).
   id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}" ${CTOR_ARGS[@]+"${CTOR_ARGS[@]}"})"
