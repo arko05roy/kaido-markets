@@ -1,91 +1,166 @@
-<div align="center">
-
 # Kaido
 
-**The first distribution-market primitive on Stellar / Soroban.**
+**The first distribution-market primitive on Stellar.**
+Bet on where a number lands — not whether it crosses a line.
 
-Trade a *belief curve* `(μ, σ)` over a numeric outcome — not a yes / no share.
-Payouts scale with how close your curve peaks to the realized number.
+```
+   Polymarket asks:                    Kaido asks:
+   "Will BTC close above $70k?"        "Where does BTC close on Friday?"
 
-[Whitepaper](./kaido-whitepaper.md) · [Build plan](./build.md) · [ADRs](./docs/adr/) · [Test vectors](./docs/test-vectors/)
+   ┌────────┐  ┌────────┐                       ╱╲
+   │  YES   │  │  NO    │                      ╱  ╲
+   │  38¢   │  │  62¢   │                     ╱    ╲
+   └────────┘  └────────┘                   ╱        ╲___
+                                          ─────────────────
+   $1 if right, $0 if wrong              $60k   $68k   $80k
 
-</div>
+   Outcome space: 1 bit                  Outcome space: any number
+   Position: a share                     Position: a curve
+   Payout: binary                        Payout: scales with accuracy
+```
+
+[Whitepaper](./kaido-whitepaper.md) · [Build plan](./build.md) · [ADRs](./docs/adr/)
 
 ---
 
-## What is it
+## What is Kaido
 
-A prediction market where the outcome is a **number**, not a side. Your position
-is a Gaussian `(μ, σ)` over the outcome space; the AMM prices it against the
-current aggregate curve using an L²-norm invariant (Uniswap's class of
-constant-function AMM, lifted to a Hilbert space of probability densities, per
-White, Paradigm 2024). At resolution the contract pays the height of your curve
-at the realized value, scaled by your collateral. Tighter peak ⇒ bigger payout
-when you're right, bigger loss when you're wrong.
+A prediction market where the outcome is a **number**, not a side.
 
-Capital efficiency comes from the single-position-per-curve structure: instead
-of buying dozens of binary "above X / below X" shares to express a shape, you
-post one trade.
+Instead of buying YES or NO shares, you pick:
+
+1. **Where you think the number will land.** A center value — the price, margin,
+   count, or score you expect.
+2. **How sure you are.** A confidence band around that center — tight if
+   you're confident, wide if you're not.
+
+The market combines that into a curve. When the answer arrives, the contract
+pays you in proportion to **how close your curve peaked to reality**. Nail it
+tight ⇒ big win. Spread wide ⇒ smaller win, smaller loss.
+
+```
+   Your bet on "BTC close on Friday"
+   center: $68,200    confidence: tight (±$1,400)
+
+         payout if you win here
+                ↓
+              ╱╲
+             ╱  ╲
+            ╱    ╲
+           ╱      ╲          truth lands: $68,600
+         ╱          ╲           │
+       ╱              ╲___     ▼
+   ────────────────────|────────────────►
+   $60k         $68k   ▲  $70k         $80k
+                     payout = curve height at the truth
+                     (here: 14.7 XLM on a 12 XLM stake)
+```
+
+Why this matters: a binary market asks you to compress your whole belief into
+one of two buckets. A distribution market lets you express *the whole shape*
+in a single position. That's the capital efficiency claim — one trade
+replaces dozens of "above X / below X" markets.
+
+---
+
+## How a bet works
+
+```
+       Mon                    Wed                    Fri
+        │                      │                      │
+        ▼                      ▼                      ▼
+   ┌─────────┐           ┌──────────┐           ┌──────────┐
+   │  open   │  ───────► │  trade   │  ───────► │ resolve  │
+   └─────────┘           └──────────┘           └──────────┘
+   creator sets:         you set:                oracle reads
+    • question            • center slider         the truth
+    • outcome range       • confidence slider
+    • oracle              UI quotes:              contract pays
+    • resolve time         • cost                 you in
+    • fee                  • max payout           proportion to
+                           • worst case           how close you
+                          you confirm.            got.
+```
+
+Anyone can create a market. Anyone can take a position. The protocol earns a
+small fee on each trade; LPs (including a protocol-owned house vault) earn the
+spread.
 
 ---
 
 ## Architecture
 
-```mermaid
-flowchart TB
-  subgraph user["Client"]
-    web["web/ — Next.js 16 app<br/>Belief Surface, markets, /whitepaper"]
-  end
-
-  subgraph ts["TypeScript layer"]
-    sdk["@kaido/sdk<br/>createMarket · trade · resolve · positions"]
-    bindings["@kaido/contract-bindings<br/>generated TS clients (committed)"]
-  end
-
-  subgraph soroban["Soroban contracts · Rust"]
-    factory["market-factory<br/>create_market(...)"]
-    registry["registry<br/>indexes markets + resolvers"]
-    market["distribution-market<br/>per-market AMM<br/>‖f‖₂ = k invariant"]
-    house["house-vault<br/>protocol-owned LP / underwriter"]
-    rRef["resolver-reflector · T0"]
-    rAtt["resolver-attested · T1"]
-    rOpt["resolver-optimistic · T2"]
-    rDes["resolver-designated · T3"]
-  end
-
-  subgraph math["Math crate"]
-    kmath["kaido-math<br/>WAD fixed-point<br/>exp · erf · L²-norm · λ-scaling"]
-  end
-
-  subgraph external["External"]
-    rpc["Stellar RPC<br/>(soroban-testnet)"]
-    reflector["Reflector oracle<br/>BTC/USD, ETH/USD, ..."]
-    usdc["USDC · Stellar Asset"]
-  end
-
-  web --> sdk
-  sdk --> bindings
-  bindings --> rpc
-  rpc --> factory & market & house & registry
-  factory -.deploys.-> market
-  factory --> registry
-  market --> kmath
-  market <--> house
-  market --> rRef & rAtt & rOpt & rDes
-  rRef --> reflector
-  market <--> usdc
-
-  classDef ext fill:#1a1a1a,stroke:#888,color:#ddd;
-  classDef ours fill:#d8c69a22,stroke:#d8c69a,color:#f3efe6;
-  class web,sdk,bindings,factory,registry,market,house,rRef,rAtt,rOpt,rDes,kmath ours;
-  class rpc,reflector,usdc ext;
+```
+   ┌──────────────────────────────────────────────────────────┐
+   │  web/  Next.js 16 · App Router                           │
+   │  Belief Surface · /markets · /create · /whitepaper       │
+   └────────────────────────┬─────────────────────────────────┘
+                            │
+   ┌────────────────────────▼─────────────────────────────────┐
+   │  packages/sdk  @kaido/sdk                                │
+   │  createMarket · trade · resolve · positions · quotes     │
+   └────────────────────────┬─────────────────────────────────┘
+                            │
+   ┌────────────────────────▼─────────────────────────────────┐
+   │  packages/contract-bindings  generated TypeScript        │
+   │  (committed; refreshed by CI)                            │
+   └────────────────────────┬─────────────────────────────────┘
+                            │  Stellar RPC
+                            ▼
+   ┌──────────────────────────────────────────────────────────┐
+   │  contracts/  Rust · Soroban                              │
+   │                                                            │
+   │    ┌─────────────────┐       ┌──────────────────────┐   │
+   │    │ market-factory  │──────►│ distribution-market  │   │
+   │    │   create_market │       │   per-market AMM     │   │
+   │    └─────────────────┘       │   holds collateral   │   │
+   │             │                │   prices trades      │   │
+   │             ▼                │   pays at resolve    │   │
+   │    ┌─────────────────┐       └──┬───────────┬───────┘   │
+   │    │    registry     │          │           │           │
+   │    │  indexes markets│          ▼           ▼           │
+   │    └─────────────────┘   ┌──────────┐  ┌──────────────┐ │
+   │                          │ house-   │  │ resolver-*   │ │
+   │                          │ vault    │  │ T0 reflector │ │
+   │                          │ protocol │  │ T1 attested  │ │
+   │                          │ LP       │  │ T2 optimistic│ │
+   │                          └──────────┘  │ T3 designated│ │
+   │                                        └──────┬───────┘ │
+   │    ┌────────────────────────────────────┐    │         │
+   │    │ crates/kaido-math                  │    │         │
+   │    │ fixed-point belief math (no f64)   │    │         │
+   │    └────────────────────────────────────┘    │         │
+   └───────────────────────────────────────────────┼─────────┘
+                                                   │
+                       ┌───────────────────────────┼─────────┐
+                       │                           ▼         │
+                       │           ┌──────────────────────┐  │
+                       │           │  Reflector oracle    │  │
+                       │           │  (BTC/USD, etc.)     │  │
+                       │           └──────────────────────┘  │
+                       │           ┌──────────────────────┐  │
+                       │           │  USDC · Stellar SAC  │  │
+                       │           └──────────────────────┘  │
+                       │           External                  │
+                       └─────────────────────────────────────┘
 ```
 
-**Layer 1** is the chain side — a Soroban contract suite that holds collateral,
-prices trades, and settles markets. **Layer 2** is the off-chain surface — a
-Next.js app and a TypeScript SDK that compile a user's `(μ, σ)` input into the
-correct calldata, quote cost / worst-case / max payout deterministically, and
-display results.
+**Layer 1** (chain side): Rust contracts on Soroban — they hold collateral,
+match trades against the current aggregate curve, and settle deterministically
+when an oracle reports the realized number.
+
+**Layer 2** (off-chain side): a Next.js app and a TypeScript SDK that compile
+slider inputs into the correct calldata, show pre-trade quotes (cost, max
+payout, worst case), and display results.
+
+The four resolver tiers let any market choose how much trust it needs:
+
+| Tier | How truth arrives | Use case |
+| --- | --- | --- |
+| **T0** trustless | On-chain oracle feed (Reflector) | Crypto prices, FX |
+| **T1** attested | Signed report from a vetted provider + challenge window | Elections, sports, official stats |
+| **T2** optimistic | Anyone proposes with a bond; anyone can dispute | Long-tail metrics, niche data |
+| **T3** designated | A specific named party reports | Community/fun markets — labeled `pure trust` |
 
 ---
 
@@ -94,16 +169,16 @@ display results.
 ```
 kaido/
 ├─ contracts/                     Rust / Soroban — Cargo workspace
-│  ├─ crates/kaido-math/          fixed-point Gaussian math (no f64 — ADR-1)
-│  ├─ packages-common/            shared Soroban types: Resolver trait, errors, events (ADR-5)
+│  ├─ crates/kaido-math/          fixed-point belief math (no f64, ADR-1)
+│  ├─ packages-common/            shared types: Resolver trait, errors, events
 │  ├─ contracts/
-│  │   ├─ market-factory/         create_market(...) entry point
-│  │   ├─ distribution-market/    per-market AMM (‖f‖₂ = k invariant)
+│  │   ├─ market-factory/         create_market entry point
+│  │   ├─ distribution-market/    per-market AMM
 │  │   ├─ house-vault/            protocol LP / underwriter of last resort
 │  │   ├─ registry/               indexes markets + resolvers
 │  │   └─ resolver-{reflector,attested,optimistic,designated}/
 │  ├─ tests/                      multi-contract integration tests
-│  ├─ fuzz/                       cargo-fuzz targets (nightly; outside workspace)
+│  ├─ fuzz/                       cargo-fuzz targets (nightly)
 │  └─ Makefile.toml               cargo-make tasks
 │
 ├─ web/                           Next.js 16 (App Router)
@@ -113,13 +188,13 @@ kaido/
 │
 ├─ packages/
 │  ├─ sdk/                        @kaido/sdk — TypeScript SDK
-│  ├─ contract-bindings/          generated TS bindings (committed; refreshed by CI)
+│  ├─ contract-bindings/          generated TS bindings (committed)
 │  └─ config/                     shared eslint / tsconfig / tailwind preset
 │
 ├─ config/networks.json           static, public network params
 ├─ docs/
-│  ├─ adr/                        architecture decisions (math, types, oracle, ...)
-│  └─ test-vectors/               cross-language reference (mpmath, 50-digit)
+│  ├─ adr/                        architecture decisions
+│  └─ test-vectors/               cross-language reference (50-digit)
 ├─ kaido-whitepaper.md            full mechanism + system architecture
 └─ build.md                       sprint plan + SCF tranche mapping
 ```
@@ -128,8 +203,8 @@ kaido/
 
 ## Prerequisites
 
-- **Node ≥ 22** and **pnpm** (`corepack enable` or `npm i -g pnpm`)
-- **Rust (stable)** via rustup — the `wasm32v1-none` target is installed
+- **Node ≥ 22** + **pnpm** (`corepack enable` or `npm i -g pnpm`)
+- **Rust (stable)** via rustup — the `wasm32v1-none` target installs
   automatically from `contracts/rust-toolchain.toml`
 - **Stellar CLI** ≥ 23 — <https://developers.stellar.org/docs/tools/cli>
 - **cargo-make** — `cargo install --locked cargo-make`
@@ -138,34 +213,34 @@ kaido/
 
 ---
 
-## Getting started
+## Quick start
 
 ```bash
-# 1. install JS deps + build all contract WASM
+# 1. install JS deps + build contract WASM
 pnpm install
 cargo make --cwd contracts build-wasm        # or: make bootstrap
 
 # 2. env — defaults target Stellar Testnet
 cp .env.example .env
 
-# 3. a funded testnet deployer account
+# 3. a funded testnet deployer
 stellar keys generate kaido-testnet-deployer --network testnet --fund
 
 # 4. run the web app
 pnpm dev                                      # http://localhost:3000
 
-# 5. the usual checks (same as CI)
+# 5. CI-equivalent checks
 pnpm build && pnpm lint && pnpm typecheck && pnpm test     # web
-cargo make --cwd contracts ci                              # fmt + clippy + test + wasm
+cargo make --cwd contracts ci                              # rust
 pnpm --filter web e2e                                      # Playwright smoke
 
-# (optional) offline local network instead of testnet
-make localnet                                 # Docker — RPC at http://localhost:8000/rpc
+# optional offline local network
+make localnet                                 # Docker; RPC at localhost:8000/rpc
 make localnet-stop
 ```
 
-> Native Rust unit tests (`cargo make test`) use `soroban-sdk` testutils — no
-> network at all. Only the integration / E2E lifecycle suites hit Testnet RPC.
+Native Rust unit tests use `soroban-sdk` testutils and hit **no network**. Only
+integration / E2E lifecycle suites talk to Testnet RPC.
 
 ---
 
@@ -177,14 +252,11 @@ make localnet-stop
 | Local *(optional, Docker)* | `Standalone Network ; February 2017` | `http://localhost:8000/rpc` |
 | Mainnet | `Public Global Stellar Network ; September 2015` | third-party provider |
 
-Static params live in [`config/networks.json`](./config/networks.json),
-[`contracts/network.toml`](./contracts/network.toml) and
-[`web/lib/stellar/networks.ts`](./web/lib/stellar/networks.ts). **Per-network
-contract ids** (USDC SAC, Reflector feed, deployed Kaido contracts, admin
-multisig, Launchtube) are never hardcoded — they're resolved at deploy time and
+Per-network contract ids (USDC SAC, Reflector feed, Kaido contracts, admin
+multisig, Launchtube) are never hardcoded. They're resolved at deploy time and
 written by `contracts/scripts/deploy.sh` into `config/networks.<network>.json`.
 
-> ⚠️ **Testnet resets** ~2–4×/year at 17:00 UTC (next: **2026-06-17**,
+> ⚠️ Testnet resets ~2–4×/year at 17:00 UTC (next: **2026-06-17**,
 > **2026-12-16**) and wipes all state. Every deploy is scripted and idempotent;
 > fixtures are re-seedable; nothing off-chain treats a testnet contract id as
 > permanent.
@@ -194,65 +266,12 @@ written by `contracts/scripts/deploy.sh` into `config/networks.<network>.json`.
 ## Deploying
 
 ```bash
-make deploy:testnet      # scripted, idempotent; rewrites config/networks.testnet.json
-make seed:testnet        # re-seed demo/test fixtures
+make deploy:testnet      # scripted, idempotent
+make seed:testnet        # re-seed demo fixtures
 ```
 
-Mainnet deploys are gated on the external audit + a legal opinion (see
+Mainnet deploys are gated on an external audit + a legal opinion (see
 `build.md` Sprint 8). `deploy.sh` refuses to run against mainnet until then.
-
----
-
-## End-to-end flow
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant U as User
-  participant W as web (Belief Surface)
-  participant S as @kaido/sdk
-  participant F as market-factory
-  participant M as distribution-market
-  participant O as resolver-reflector
-  participant V as house-vault
-
-  Note over F,M: One-time per market
-  U->>W: open /create, set question, range, oracle
-  W->>S: createMarket(...)
-  S->>F: invoke create_market
-  F-->>M: deploy + init(params, μ₀, σ₀)
-  F->>V: register market for house liquidity
-
-  Note over U,M: Per trade
-  U->>W: set μ slider, σ slider
-  W->>S: quote(μ, σ) → cost · worst · max payout
-  U->>W: confirm
-  W->>S: trade(market, μ, σ, collateral)
-  S->>M: invoke trade; M reads kaido-math (λ-scaling, ‖f‖₂)
-
-  Note over M,O: At resolveAt
-  M->>O: resolve()
-  O-->>M: x₀ (truth)
-  M->>U: pay f(x₀) · collateral
-  M->>V: settle house position
-```
-
----
-
-## Concepts
-
-The depth lives in [`kaido-whitepaper.md`](./kaido-whitepaper.md). One-liners:
-
-- **Distribution market** — an AMM that holds an aggregate belief curve over a
-  numeric outcome. Equilibrium ⇒ truth (Cauchy–Schwarz).
-- **`(μ, σ)`** — a Gaussian belief: where the number lands and how sure.
-- **`‖f‖₂ = k`** — the L²-norm invariant. Same role as `xy = k`.
-- **σ-floor** — the mechanism's bounded-loss guarantee. No belief can be
-  sharper than `σ ≥ k² / (b²·√π)`, which caps `max f(x) ≤ b`.
-- **Oracle tiers** — T0 trustless feed (Reflector), T1 attested, T2 optimistic,
-  T3 designated. Every market displays its tier badge.
-- **HouseVault** — protocol-owned LP that seeds new markets so a trader can
-  show up minute one and trade against *something*.
 
 ---
 
@@ -260,12 +279,9 @@ The depth lives in [`kaido-whitepaper.md`](./kaido-whitepaper.md). One-liners:
 
 | Workflow | What it runs |
 | --- | --- |
-| `.github/workflows/ci-contracts.yml` | `fmt`, `clippy -D warnings`, `cargo test`, `stellar contract build`, `cargo audit` |
-| `.github/workflows/ci-web.yml` | lint, typecheck, build, Vitest, Playwright smoke |
-| `.github/workflows/deploy-testnet.yml` | manual, scripted testnet deploy |
-
-> Repo admin TODO: enable branch protection on `main` requiring both CI
-> workflows to pass.
+| `ci-contracts.yml` | fmt, clippy `-D warnings`, `cargo test`, `stellar contract build`, `cargo audit` |
+| `ci-web.yml` | lint, typecheck, build, Vitest, Playwright smoke |
+| `deploy-testnet.yml` | manual, scripted testnet deploy |
 
 ---
 

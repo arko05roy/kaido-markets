@@ -210,20 +210,20 @@ export default async function WhitepaperPage() {
             {tagline}
           </p>
 
-          <dl className="mt-14 grid max-w-[800px] grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-6 font-mono text-[10px] uppercase tracking-[0.22em]">
-            <div className="pr-6">
+          <dl className="mt-14 grid max-w-[800px] grid-cols-1 divide-y divide-white/10 border-t border-white/10 pt-6 font-mono text-[10px] uppercase tracking-[0.22em] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="py-4 sm:py-0 sm:pr-6">
               <dt className="text-white/35">Author</dt>
               <dd className="mt-1.5 font-serif text-base normal-case tracking-normal text-[#f3efe6]">
                 Kaido Labs
               </dd>
             </div>
-            <div className="px-6">
+            <div className="py-4 sm:px-6 sm:py-0">
               <dt className="text-white/35">Sections</dt>
               <dd className="mt-1.5 font-serif text-base normal-case tracking-normal text-[#f3efe6]">
                 {toc.filter((e) => e.level === 1).length} parts
               </dd>
             </div>
-            <div className="pl-6">
+            <div className="py-4 sm:py-0 sm:pl-6">
               <dt className="text-white/35">Read time</dt>
               <dd className="mt-1.5 font-serif text-base normal-case tracking-normal text-[#d8c69a]">
                 ~40 min
@@ -236,13 +236,21 @@ export default async function WhitepaperPage() {
       {/* TOC + BODY */}
       <div className="relative mx-auto max-w-[1400px] px-6 py-20 sm:px-10 lg:py-28">
         <div className="grid grid-cols-12 gap-x-10 gap-y-12">
-          {/* TOC — sticky on desktop */}
+          {/* TOC — collapsible on mobile, sticky on desktop */}
           <aside className="col-span-12 lg:sticky lg:top-24 lg:col-span-3 lg:self-start">
-            <div className="border border-white/10 bg-[#0a0a0b] p-6">
-              <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-[#d8c69a]">
-                Contents
-              </div>
-              <ol className="mt-5 space-y-2.5 font-mono text-[11px] uppercase tracking-[0.18em]">
+            <details
+              open
+              className="group border border-white/10 bg-[#0a0a0b] [&_summary::-webkit-details-marker]:hidden"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between p-6">
+                <span className="font-mono text-[10px] uppercase tracking-[0.28em] text-[#d8c69a]">
+                  Contents
+                </span>
+                <span className="font-mono text-[12px] tracking-[0.22em] text-white/40 transition-transform group-open:rotate-180">
+                  ▾
+                </span>
+              </summary>
+              <ol className="space-y-2.5 px-6 pb-6 font-mono text-[11px] uppercase tracking-[0.18em]">
                 {toc.map((entry) => (
                   <li
                     key={entry.slug}
@@ -257,7 +265,7 @@ export default async function WhitepaperPage() {
                   </li>
                 ))}
               </ol>
-            </div>
+            </details>
           </aside>
 
           {/* BODY */}

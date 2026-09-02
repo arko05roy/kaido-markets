@@ -247,7 +247,7 @@ function DistributionDemo() {
           <BellCurveChart />
 
           {/* position readout — feels like a real trade */}
-          <div className="mt-auto grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 font-mono text-[10px] uppercase tracking-[0.22em]">
+          <div className="mt-auto grid grid-cols-1 divide-y divide-white/10 border-t border-white/10 font-mono text-[10px] uppercase tracking-[0.22em] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             <div className="px-6 py-4 sm:px-8">
               <div className="text-white/35">Cost to open</div>
               <div className="mt-1.5 font-serif text-lg normal-case tracking-normal text-[#f3efe6]">
@@ -580,10 +580,10 @@ function BeliefSection() {
         >
           <h2
             className="w-full font-serif leading-[0.92] tracking-[-0.045em] text-[#f3efe6]"
-            style={{ fontSize: "clamp(2.5rem, 9vw, 12rem)" }}
+            style={{ fontSize: "clamp(2.25rem, 9vw, 12rem)" }}
           >
-            <span className="block whitespace-nowrap">Your belief on a curve.</span>
-            <span className="block whitespace-nowrap text-white/40">your capital more efficient.</span>
+            <span className="block sm:whitespace-nowrap">Your belief on a curve.</span>
+            <span className="block text-white/40 sm:whitespace-nowrap">your capital more efficient.</span>
           </h2>
         </motion.div>
 
@@ -661,8 +661,8 @@ function BuildersSection() {
           viewport={{ once: true, margin: "-100px" }}
         >
           <h2
-            className="w-full whitespace-nowrap font-serif leading-[0.92] tracking-[-0.045em] text-[#f3efe6]"
-            style={{ fontSize: "clamp(2.5rem, 11.2vw, 16rem)" }}
+            className="w-full font-serif leading-[0.92] tracking-[-0.045em] text-[#f3efe6] sm:whitespace-nowrap"
+            style={{ fontSize: "clamp(2.25rem, 10vw, 14rem)" }}
           >
             Any market. <span className="text-white/40">One call.</span>
           </h2>
