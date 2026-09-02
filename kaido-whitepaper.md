@@ -1,8 +1,8 @@
-# Kaido — A Distribution-Market Primitive for Stellar
+# Paradigm — A Distribution-Market Primitive for Stellar
 
 **Arko Roy** · arkoroy302@gmail.com · 2026
 
-### *Kaido is the first distribution market of its kind — providing more capital efficiency than traditional markets.*
+### *Paradigm is the first distribution market of its kind — providing more capital efficiency than traditional markets.*
 
 **Whitepaper v0.1 — Working Draft**
 
@@ -13,7 +13,7 @@
 - [Abstract](#abstract)
 - [Part I — The Idea, Explained From Zero](#part-i--the-idea-explained-from-zero)
 - [Part II — Distribution Markets: The Mechanism](#part-ii--distribution-markets-the-mechanism)
-- [Part III — Kaido: System Architecture](#part-iii--kaido-system-architecture)
+- [Part III — Paradigm: System Architecture](#part-iii--Paradigm-system-architecture)
 - [Part IV — Why Stellar, Why Now](#part-iv--why-stellar-why-now)
 - [Part V — Worked Examples](#part-v--worked-examples)
 - [Part VI — Security, Risks, and Mitigations](#part-vi--security-risks-and-mitigations)
@@ -28,11 +28,11 @@
 
 Existing prediction markets are fragmented. Users can forecast binary outcomes across politics, sports, and crypto, but they cannot easily express full probability distributions, trade continuous beliefs, price uncertainty, or exit with payouts scaled to forecast accuracy. Real beliefs are not coin flips; they are **shapes** — "Bitcoin probably drifts toward ~$68k, with a fat tail toward $75k"; "the election margin is likely +3 to +6, but a blowout isn't impossible."
 
-We present **Kaido**, a Stellar-native distribution-market protocol that turns shaped beliefs into tradable positions. Users submit Gaussian beliefs `(μ, σ)` through a two-slider **Belief Surface**, trade against an L²-norm distribution AMM implemented in Soroban, settle through a tiered oracle framework, and bootstrap liquidity via **BlendTap** JIT borrowing from Blend lending pools. Kaido is built as a composable protocol stack: an on-chain **Distribution Engine**, consumer **Belief Surface**, scalar and trajectory market types, tiered **Resolver** layer (T0–T3), **BlendTap** liquidity bootstrap, and TypeScript/Rust **SDK**. Together, these components let users forecast, trade, settle, and compose continuous-outcome markets through one protocol. Kaido starts with BTC-close markets and expands toward a broader vision: making every quantifiable forecast tradable.
+We present **Paradigm**, a Stellar-native distribution-market protocol that turns shaped beliefs into tradable positions. Users submit Gaussian beliefs `(μ, σ)` through a two-slider **Belief Surface**, trade against an L²-norm distribution AMM implemented in Soroban, settle through a tiered oracle framework, and bootstrap liquidity via **BlendTap** JIT borrowing from Blend lending pools. Paradigm is built as a composable protocol stack: an on-chain **Distribution Engine**, consumer **Belief Surface**, scalar and trajectory market types, tiered **Resolver** layer (T0–T3), **BlendTap** liquidity bootstrap, and TypeScript/Rust **SDK**. Together, these components let users forecast, trade, settle, and compose continuous-outcome markets through one protocol. Paradigm starts with BTC-close markets and expands toward a broader vision: making every quantifiable forecast tradable.
 
 **Keywords:** distribution markets · L² norm · Gaussian beliefs · Soroban · Stellar · prediction markets · oracle resolution · BlendTap
 
-**Legal Disclaimer.** This White Paper is a proposed technical paper and architecture plan for Kaido v1. It is shared for feedback and discussion, and should not be read as the final protocol architecture, a product guarantee, financial advice, or an offer to buy or sell any token or financial instrument. Kaido involves DeFi, distribution-market AMM accounting, oracle resolution, and smart contracts, all of which require extensive testing, audits, risk review, and possible design changes before any production release. Parameters, mechanisms, integrations, and roadmap items described here may change materially as the protocol is developed.
+**Legal Disclaimer.** This White Paper is a proposed technical paper and architecture plan for Paradigm v1. It is shared for feedback and discussion, and should not be read as the final protocol architecture, a product guarantee, financial advice, or an offer to buy or sell any token or financial instrument. Paradigm involves DeFi, distribution-market AMM accounting, oracle resolution, and smart contracts, all of which require extensive testing, audits, risk review, and possible design changes before any production release. Parameters, mechanisms, integrations, and roadmap items described here may change materially as the protocol is developed.
 
 ---
 
@@ -96,7 +96,7 @@ The classic story: a TV weather forecaster. Each day they announce "70% chance o
 
 There are several proper scoring rules. The most famous in this space is the **logarithmic scoring rule** (you get paid an amount proportional to the log of the probability you assigned to whatever actually happened). When you wrap a logarithmic scoring rule inside a continuously-trading market, you get **LMSR** — the *Logarithmic Market Scoring Rule* — which is the engine under a lot of classic prediction markets.
 
-**Important clarification for the rest of this paper:** the Paradigm distribution-market mechanism Kaido is built on does **not** use the logarithmic rule. It uses a different, geometrically elegant construction based on the **L² norm** (think: ordinary "straight-line distance," but for curves instead of points) — explained in Part II. It still behaves like a *market scoring rule* (in an efficient market, prices converge to the true distribution; arbitrage profit is proportional to how much your belief beats the current market's), but the internals are spheres and Hilbert-space geometry, not logarithms. We flag this because earlier informal descriptions of Kaido loosely said "log scoring" — the accurate statement is "an L²-norm market scoring rule, per White (2024)."
+**Important clarification for the rest of this paper:** the Paradigm distribution-market mechanism Paradigm is built on does **not** use the logarithmic rule. It uses a different, geometrically elegant construction based on the **L² norm** (think: ordinary "straight-line distance," but for curves instead of points) — explained in Part II. It still behaves like a *market scoring rule* (in an efficient market, prices converge to the true distribution; arbitrage profit is proportional to how much your belief beats the current market's), but the internals are spheres and Hilbert-space geometry, not logarithms. We flag this because earlier informal descriptions of Paradigm loosely said "log scoring" — the accurate statement is "an L²-norm market scoring rule, per White (2024)."
 
 ## 6. The family tree, in one picture
 
@@ -105,9 +105,9 @@ There are several proper scoring rules. The most famous in this space is the **l
 | **Binary prediction market** | YES or NO on one event | 1 bit | Yes | Polymarket, Kalshi |
 | **Categorical prediction market** | One of N preset buckets | A few bits | Yes | "Who wins the election: A / B / C" |
 | **Scoring-rule forecasting** | A full probability distribution | The whole shape | Usually no (reputation) | Metaculus |
-| **Distribution market** ← *Kaido* | A full probability distribution | The whole shape | **Yes — real trading** | (didn't exist in production) |
+| **Distribution market** ← *Paradigm* | A full probability distribution | The whole shape | **Yes — real trading** | (didn't exist in production) |
 
-Distribution markets are the bottom-right cell that was empty. Kaido fills it, on Stellar, with a friendly two-slider interface on top.
+Distribution markets are the bottom-right cell that was empty. Paradigm fills it, on Stellar, with a friendly two-slider interface on top.
 
 ---
 
@@ -176,7 +176,7 @@ The fix is to add a **hard cap**: require `max_x f(x) ≤ b` everywhere — no p
 1. **Restrict σ (limit certainty):** for Gaussian beliefs, the peak height is controlled by σ; capping the peak means forbidding σ below a threshold. Concretely (Gaussian case): **σ ≥ k² / (b²·√π)**. Traders simply can't claim to be *more* certain than that floor allows.
 2. **Capped Gaussians (clip the spike):** allow any σ, but redefine the payout curve as `f(x) = min( b, λ·φ(x) )` — a Gaussian with its top sliced flat at height `b` — where `λ` is rescaled so the L² norm constraint still holds. You keep the bell shape; you just don't promise to pay more than you have.
 
-Either way: full collateralization preserved, insolvency impossible. **Kaido takes option (1) by default for v1** (a configurable σ-floor per market — simplest to reason about and audit) **and supports capped Gaussians (2) as an opt-in for markets that need sharp beliefs.**
+Either way: full collateralization preserved, insolvency impossible. **Paradigm takes option (1) by default for v1** (a configurable σ-floor per market — simplest to reason about and audit) **and supports capped Gaussians (2) as an opt-in for markets that need sharp beliefs.**
 
 ## 11. The Gaussian case in practice (the two-number belief)
 
@@ -206,20 +206,20 @@ LPs work much like Uniswap V2 LPs. To add liquidity at "scale" `y`:
 2. Receive `y·L` LP shares (L = current total shares).
 3. Keep `y·f` as your *own* market position (you're now also a participant in the belief, proportionally).
 
-Before and after, total system holdings still sum to `b` per outcome — full collateralization is invariant under LP entry/exit. LPs earn the trading fees the market charges (Kaido: a small protocol + LP fee on each trade — see §20), and bear the usual market-maker P&L: they're effectively the counterparty of last resort to the aggregate of traders' beliefs.
+Before and after, total system holdings still sum to `b` per outcome — full collateralization is invariant under LP entry/exit. LPs earn the trading fees the market charges (Paradigm: a small protocol + LP fee on each trade — see §20), and bear the usual market-maker P&L: they're effectively the counterparty of last resort to the aggregate of traders' beliefs.
 
 ## 13. Why this is the right primitive (recap)
 
 - **Equilibrium = truth.** In an efficient market the state converges to the true continuous distribution (Cauchy–Schwarz, §7–8).
 - **Always solvent.** Settlement pays exactly `b`; with the σ-floor or capped-Gaussian fix, never more (§9–10).
 - **Self-limiting on confident traders.** Peaked beliefs ⇒ smaller positions; manipulation is damped automatically (§11).
-- **Composable.** It's an AMM with a clean interface — a market is just `(outcome space, current curve, collateral b, k, fee, resolver)`. Anything that can be measured as a number can be a market. That last property is what Kaido is built around.
+- **Composable.** It's an AMM with a clean interface — a market is just `(outcome space, current curve, collateral b, k, fee, resolver)`. Anything that can be measured as a number can be a market. That last property is what Paradigm is built around.
 
 ---
 
-# Part III — Kaido: System Architecture
+# Part III — Paradigm: System Architecture
 
-Kaido is two layers plus an oracle framework. **Layer 1** is the chain-side primitive (the distribution-market AMM as a Soroban contract suite). **Layer 2** is the off-chain + frontend experience (the Belief Surface, the markets directory, the social loop). The **oracle framework** is what connects on-chain markets to real-world truth and ultimately decides how broad "all possible markets" can be on day one.
+Paradigm is two layers plus an oracle framework. **Layer 1** is the chain-side primitive (the distribution-market AMM as a Soroban contract suite). **Layer 2** is the off-chain + frontend experience (the Belief Surface, the markets directory, the social loop). The **oracle framework** is what connects on-chain markets to real-world truth and ultimately decides how broad "all possible markets" can be on day one.
 
 ## 14. Layer 1 — the Distribution Engine (Soroban)
 
@@ -235,11 +235,11 @@ A small suite of Soroban contracts:
 - **`BlendAdapter`** — optional per-market spine for **BlendTap**: JIT-borrows counterparty USDC from a Blend pool on `trade()` and unwinds on `claim()` (see §18).
 - **`Registry`** — indexes markets, resolvers, and their trust tiers for the frontend.
 
-Everything that can be done by hand via these contracts can also be done via an **SDK** (TypeScript + a Rust crate) so third parties can create markets, plug in their own resolvers, and embed Kaido markets in their own apps.
+Everything that can be done by hand via these contracts can also be done via an **SDK** (TypeScript + a Rust crate) so third parties can create markets, plug in their own resolvers, and embed Paradigm markets in their own apps.
 
 ## 15. The market tuple
 
-Formally, a Kaido market is the tuple:
+Formally, a Paradigm market is the tuple:
 
 > **M = ( OutcomeSpace, Parameterization, k, b, fee, Resolver, Window )**
 
@@ -256,7 +256,7 @@ Both flavors compile down to the same core AMM — a trajectory market is, mathe
 
 ## 17. The oracle framework — how truth gets on-chain (the part that gates breadth)
 
-A market is only as good as its resolver. Kaido defines a single `Resolver` interface (`resolve() → value` callable after `resolve_time`, with an optional `dispute()` path) and supports **four tiers**, each clearly labeled in the UI so users know exactly what they're trusting:
+A market is only as good as its resolver. Paradigm defines a single `Resolver` interface (`resolve() → value` callable after `resolve_time`, with an optional `dispute()` path) and supports **four tiers**, each clearly labeled in the UI so users know exactly what they're trusting:
 
 | Tier | How truth arrives | Trust assumption | Good for |
 |---|---|---|---|
@@ -265,11 +265,11 @@ A market is only as good as its resolver. Kaido defines a single `Resolver` inte
 | **T2 — Optimistic oracle** | Anyone proposes the value with a bond; anyone can dispute by bonding; disputes escalate to a vote/arbitration; undisputed after the window ⇒ final | Economic — wrong proposals get slashed; assumes at least one honest watcher | The long tail: niche metrics, anything without a clean API |
 | **T3 — Designated resolver** | A specific named party (the market creator or an appointed judge) reports the value | That party's honesty — *pure trust*, clearly flagged | Community/fun markets, private leagues, hyper-local events |
 
-The breadth of "all possible markets" on day one is exactly: **T0 is live at launch (crypto), T1/T2 follow during testnet, T3 is available immediately for clearly-labeled trust-me markets.** Over time, more T1 adapters and a hardened T2 expand the trustless/economically-secured frontier. Kaido never claims a market is trustless when it isn't — the tier badge is non-negotiable UI.
+The breadth of "all possible markets" on day one is exactly: **T0 is live at launch (crypto), T1/T2 follow during testnet, T3 is available immediately for clearly-labeled trust-me markets.** Over time, more T1 adapters and a hardened T2 expand the trustless/economically-secured frontier. Paradigm never claims a market is trustless when it isn't — the tier badge is non-negotiable UI.
 
 ## 18. Bootstrapping liquidity — BlendTap (JIT borrow)
 
-New markets face a cold-start problem: no LPs, no other side. Kaido's answer is **BlendTap**: on the first `trade()`, the market JIT-borrows counterparty USDC from an existing **Blend** lending pool (collateral = the trader's locked margin). No protocol-owned book, no seed transaction, no HouseVault. At `claim()`, forfeitures repay the borrow and collateral is unwound. Optional third-party LPs can still add liquidity later; they are not required for minute-one trading.
+New markets face a cold-start problem: no LPs, no other side. Paradigm's answer is **BlendTap**: on the first `trade()`, the market JIT-borrows counterparty USDC from an existing **Blend** lending pool (collateral = the trader's locked margin). No protocol-owned book, no seed transaction, no HouseVault. At `claim()`, forfeitures repay the borrow and collateral is unwound. Optional third-party LPs can still add liquidity later; they are not required for minute-one trading.
 
 This also matters for the regulatory posture (Part VII): the protocol borrows from public DeFi liquidity and runs a transparent scoring-rule market — not a house book against players.
 
@@ -286,7 +286,7 @@ The point: the *feel* is a clean financial surface, not a chart-trading app — 
 
 ## 20. The launch wedge — a single BTC market
 
-Day one, Kaido ships one market: **"Where does BTC close on Friday?"** Resolver: Reflector BTC/USD at the close timestamp. **BlendTap** supplies depth on the first trade (no seed step); traders take positions against the crowd curve. Position sizes start at 1 USDC; fees are 1%.
+Day one, Paradigm ships one market: **"Where does BTC close on Friday?"** Resolver: Reflector BTC/USD at the close timestamp. **BlendTap** supplies depth on the first trade (no seed step); traders take positions against the crowd curve. Position sizes start at 1 USDC; fees are 1%.
 
 Why crypto first, when the whole thesis is "all markets":
 - **Warm audience** — crypto-natives will price a BTC market on day one; they're the cheapest users to acquire.
@@ -358,7 +358,7 @@ Then the surface opens: permissionless market creation, scalar + trajectory mark
 
 # Part VII — Regulatory Posture
 
-Real-money forecasting on prices and events is a genuinely sensitive area, and short-dated price guessing in particular can resemble binary options — a product restricted or banned for retail in several major jurisdictions. Kaido's stance is to **manage this deliberately**, not pretend it away:
+Real-money forecasting on prices and events is a genuinely sensitive area, and short-dated price guessing in particular can resemble binary options — a product restricted or banned for retail in several major jurisdictions. Paradigm's stance is to **manage this deliberately**, not pretend it away:
 
 1. **Build it as a market, not a casino.** Participants provide liquidity to / take positions in a *distribution market*; the protocol runs an AMM and earns a transparent fee — it is not a bookmaker setting odds against players.
 2. **Be a forecasting platform, not a price-betting app.** Crypto is the launch *wedge*, not the identity. Ship non-price markets (elections, box office, weather, sports) early so the platform reads as Kalshi/Metaculus-shaped — a venue for forecasting many quantities — with crypto as one vertical among many.
@@ -367,7 +367,7 @@ Real-money forecasting on prices and events is a genuinely sensitive area, and s
 5. **No protocol token at launch** — removes a whole class of securities questions.
 6. **Get a real legal opinion before mainnet**, in the target launch jurisdictions, and structure accordingly (entity, T&Cs, KYC thresholds if needed). Treat this as a gating milestone, not a footnote.
 
-The point isn't that Kaido is risk-free; it's that the design choices (market-not-casino, platform-not-price-app, no token, labeled trust, geofencing, counsel-before-mainnet) put it in a defensible posture rather than an obviously-doomed one.
+The point isn't that Paradigm is risk-free; it's that the design choices (market-not-casino, platform-not-price-app, no token, labeled trust, geofencing, counsel-before-mainnet) put it in a defensible posture rather than an obviously-doomed one.
 
 ---
 
@@ -399,7 +399,7 @@ Structured to map onto an SCF Build Award's milestone tranches.
 - More T1 adapters (sports, weather, official stats); hardened T2.
 - Richer belief parameterizations (skewed, multi-modal) beyond Gaussian.
 - PvP pools with skill brackets; tournaments; embeddable widgets.
-- Partner integrations: parametric-insurance, sports, forecasting communities building on Layer 1 — the evidence that Kaido is infrastructure, not a game.
+- Partner integrations: parametric-insurance, sports, forecasting communities building on Layer 1 — the evidence that Paradigm is infrastructure, not a game.
 
 ---
 
@@ -412,29 +412,29 @@ Structured to map onto an SCF Build Award's milestone tranches.
 - **Gaussian / Normal distribution:** the classic symmetric "bell curve," fully described by its mean **μ** (center) and standard deviation **σ** (width). Small σ = confident/narrow; large σ = unsure/wide.
 - **Mean (μ):** the center of a distribution. **Standard deviation (σ):** how spread out it is.
 - **Scoring rule:** a payout formula for graded probabilistic forecasts. **Proper scoring rule:** one where your best strategy is to report your *true* beliefs (no benefit to exaggerating).
-- **Logarithmic scoring rule / LMSR:** a specific proper scoring rule (pay ∝ log of the probability you assigned to the realized outcome) and the prediction-market mechanism built from it. *Kaido does **not** use LMSR* — it uses White's L²-norm market scoring rule.
+- **Logarithmic scoring rule / LMSR:** a specific proper scoring rule (pay ∝ log of the probability you assigned to the realized outcome) and the prediction-market mechanism built from it. *Paradigm does **not** use LMSR* — it uses White's L²-norm market scoring rule.
 - **L² norm (‖·‖₂):** the "straight-line length" of a vector — √(sum of squares) — generalized to curves as √(∫ f² dx). It's the **invariant** of the distribution-market AMM.
 - **Cauchy–Schwarz inequality:** the math fact that guarantees the profit-maximizing position points in the same "direction" as the true probability distribution — hence "equilibrium = truth."
 - **Hilbert space:** the mathematical setting (an infinite-dimensional space of functions with a notion of length and angle) where the continuous version of the mechanism lives.
 - **Outcome token / outcome-function token:** a claim that pays $1 if a specific discrete outcome occurs (discrete case) / a *function* `f(x)` paying `f(x)` dollars if the realized outcome is `x` (continuous case).
 - **Bounded loss / unbounded loss:** whether the AMM's maximum payout obligation is finite. In infinite dimensions it can be infinite (a delta-spike belief), so the mechanism adds a hard cap (σ-floor or capped Gaussians).
-- **Resolver / oracle:** the mechanism by which the real-world outcome value gets reported on-chain so the market can settle. Kaido has four trust tiers (T0 trustless feed → T3 designated party).
+- **Resolver / oracle:** the mechanism by which the real-world outcome value gets reported on-chain so the market can settle. Paradigm has four trust tiers (T0 trustless feed → T3 designated party).
 - **Soroban:** Stellar's smart-contract platform (Rust-based).
-- **Reflector:** an on-chain oracle network on Stellar (used for Kaido's T0 price feeds).
+- **Reflector:** an on-chain oracle network on Stellar (used for Paradigm's T0 price feeds).
 - **Scalar market vs. trajectory market:** a market whose outcome is one final number vs. one whose outcome is a path of numbers over time (sampled at checkpoints).
-- **BlendTap:** Kaido's liquidity bootstrap — JIT borrow from a Blend lending pool on the first `trade()`, repaid and unwound at `claim()`. No protocol-owned book.
-- **Belief Surface:** Kaido's consumer UI — two sliders (center `μ` and confidence `σ`) plus a pre-trade quote (cost, max payout, worst case) before confirmation.
+- **BlendTap:** Paradigm's liquidity bootstrap — JIT borrow from a Blend lending pool on the first `trade()`, repaid and unwound at `claim()`. No protocol-owned book.
+- **Belief Surface:** Paradigm's consumer UI — two sliders (center `μ` and confidence `σ`) plus a pre-trade quote (cost, max payout, worst case) before confirmation.
 
 ---
 
 # References
 
-1. White, D. **"Distribution Markets."** Paradigm, December 2024. https://www.paradigm.xyz/2024/12/distribution-markets — the mechanism Kaido's Layer 1 implements (L²-norm market-scoring-rule AMM over continuous outcomes; discrete sphere case; Gaussian parameterization and λ-scaling; bounded-loss via σ-floor / capped Gaussians; LP construction; always-solvent settlement).
+1. White, D. **"Distribution Markets."** Paradigm, December 2024. https://www.paradigm.xyz/2024/12/distribution-markets — the mechanism Paradigm's Layer 1 implements (L²-norm market-scoring-rule AMM over continuous outcomes; discrete sphere case; Gaussian parameterization and λ-scaling; bounded-loss via σ-floor / capped Gaussians; LP construction; always-solvent settlement).
 2. Hanson, R. **"Logarithmic Market Scoring Rules for Modular Combinatorial Information Aggregation."** (LMSR — the classic prediction-market scoring-rule mechanism; contrast to White's construction.)
 3. Hanson, R. **"Combinatorial Information Market Design."** (Market scoring rules, background.)
 4. Gneiting, T., & Raftery, A. E. **"Strictly Proper Scoring Rules, Prediction, and Estimation."** JASA, 2007. (Proper scoring rules, the formal grounding for "you're paid most for honest reports.")
-5. Stellar Development Foundation. **Soroban documentation.** https://soroban.stellar.org — smart-contract platform Kaido is built on.
-6. Reflector. **Stellar oracle network documentation.** — Kaido's T0 resolver source.
+5. Stellar Development Foundation. **Soroban documentation.** https://soroban.stellar.org — smart-contract platform Paradigm is built on.
+6. Reflector. **Stellar oracle network documentation.** — Paradigm's T0 resolver source.
 7. Stellar Community Fund. **SCF Handbook.** https://stellar.gitbook.io/scf-handbook — award structure the roadmap milestones map onto.
 8. (Comparators, for positioning) Polymarket, Kalshi — binary/categorical prediction markets; Metaculus — distributional forecasting without financial stakes.
 
@@ -445,8 +445,8 @@ Structured to map onto an SCF Build Award's milestone tranches.
 White, D. **"Distribution Markets."** Paradigm, December 2024.  
 https://www.paradigm.xyz/2024/12/distribution-markets
 
-The distribution-market mechanism that Kaido's Layer 1 implements---the $L^2$-norm market-scoring-rule AMM over continuous outcomes, discrete sphere case, Gaussian parameterization and $\lambda$-scaling, bounded-loss via $\sigma$-floor / capped Gaussians, LP construction, and always-solvent settlement---is due to this paper.
+The distribution-market mechanism that Paradigm's Layer 1 implements---the $L^2$-norm market-scoring-rule AMM over continuous outcomes, discrete sphere case, Gaussian parameterization and $\lambda$-scaling, bounded-loss via $\sigma$-floor / capped Gaussians, LP construction, and always-solvent settlement---is due to this paper.
 
 ---
 
-*Kaido whitepaper v0.1 — working draft. Author: Arko Roy (arkoroy302@gmail.com). The mechanism described in Part II is due to White (2024); Parts III–VIII (the Stellar implementation, the Belief Surface, the oracle tiering, the economics, the roadmap) are Kaido's contribution. Open questions flagged in-text: belief parameterizations beyond Gaussian; correlation structure across trajectory checkpoints; hardening the T2 optimistic oracle; the pre-mainnet legal opinion. Feedback welcome.*
+*Paradigm whitepaper v0.1 — working draft. Author: Arko Roy (arkoroy302@gmail.com). The mechanism described in Part II is due to White (2024); Parts III–VIII (the Stellar implementation, the Belief Surface, the oracle tiering, the economics, the roadmap) are Paradigm's contribution. Open questions flagged in-text: belief parameterizations beyond Gaussian; correlation structure across trajectory checkpoints; hardening the T2 optimistic oracle; the pre-mainnet legal opinion. Feedback welcome.*
