@@ -1,1 +1,19 @@
-{}
+{
+  "testnet": {
+    "CCZJCTECVQVHBB4OK6I7LXSYK4NEIPHCDZOQGFOPNJTNPAV3PNVSF5RG": {
+      "question": "Test Market 1",
+      "createdAt": "2026-07-03T07:01:30.436Z",
+      "marketStyle": "kaido",
+      "outcomeMin": 0,
+      "outcomeMax": 100,
+      "divisions": [
+        0,
+        20,
+        40,
+        60,
+        80,
+        100
+      ]
+    }
+  }
+}

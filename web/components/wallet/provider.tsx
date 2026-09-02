@@ -40,6 +40,8 @@ interface WalletContextValue {
   lastKind: WalletKind | null;
   /** Soroban RPC URL for the active network (for balance reads). */
   rpcUrl: string | null;
+  /** Horizon URL for classic balance reads (navbar). */
+  horizonUrl: string | null;
   /** USDC SAC contract id for the active network. */
   usdcSacId: string | null;
   networkPassphrase: string;
@@ -53,6 +55,7 @@ export interface WalletProviderProps {
   network: string;
   networkPassphrase: string;
   rpcUrl?: string | null;
+  horizonUrl?: string | null;
   usdcSacId?: string | null;
   children: React.ReactNode;
 }
@@ -61,6 +64,7 @@ export function WalletProvider({
   network,
   networkPassphrase,
   rpcUrl = null,
+  horizonUrl = null,
   usdcSacId = null,
   children,
 }: WalletProviderProps) {
@@ -140,12 +144,13 @@ export function WalletProvider({
       connectors: Object.values(CONNECTORS),
       lastKind,
       rpcUrl,
+      horizonUrl,
       usdcSacId,
       networkPassphrase,
       connect,
       disconnect,
     }),
-    [wallet, connecting, restoring, error, lastKind, rpcUrl, usdcSacId, networkPassphrase, connect, disconnect],
+    [wallet, connecting, restoring, error, lastKind, rpcUrl, horizonUrl, usdcSacId, networkPassphrase, connect, disconnect],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

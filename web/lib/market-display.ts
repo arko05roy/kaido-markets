@@ -115,8 +115,11 @@ export function formatContractTradeError(message: string): string {
 }
 
 /** Format a real-unit outcome for display (prices, scores, etc.). */
-export function formatOutcome(v: number): string {
+export function formatOutcome(v: number, kind?: import("@/lib/outcome-scale").OutcomeKind): string {
   if (!Number.isFinite(v)) return "—";
+  if (kind === "probability") {
+    return `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+  }
   const abs = Math.abs(v);
   if (abs >= 1_000_000) {
     return `$${(v / 1_000_000).toFixed(2)}M`;
@@ -294,22 +297,39 @@ export function convictionHint(level: ConvictionLevel): string {
   }
 }
 
+const PREVIEW_MAX_MULTIPLE = 25;
+
 /** Rough payout preview — honest estimate, not a guaranteed quote. */
 export function estimatePayoutPreview(opts: {
   riskUsdc: number;
-  yourPeak: number;
-  crowdPeak: number;
-  bReal: number;
-}): { maxWin: number; multiple: number } {
-  const { riskUsdc, yourPeak, crowdPeak, bReal } = opts;
+  yourBelief: { muWad: bigint; sigmaWad: bigint };
+  crowdBelief: { muWad: bigint; sigmaWad: bigint };
+  market: { kWad: bigint; bWad: bigint; capped?: boolean };
+}): { maxWin: number; multiple: number; poolLimited: boolean } {
+  const { riskUsdc, yourBelief, crowdBelief, market } = opts;
   if (!Number.isFinite(riskUsdc) || riskUsdc <= 0) {
-    return { maxWin: 0, multiple: 0 };
+    return { maxWin: 0, multiple: 0, poolLimited: false };
   }
-  const ratio = yourPeak / Math.max(crowdPeak, 1e-9);
-  const raw = riskUsdc * Math.max(0, ratio - 0.5) * 2;
-  const maxWin = Math.min(Math.max(0, raw), bReal * 0.85);
-  const multiple = maxWin / riskUsdc;
-  return { maxWin, multiple };
+  const yourMu = fromWad(yourBelief.muWad);
+  const yourPeak = peakAtMu(yourBelief.muWad, yourBelief.sigmaWad, market);
+  const crowdPeak = peakAtMu(crowdBelief.muWad, crowdBelief.sigmaWad, market);
+  const crowdAtYourMu = renderGaussian(crowdBelief, market, [yourMu])[0]?.y ?? 0;
+  // ponytail: floor vs crowd peak so fading far doesn't divide by ~0 and print 28,000×
+  const crowdRef = Math.max(crowdAtYourMu, crowdPeak * 0.05);
+  const densityEdge = yourPeak / Math.max(crowdRef, 1e-12);
+  const edgeMultiple = Math.min(
+    Math.max(0, (densityEdge - 1) * 0.35),
+    PREVIEW_MAX_MULTIPLE,
+  );
+  const maxWin = riskUsdc * edgeMultiple;
+  const multiple = edgeMultiple;
+  return { maxWin, multiple, poolLimited: false };
+}
+
+export function formatPayoutMultiple(multiple: number): string {
+  if (!Number.isFinite(multiple) || multiple <= 0) return "0.0x";
+  if (multiple < 0.1) return "<0.1x";
+  return `${multiple.toFixed(1)}x`;
 }
 
 export function peakAtMu(

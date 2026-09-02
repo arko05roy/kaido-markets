@@ -1,29 +1,20 @@
 "use client";
 
 import { Loader2, LogOut, Wallet } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
+import { SettlementWalletChip } from "./settlement-wallet-chip";
 import { useWallet } from "./provider";
-import { useUsdcBalance } from "./use-usdc-balance";
 import type { WalletKind } from "./types";
-import { USDC_FAUCET_URL } from "@/lib/stellar/usdc";
 
 /**
  * Wallet connect/disconnect control. Disconnected: a row of available
- * connectors (today: Freighter). Connected: the account pill + a disconnect
- * button.
+ * connectors (today: Freighter). Connected: balance chip + account pill.
  */
 export function ConnectButton() {
-  const { wallet, connecting, restoring, error, connectors, connect, disconnect, rpcUrl, networkPassphrase, usdcSacId } = useWallet();
-  const { formatted: usdcBal, loading: usdcLoading, balance7dp } = useUsdcBalance(
-    rpcUrl ?? undefined,
-    networkPassphrase,
-    usdcSacId ?? undefined,
-    wallet?.accountId,
-  );
+  const { wallet, connecting, restoring, error, connectors, connect, disconnect } = useWallet();
   const [available, setAvailable] = useState<Record<WalletKind, boolean> | null>(null);
 
   useEffect(() => {
@@ -41,24 +32,7 @@ export function ConnectButton() {
   if (wallet) {
     return (
       <div className="flex items-center gap-2">
-        {usdcSacId && (
-          <span className="hidden rounded-lg border border-white/[0.06] bg-[#1c1c21] px-2.5 py-1.5 font-mono text-[10px] tabular-nums tracking-tight text-white/55 sm:inline">
-            {usdcLoading ? "…" : usdcBal != null ? `${usdcBal} USDC` : "0 USDC"}
-            {balance7dp != null && balance7dp <= 0n && (
-              <>
-                {" · "}
-                <Link
-                  href={USDC_FAUCET_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#d8c69a] underline underline-offset-2"
-                >
-                  Faucet
-                </Link>
-              </>
-            )}
-          </span>
-        )}
+        <SettlementWalletChip variant="dark" />
         <span
           className="max-w-[8.5rem] truncate rounded-xl border border-[#d8c69a]/20 bg-[#1c1c21] px-3 py-1.5 font-mono text-xs text-[#f3efe6] sm:max-w-[10rem]"
           title={wallet.accountId}
@@ -105,7 +79,7 @@ export function ConnectButton() {
               disabled={connecting || !ok}
               onClick={() => void connect(c.kind).catch(() => {})}
               title={ok ? `Connect with ${c.name}` : `${c.name} unavailable`}
-              className="h-9 rounded-xl border-white/[0.1] bg-[#1c1c21] font-mono text-[10px] uppercase tracking-[0.14em] text-[#f3efe6] hover:border-[#d8c69a]/30 hover:bg-[#d8c69a]/10"
+              className="h-9 rounded-xl border-white/[0.10] bg-[#1c1c21] font-mono text-[10px] uppercase tracking-[0.14em] text-[#f3efe6] hover:border-[#d8c69a]/30 hover:bg-[#d8c69a]/10"
             >
               {connecting ? (
                 <Loader2 className="size-4 animate-spin" />

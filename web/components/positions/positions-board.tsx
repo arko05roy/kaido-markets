@@ -26,7 +26,6 @@ import {
   estimatePayoutPreview,
   formatOutcome,
   isTradingWindowOpen,
-  peakAtMu,
   statusLabel,
 } from "@/lib/market-display";
 import { tradeViewFromMarketCard } from "@/lib/market-card-trade-view";
@@ -89,17 +88,15 @@ function rowDetail(row: PositionRow, title: string): PositionDetailData | null {
   const kWad = row.market.kWad ?? 1n;
   const bWad = row.market.bWad ?? 1n;
   const risk = position.collateral7dp ? Number(position.collateral7dp) / 1e7 : 25;
-  const yourPeak = peakAtMu(BigInt(muWad), BigInt(sigmaWad), { kWad, bWad });
-  const crowdPeak =
+  const payout =
     market.crowdMuWad != null && market.crowdSigmaWad != null
-      ? peakAtMu(market.crowdMuWad, market.crowdSigmaWad, { kWad, bWad })
-      : 0;
-  const payout = estimatePayoutPreview({
-    riskUsdc: risk,
-    yourPeak,
-    crowdPeak,
-    bReal: fromWad(bWad),
-  });
+      ? estimatePayoutPreview({
+          riskUsdc: risk,
+          yourBelief: { muWad: BigInt(muWad), sigmaWad: BigInt(sigmaWad) },
+          crowdBelief: { muWad: market.crowdMuWad, sigmaWad: market.crowdSigmaWad },
+          market: { kWad, bWad },
+        })
+      : { maxWin: 0, multiple: 0 };
   const sigma = fromWad(BigInt(sigmaWad));
   const conviction = convictionLabel(convictionFromSigma(sigma, 1e-6, sigma * 16));
 

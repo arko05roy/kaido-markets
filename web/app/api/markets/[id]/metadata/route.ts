@@ -10,9 +10,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  let body: { question?: string };
+  let body: {
+    question?: string;
+    marketStyle?: string;
+    outcomeMin?: number;
+    outcomeMax?: number;
+    divisions?: number[];
+    optionLow?: string;
+    optionHigh?: string;
+  };
   try {
-    body = (await req.json()) as { question?: string };
+    body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
@@ -26,7 +34,17 @@ export async function POST(
   }
 
   try {
-    const saved = saveMarketQuestionToStore(activeNetworkId(), id, question);
+    const saved = saveMarketQuestionToStore(activeNetworkId(), id, {
+      question,
+      ...(body.marketStyle === "binary" || body.marketStyle === "kaido"
+        ? { marketStyle: body.marketStyle }
+        : {}),
+      ...(typeof body.outcomeMin === "number" ? { outcomeMin: body.outcomeMin } : {}),
+      ...(typeof body.outcomeMax === "number" ? { outcomeMax: body.outcomeMax } : {}),
+      ...(Array.isArray(body.divisions) ? { divisions: body.divisions } : {}),
+      ...(typeof body.optionLow === "string" ? { optionLow: body.optionLow.trim() } : {}),
+      ...(typeof body.optionHigh === "string" ? { optionHigh: body.optionHigh.trim() } : {}),
+    });
     return NextResponse.json({ ok: true, ...saved });
   } catch (e) {
     const message = e instanceof Error ? e.message : "failed to save metadata";

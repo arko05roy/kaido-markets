@@ -4,6 +4,8 @@ import { type KaidoConfig } from "@kaido/sdk";
 import { useState } from "react";
 
 import { AdvancedBlock } from "@/components/app/advanced-block";
+import { isTradingWindowOpen } from "@/lib/market-display";
+import { useLedgerNowSec } from "@/lib/use-ledger-now";
 import {
   MobileTradeBar,
   TradePanel,
@@ -41,7 +43,12 @@ export function MarketActions({
   const [call, setCall] = useState("—");
   const [multiple, setMultiple] = useState(1);
 
-  const tradingOpen = tradeMarket.tradingOpen;
+  const nowSec = useLedgerNowSec(config.rpcUrl);
+  const tradingOpen = isTradingWindowOpen(
+    tradeMarket.statusTag,
+    { open: tradeMarket.windowOpen, lock: tradeMarket.windowLock },
+    nowSec,
+  );
   const enrichedMarket: TradeMarketView = {
     ...tradeMarket,
     marketTitle: marketTitle ?? tradeMarket.marketTitle,

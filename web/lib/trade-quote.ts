@@ -1,7 +1,6 @@
 import { Kaido, type KaidoConfig, type KaidoSigner } from "@kaido/sdk";
 
-import { fromWad } from "@/lib/curve";
-import { estimatePayoutPreview, formatContractTradeError, peakAtMu } from "@/lib/market-display";
+import { estimatePayoutPreview, formatContractTradeError } from "@/lib/market-display";
 
 const USDC_DECIMALS = 7;
 
@@ -61,17 +60,15 @@ export async function simulateTradeQuote(
 
   const riskUsdc = Number(args.maxCollateral7dp) / 10 ** USDC_DECIMALS;
   const marketCurve = { kWad: args.kWad, bWad: args.bWad, capped: args.capped };
-  const yourPeak =
+  const payout =
     args.kind === "scalar" && args.mu2 != null && args.sigma2 != null
-      ? peakAtMu(args.mu2, args.sigma2, marketCurve)
-      : 0;
-  const crowdPeak = peakAtMu(args.crowdMuWad, args.crowdSigmaWad, marketCurve);
-  const payout = estimatePayoutPreview({
-    riskUsdc,
-    yourPeak,
-    crowdPeak,
-    bReal: fromWad(args.bWad),
-  });
+      ? estimatePayoutPreview({
+          riskUsdc,
+          yourBelief: { muWad: args.mu2, sigmaWad: args.sigma2 },
+          crowdBelief: { muWad: args.crowdMuWad, sigmaWad: args.crowdSigmaWad },
+          market: marketCurve,
+        })
+      : { maxWin: 0, multiple: 0 };
   const feeUsdc = args.feeBps ? riskUsdc * (args.feeBps / 10_000) : 0;
 
   return {

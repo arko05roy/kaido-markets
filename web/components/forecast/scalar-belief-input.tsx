@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { BinaryOddsBar } from "@/components/forecast/binary-odds-bar";
 import { BeliefChart } from "@/components/forecast/belief-chart";
 import { RangeSlider } from "@/components/forecast/range-slider";
 import { SnappySlider } from "@/components/ui/snappy-slider";
@@ -19,17 +20,28 @@ import {
   toWad,
   type GaussianBelief,
 } from "@/lib/curve";
+import type { OutcomeConfig } from "@/lib/outcome-scale";
+import { defaultOpeningWidth, formatXTick } from "@/lib/outcome-scale";
 import { cn } from "@/lib/utils";
 
 export interface ScalarBeliefInputProps {
   market: { kWad: bigint; bWad: bigint; capped?: boolean };
   consensus: GaussianBelief;
   range?: { min: number; max: number };
+  outcomeConfig?: OutcomeConfig;
   disabled?: boolean;
   onChange: (belief: GaussianBelief) => void;
 }
 
-export function ScalarBeliefInput({ market, consensus, range, disabled, onChange }: ScalarBeliefInputProps) {
+export function ScalarBeliefInput({
+  market,
+  consensus,
+  range,
+  outcomeConfig,
+  disabled,
+  onChange,
+}: ScalarBeliefInputProps) {
+  const isBinary = outcomeConfig?.style === "binary";
   const floorReal = useMemo(
     () => Math.max(1e-12, fromWad(effectiveSigmaFloor(market.kWad, market.bWad))),
     [market.kWad, market.bWad],
@@ -37,7 +49,6 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
   const cMu = fromWad(consensus.muWad);
   const cSigma = Math.max(floorReal, fromWad(consensus.sigmaWad));
 
-  // X/Y frame is pinned to the crowd — only your curve moves when sliders change.
   const chartRange = useMemo(
     () =>
       range ?? {
@@ -66,31 +77,56 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
 
   const belief: GaussianBelief = useMemo(() => {
     const muWad = toWad(muReal);
-    const sigmaWad = clampSigma(toWad(Math.max(sigmaReal, sigmaMin)), market);
+    const sigmaForBinary =
+      outcomeConfig?.style === "binary"
+        ? Number(defaultOpeningWidth(outcomeConfig))
+        : sigmaReal;
+    const sigmaWad = clampSigma(
+      toWad(Math.max(isBinary ? sigmaForBinary : sigmaReal, sigmaMin)),
+      market,
+    );
     return { muWad, sigmaWad };
-  }, [muReal, sigmaReal, sigmaMin, market]);
+  }, [muReal, sigmaReal, sigmaMin, market, isBinary, outcomeConfig]);
 
   useEffect(() => {
     onChange(belief);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [belief.muWad, belief.sigmaWad]);
+  }, [belief, onChange]);
 
   const edge = edgeVsCrowd(muReal, cMu);
   const conviction = convictionFromSigma(sigmaReal, sigmaMin, sigmaMax);
-  // UI maps wide (left) ↔ tight/sniper (right); σ increases toward wide.
   const convictionUi = sigmaMax - sigmaReal + sigmaMin;
 
   const convictionSnapValues = useMemo(() => {
-    const span = sigmaMax - sigmaMin;
+    const s = sigmaMax - sigmaMin;
     const toUi = (sigma: number) => sigmaMax - sigma + sigmaMin;
     return [
       toUi(sigmaMax),
-      toUi(sigmaMin + 0.75 * span),
-      toUi(sigmaMin + 0.5 * span),
-      toUi(sigmaMin + 0.25 * span),
+      toUi(sigmaMin + 0.75 * s),
+      toUi(sigmaMin + 0.5 * s),
+      toUi(sigmaMin + 0.25 * s),
       toUi(sigmaMin),
     ];
   }, [sigmaMin, sigmaMax]);
+
+  if (isBinary && outcomeConfig) {
+    return (
+      <div className="flex flex-col gap-4">
+        <BinaryOddsBar
+          config={outcomeConfig}
+          value={muReal}
+          crowdValue={cMu}
+          onChange={setMuReal}
+          disabled={disabled}
+          size="lg"
+        />
+        <p className="text-center font-mono text-xs text-white/45">
+          {edge.deltaLabel}
+          <span className="mx-2 text-white/20">·</span>
+          {edge.pctLabel}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -98,6 +134,8 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
         mode="scalar"
         market={market}
         range={chartRange}
+        xTicks={outcomeConfig?.divisions}
+        formatXTick={outcomeConfig ? (v) => formatXTick(outcomeConfig, v) : undefined}
         consensus={consensus}
         you={belief}
         anchorYToConsensus
@@ -112,7 +150,7 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
           max={win.max}
           step={muStep || 1}
           disabled={disabled}
-          format={formatOutcome}
+          format={(v) => (outcomeConfig ? formatXTick(outcomeConfig, v) : formatOutcome(v))}
           prominent
         />
         <p className="text-center font-mono text-xs text-white/45">
@@ -146,9 +184,6 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
           <span>Tight</span>
         </div>
         <p className="text-[11px] text-white/40">{convictionHint(conviction)}</p>
-        <p className="text-[11px] text-white/35">
-          Tighter = more upside, less room to miss. Wider = safer range, lower upside.
-        </p>
       </div>
     </div>
   );

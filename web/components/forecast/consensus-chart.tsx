@@ -1,15 +1,11 @@
 "use client";
 
-/**
- * ConsensusChart — read-only render of a market's current consensus
- * distribution (the belief the AMM holds right now), plus the resolved value
- * once known. A thin client boundary that re-hydrates the string-encoded
- * `TradeMarketView` (RSC can't pass `bigint`) into a {@link BeliefChart}.
- */
 import { useMemo } from "react";
 
+import { BinaryOddsBar } from "@/components/forecast/binary-odds-bar";
 import { BeliefChart } from "@/components/forecast/belief-chart";
 import { fromWad, type GaussianBelief } from "@/lib/curve";
+import { chartRangeForConfig, formatXTick, parseOutcomeConfig } from "@/lib/outcome-scale";
 
 import type { TradeMarketView } from "@/components/forecast/trade-panel";
 
@@ -19,7 +15,6 @@ export function ConsensusChart({
   you,
 }: {
   view: TradeMarketView;
-  /** Resolved outcome(s) in WAD strings, once known: one for scalar, one per checkpoint. */
   resolved?: string[];
   you?: GaussianBelief;
 }) {
@@ -31,11 +26,46 @@ export function ConsensusChart({
     const sigmaWad = BigInt(view.consensusSigmasWad[0] ?? "1");
     const muReal = fromWad(muWad);
     const sigmaReal = Math.max(1e-12, fromWad(sigmaWad));
+    const outcomeConfig = parseOutcomeConfig({
+      marketStyle: view.marketStyle,
+      outcomeMin: view.outcomeMin,
+      outcomeMax: view.outcomeMax,
+      divisions: view.divisions,
+      optionLow: view.optionLow,
+      optionHigh: view.optionHigh,
+    });
+
+    if (outcomeConfig?.style === "binary") {
+      const youMu = you != null ? fromWad(you.muWad) : undefined;
+      const resolvedVal = resolved?.[0] != null ? fromWad(BigInt(resolved[0])) : undefined;
+      return (
+        <div className="space-y-6">
+          <BinaryOddsBar
+            config={outcomeConfig}
+            value={muReal}
+            resolved={resolvedVal}
+            size="lg"
+          />
+          {youMu != null && Number.isFinite(youMu) && Math.abs(youMu - muReal) > 0.5 && (
+            <div className="border-t border-white/[0.06] pt-4">
+              <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
+                Your position
+              </p>
+              <BinaryOddsBar config={outcomeConfig} value={youMu} crowdValue={muReal} size="md" />
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const range = chartRangeForConfig(outcomeConfig, muReal, sigmaReal);
     return (
       <BeliefChart
         mode="scalar"
         market={{ kWad, bWad, capped: view.capped }}
-        range={{ min: muReal - 5 * sigmaReal, max: muReal + 5 * sigmaReal }}
+        range={range}
+        xTicks={outcomeConfig?.divisions}
+        formatXTick={outcomeConfig ? (v) => formatXTick(outcomeConfig, v) : undefined}
         consensus={{ muWad, sigmaWad }}
         you={you}
         anchorYToConsensus

@@ -4,7 +4,7 @@
 import fs from "fs";
 import path from "path";
 
-import type { SavedMarketMetadata } from "@/lib/market-metadata";
+import type { MarketMetadataInput, SavedMarketMetadata } from "@/lib/market-metadata";
 
 const FILE = path.join(process.cwd(), "data", "market-questions.json");
 
@@ -20,20 +20,34 @@ export function loadMarketMetadataStore(): MarketMetadataStore {
   }
 }
 
+export function getSavedMarketMetadata(
+  network: string,
+  marketId: string,
+): SavedMarketMetadata | null {
+  return loadMarketMetadataStore()[network]?.[marketId] ?? null;
+}
+
 export function getSavedMarketQuestion(network: string, marketId: string): string | null {
-  const q = loadMarketMetadataStore()[network]?.[marketId]?.question;
+  const q = getSavedMarketMetadata(network, marketId)?.question;
   return q?.trim() ? q.trim() : null;
 }
 
 export function saveMarketQuestionToStore(
   network: string,
   marketId: string,
-  question: string,
+  meta: MarketMetadataInput,
 ): SavedMarketMetadata {
   const store = loadMarketMetadataStore();
+  const prev = store[network]?.[marketId];
   const entry: SavedMarketMetadata = {
-    question: question.trim(),
-    createdAt: new Date().toISOString(),
+    question: meta.question.trim(),
+    createdAt: prev?.createdAt ?? new Date().toISOString(),
+    ...(meta.marketStyle != null ? { marketStyle: meta.marketStyle } : {}),
+    ...(meta.outcomeMin != null ? { outcomeMin: meta.outcomeMin } : {}),
+    ...(meta.outcomeMax != null ? { outcomeMax: meta.outcomeMax } : {}),
+    ...(meta.divisions != null ? { divisions: meta.divisions } : {}),
+    ...(meta.optionLow != null ? { optionLow: meta.optionLow } : {}),
+    ...(meta.optionHigh != null ? { optionHigh: meta.optionHigh } : {}),
   };
   if (!store[network]) store[network] = {};
   store[network][marketId] = entry;

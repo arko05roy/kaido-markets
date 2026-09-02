@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
-# Re-seed BlendTap test fixtures for a network (idempotent where the chain allows).
+# Re-seed test fixtures for a network (idempotent where the chain allows).
 #
 #   ./contracts/scripts/seed.sh <local|testnet|futurenet>
 #
-# What this does:
-#   1. blend-adapter.authorize_market on fixtures.demoMarket
-#   2. Optional short-window lifecycle market (KAIDO_RESEED_LIFECYCLE=1)
-#   3. Rewrite config/networks.<network>.json fixtures + seededAt
+# BlendTap mode (BLEND_POOL_ID set at deploy):
+#   blend-adapter.authorize_market on demo + lifecycle markets
 #
-# Prerequisites:
-#   * make deploy:<network> has already run
-#   * BLEND_POOL_ID + USDC_SAC_ID in .env
-#   * Deployer holds Blend USDC for lifecycle trades
+# KAIDO demo mode (KAIDO_DEMO=1 at deploy):
+#   protocol add_liquidity seed on demo + lifecycle markets (no Blend)
+#
+# Prerequisites: make deploy:<network> has already run.
 set -euo pipefail
 
 NETWORK="${1:-${STELLAR_NETWORK:-}}"
@@ -23,8 +21,10 @@ CONFIG="${ROOT}/config/networks.json"
 NET_FILE="${ROOT}/config/networks.${NETWORK}.json"
 
 if [[ -f "${ROOT}/.env" ]]; then
-  set -a; # shellcheck disable=SC1091
-  source "${ROOT}/.env"; set +a
+  set -a
+  # shellcheck disable=SC1091
+  source "${ROOT}/.env"
+  set +a
 fi
 
 [[ -f "${NET_FILE}" ]] || {
@@ -38,7 +38,6 @@ RPC="${RPC_URL:-$(read_cfg rpcUrl)}"
 [[ -n "${PASSPHRASE}" ]] || { echo "unknown network '${NETWORK}'" >&2; exit 2; }
 [[ -n "${RPC}" ]] || { echo "no RPC url for '${NETWORK}'" >&2; exit 2; }
 
-: "${USDC_SAC_ID:?set USDC_SAC_ID in .env}"
 : "${REFLECTOR_FEED_ID:?set REFLECTOR_FEED_ID in .env}"
 : "${REFLECTOR_ASSET_SYMBOL:=BTC}"
 
@@ -64,6 +63,7 @@ eval "$(node -e "
 const j=require('${NET_FILE}');
 const c=j.contracts||{};
 const f=j.fixtures||{};
+const ext=j.external||{};
 const lines=[
   'ID_BLEND_ADAPTER='+(c.blendAdapter?.id||''),
   'ID_MARKET_FACTORY='+(c.marketFactory?.id||''),
@@ -72,22 +72,27 @@ const lines=[
   'DEMO_RESOLVER='+(f.demoResolver||''),
   'LIFECYCLE_MARKET='+(f.lifecycleMarket||''),
   'LIFECYCLE_RESOLVER='+(f.lifecycleResolver||''),
+  'DEMO_MODE='+(ext.demoMode?'1':'0'),
+  'SETTLEMENT_SAC='+(ext.usdcSacId||''),
 ];
 for (const l of lines) console.log(l);
 ")"
 
-[[ -n "${ID_BLEND_ADAPTER}" ]] || { echo "blendAdapter id missing in ${NET_FILE}" >&2; exit 1; }
 [[ -n "${ID_MARKET_FACTORY}" ]] || { echo "marketFactory id missing in ${NET_FILE}" >&2; exit 1; }
 [[ -n "${DEMO_MARKET}" ]] || { echo "fixtures.demoMarket missing — re-run make deploy:${NETWORK}" >&2; exit 1; }
 
 WAD18="1000000000000000000"
-B18="100000000000000000000"
+B18="${DEMO_B_WAD:-100000000000000000000000}"
 MU0_18="50000000000000000000"
+if [[ "${DEMO_MODE}" != "1" ]]; then
+  B18="100000000000000000000"
+fi
 
 echo "network       : ${NETWORK}"
 echo "deployer      : ${DEPLOYER_ADDR}"
 echo "demo market   : ${DEMO_MARKET}"
-echo "blend adapter : ${ID_BLEND_ADAPTER}"
+echo "demo mode     : ${DEMO_MODE}"
+echo "blend adapter : ${ID_BLEND_ADAPTER:-<none>}"
 echo
 
 authorize_blend_market() {
@@ -105,7 +110,39 @@ authorize_blend_market() {
   return 1
 }
 
-authorize_blend_market "${DEMO_MARKET}" || true
+seed_lp_market() {
+  local market="$1"
+  local lp_key="${KAIDO_TREASURY_KEY_NAME:-kaido-${NETWORK}-treasury}"
+  local lp_addr
+  lp_addr="$(stellar keys address "${lp_key}" 2>/dev/null || echo "${DEPLOYER_ADDR}")"
+  local lp_source=(--source-account "${lp_key}")
+  if [[ -n "${KAIDO_TREASURY_SECRET_KEY:-}" ]]; then
+    lp_source=(--source-account "${KAIDO_TREASURY_SECRET_KEY}")
+    lp_addr="$(stellar keys public-key "${KAIDO_TREASURY_SECRET_KEY}" 2>/dev/null || echo "${lp_addr}")"
+  fi
+  echo "-- add_liquidity protocol seed (${market}) lp=${lp_addr} --"
+  sleep 2
+  for attempt in 1 2 3 4 5; do
+    if stellar contract invoke --id "${market}" --network "${NETWORK}" "${lp_source[@]}" \
+      -- add_liquidity --lp "${lp_addr}" --scale-y "${WAD18}" 2>/dev/null; then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "   (add_liquidity failed)" >&2
+  return 1
+}
+
+bootstrap_market() {
+  local market="$1"
+  if [[ -n "${ID_BLEND_ADAPTER}" ]]; then
+    authorize_blend_market "${market}" || true
+  else
+    seed_lp_market "${market}" || true
+  fi
+}
+
+bootstrap_market "${DEMO_MARKET}"
 
 LIFECYCLE_LOCK_SEC="${LIFECYCLE_LOCK_SEC:-300}"
 LIFECYCLE_RESOLVE_SEC="${LIFECYCLE_RESOLVE_SEC:-600}"
@@ -139,7 +176,7 @@ if [[ -z "${LIFECYCLE_MARKET}" || "${KAIDO_RESEED_LIFECYCLE:-}" == "1" ]]; then
   LIFECYCLE_MARKET="${LIFECYCLE_MARKET//\"/}"
   echo "   market   : ${LIFECYCLE_MARKET}"
 
-  authorize_blend_market "${LIFECYCLE_MARKET}" || true
+  bootstrap_market "${LIFECYCLE_MARKET}"
 else
   echo "-- lifecycle fixture already present: ${LIFECYCLE_MARKET} --"
 fi
@@ -159,7 +196,7 @@ fs.writeFileSync(path, JSON.stringify(j, null, 2) + '\n');
 "
 
 echo
-echo "OK: seeded BlendTap fixtures on ${NETWORK}; updated ${NET_FILE#${ROOT}/}"
+echo "OK: seeded fixtures on ${NETWORK}; updated ${NET_FILE#${ROOT}/}"
 echo "  demo market      : ${DEMO_MARKET}"
 echo "  lifecycle market : ${LIFECYCLE_MARKET}"
 echo "  export NEXT_PUBLIC_KAIDO_DEMO_MARKET=${DEMO_MARKET}"

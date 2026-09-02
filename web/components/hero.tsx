@@ -739,7 +739,7 @@ function BuildersSection() {
             />
             <SDKRow
               label="Lifecycle"
-              body="Open · lock · resolve. Soroban handles settlement. BlendTap borrows liquidity on your first trade."
+              body="Open · lock · resolve. Soroban handles settlement. Protocol LP seeds counterparty depth — no borrow caps on demo."
             />
           </div>
         </motion.div>

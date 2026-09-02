@@ -8,6 +8,8 @@ import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { useLedgerNowSec } from "@/lib/use-ledger-now";
+
 import { ScalarBeliefInput } from "@/components/forecast/scalar-belief-input";
 import {
   TrajectoryBeliefInput,
@@ -31,8 +33,8 @@ import {
   estimatePayoutPreview,
   formatContractTradeError,
   formatOutcome,
+  formatPayoutMultiple,
   isTradingWindowOpen,
-  peakAtMu,
   tradingClosedReason,
 } from "@/lib/market-display";
 import { effectiveSigmaFloor, fromWad, type GaussianBelief } from "@/lib/curve";
@@ -40,6 +42,9 @@ import { savePosition } from "@/lib/positions";
 import { exportShareCurvePng } from "@/lib/share-curve-export";
 import { simulateTradeQuote, type TradeQuote } from "@/lib/trade-quote";
 import { USDC_FAUCET_URL } from "@/lib/stellar/usdc";
+import { clientSettlementAsset, SETTLEMENT_DECIMALS } from "@/lib/settlement-asset";
+import { DemoFaucetButton } from "@/components/wallet/demo-faucet-button";
+import { chartRangeForConfig, formatXTick, parseOutcomeConfig } from "@/lib/outcome-scale";
 import { cn } from "@/lib/utils";
 
 export interface TradeMarketView {
@@ -57,9 +62,14 @@ export interface TradeMarketView {
   capped?: boolean;
   feeBps?: number;
   marketTitle?: string;
+  marketStyle?: import("@/lib/outcome-scale").MarketStyle;
+  outcomeMin?: number;
+  outcomeMax?: number;
+  divisions?: number[];
+  optionLow?: string;
+  optionHigh?: string;
 }
 
-const USDC_DECIMALS = 7;
 const RISK_PRESETS = [10, 25, 50, 100];
 
 function PayoutPreview({
@@ -67,32 +77,40 @@ function PayoutPreview({
   maxWin,
   multiple,
   worstCase,
+  symbol,
 }: {
   riskUsdc: number;
   maxWin: number;
   multiple: number;
   worstCase: number;
+  symbol: string;
 }) {
   return (
     <div className="space-y-2 rounded-xl border border-white/[0.06] bg-[#141416]/60 p-4">
       <div className="flex justify-between text-sm">
         <span className="text-white/45">You risk</span>
-        <span className="font-mono tabular-nums text-[#f3efe6]">{riskUsdc} USDC</span>
+        <span className="font-mono tabular-nums text-[#f3efe6]">
+          {riskUsdc} {symbol}
+        </span>
       </div>
       <div className="flex justify-between text-sm">
         <span className="text-white/45">If you nail it</span>
-        <span className="font-mono tabular-nums text-emerald-300/90">+{maxWin.toFixed(2)} USDC</span>
+        <span className="font-mono tabular-nums text-emerald-300/90">
+          +{maxWin.toFixed(2)} {symbol}
+        </span>
       </div>
       <div className="flex justify-between text-sm">
         <span className="text-white/45">Max multiple</span>
-        <span className="font-mono tabular-nums text-[#d8c69a]">{multiple.toFixed(1)}x</span>
+        <span className="font-mono tabular-nums text-[#d8c69a]">{formatPayoutMultiple(multiple)}</span>
       </div>
       <div className="flex justify-between text-sm">
         <span className="text-white/45">Worst case</span>
-        <span className="font-mono tabular-nums text-red-300/90">−{worstCase.toFixed(2)} USDC</span>
+        <span className="font-mono tabular-nums text-red-300/90">
+          −{worstCase.toFixed(2)} {symbol}
+        </span>
       </div>
       <p className="border-t border-white/[0.06] pt-2 text-[10px] leading-relaxed text-white/35">
-        Estimated at current crowd. Final quote shown before signing.
+        Rough estimate, max 25×. Exact quote shown before signing.
       </p>
     </div>
   );
@@ -106,6 +124,7 @@ function PositionLiveCard({
   edgeLabel,
   positionId,
   onShare,
+  symbol,
 }: {
   call: string;
   conviction: string;
@@ -114,6 +133,7 @@ function PositionLiveCard({
   edgeLabel: string;
   positionId: bigint;
   onShare: () => void;
+  symbol: string;
 }) {
   return (
     <div className="space-y-3 border border-emerald-500/25 bg-emerald-500/5 p-5">
@@ -131,11 +151,15 @@ function PositionLiveCard({
         </div>
         <div className="flex justify-between gap-4">
           <span className="text-white/45">Risk</span>
-          <span className="font-mono text-[#f3efe6]">{riskUsdc} USDC</span>
+          <span className="font-mono text-[#f3efe6]">
+            {riskUsdc} {symbol}
+          </span>
         </div>
         <div className="flex justify-between gap-4">
           <span className="text-white/45">Max win</span>
-          <span className="font-mono text-emerald-300/90">+{maxWin.toFixed(2)} USDC</span>
+          <span className="font-mono text-emerald-300/90">
+            +{maxWin.toFixed(2)} {symbol}
+          </span>
         </div>
       </div>
       <p className="text-xs text-white/50">{edgeLabel}</p>
@@ -181,7 +205,9 @@ export function TradePanel({
   const { wallet, connecting, connect } = useWallet();
   const { toast } = useToast();
   const kaido = useMemo(() => new Kaido(config), [config]);
-  const { balance7dp: usdcBal } = useUsdcBalance(
+  const settlement = clientSettlementAsset();
+  const sym = settlement.symbol;
+  const { balance7dp: usdcBal, refresh: refreshBal } = useUsdcBalance(
     config.rpcUrl,
     config.networkPassphrase,
     config.usdcSacId,
@@ -213,12 +239,7 @@ export function TradePanel({
   const [quote, setQuote] = useState<TradeQuote | null>(null);
   const [positionId, setPositionId] = useState<bigint | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
-
-  useEffect(() => {
-    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
-    return () => clearInterval(t);
-  }, []);
+  const nowSec = useLedgerNowSec(config.rpcUrl);
 
   const tradingOpen = isTradingWindowOpen(
     market.statusTag,
@@ -230,27 +251,51 @@ export function TradePanel({
   const crowdMu = fromWad(consensusScalar.muWad);
   const yourMu = fromWad(scalarBelief.muWad);
   const yourSigma = fromWad(scalarBelief.sigmaWad);
+  const crowdSigma = fromWad(consensusScalar.sigmaWad);
+  const outcomeConfig = useMemo(
+    () =>
+      parseOutcomeConfig({
+        marketStyle: market.marketStyle,
+        outcomeMin: market.outcomeMin,
+        outcomeMax: market.outcomeMax,
+        divisions: market.divisions,
+        optionLow: market.optionLow,
+        optionHigh: market.optionHigh,
+      }),
+    [
+      market.marketStyle,
+      market.outcomeMin,
+      market.outcomeMax,
+      market.divisions,
+      market.optionLow,
+      market.optionHigh,
+    ],
+  );
+  const scalarChartRange = useMemo(
+    () => (market.kind === "scalar" ? chartRangeForConfig(outcomeConfig, crowdMu, crowdSigma) : null),
+    [market.kind, outcomeConfig, crowdMu, crowdSigma],
+  );
   const floorReal = Math.max(1e-12, fromWad(effectiveSigmaFloor(kWad, bWad)));
   const sigmaMax = Math.max(Math.abs(crowdMu) * 0.5, floorReal * 16);
 
-  const payout = useMemo(() => {
-    if (market.kind !== "scalar" || !Number.isFinite(riskUsdc) || riskUsdc <= 0) {
-      return { maxWin: 0, multiple: 0 };
-    }
-    const yourPeak = peakAtMu(scalarBelief.muWad, scalarBelief.sigmaWad, marketCurve);
-    const crowdPeak = peakAtMu(consensusScalar.muWad, consensusScalar.sigmaWad, marketCurve);
-    return estimatePayoutPreview({
-      riskUsdc,
-      yourPeak,
-      crowdPeak,
-      bReal: fromWad(bWad),
-    });
-  }, [market.kind, riskUsdc, scalarBelief, consensusScalar, marketCurve, bWad]);
+  const payout =
+    market.kind !== "scalar" || !Number.isFinite(riskUsdc) || riskUsdc <= 0
+      ? { maxWin: 0, multiple: 0, poolLimited: false }
+      : estimatePayoutPreview({
+          riskUsdc,
+          yourBelief: scalarBelief,
+          crowdBelief: consensusScalar,
+          market: marketCurve,
+        });
 
   const edge = edgeVsCrowd(yourMu, crowdMu);
   const conviction = convictionFromSigma(yourSigma, floorReal, sigmaMax);
-  const callLabel = market.kind === "scalar" ? formatOutcome(yourMu) : "Trajectory belief";
+  const callLabel = market.kind === "scalar" ? formatXTick(outcomeConfig, yourMu) || formatOutcome(yourMu) : "Trajectory belief";
   const convictionText = market.kind === "scalar" ? convictionLabel(conviction) : "—";
+
+  useEffect(() => {
+    setQuote(null);
+  }, [scalarBelief.muWad, scalarBelief.sigmaWad, maxUsdc]);
 
   useEffect(() => {
     if (market.kind === "scalar") onBeliefChange?.(scalarBelief);
@@ -281,7 +326,7 @@ export function TradePanel({
     setQuoting(true);
     setQuote(null);
     try {
-      const maxCollateral7dp = BigInt(Math.round(n * 10 ** USDC_DECIMALS));
+      const maxCollateral7dp = BigInt(Math.round(n * 10 ** SETTLEMENT_DECIMALS));
       const q = await simulateTradeQuote(
         config,
         market.address,
@@ -316,7 +361,7 @@ export function TradePanel({
     setSubmitting(true);
     try {
       const n = Number(maxUsdc);
-      const maxCollateral7dp = BigInt(Math.round(n * 10 ** USDC_DECIMALS));
+      const maxCollateral7dp = BigInt(Math.round(n * 10 ** SETTLEMENT_DECIMALS));
       let id: bigint;
       if (market.kind === "scalar") {
         id = await kaido.trade(
@@ -362,7 +407,7 @@ export function TradePanel({
     );
   }
 
-  const displayPayout = quote ?? { maxWin: payout.maxWin, multiple: payout.multiple, worstCase: riskUsdc };
+  const displayPayout = { maxWin: payout.maxWin, multiple: payout.multiple, worstCase: riskUsdc };
 
   return (
     <>
@@ -375,9 +420,13 @@ export function TradePanel({
         {!compact && (
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-[#d8c69a]">
-              Call the number
+              {outcomeConfig?.style === "binary" ? "Pick your side" : "Call the number"}
             </p>
-            <p className="mt-1 text-sm text-white/45">Set your call, press conviction, size your risk.</p>
+            <p className="mt-1 text-sm text-white/45">
+              {outcomeConfig?.style === "binary"
+                ? "Slide toward your option, then size your risk."
+                : "Set your call, press conviction, size your risk."}
+            </p>
           </div>
         )}
 
@@ -385,6 +434,8 @@ export function TradePanel({
           <ScalarBeliefInput
             market={marketCurve}
             consensus={consensusScalar}
+            range={scalarChartRange ?? undefined}
+            outcomeConfig={outcomeConfig ?? undefined}
             disabled={submitting}
             onChange={setScalarBelief}
           />
@@ -400,7 +451,7 @@ export function TradePanel({
 
         <div className="flex flex-col gap-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
-            Risk amount (USDC)
+            Risk amount ({sym})
           </span>
           <div className="flex flex-wrap gap-2">
             {RISK_PRESETS.map((p) => (
@@ -435,9 +486,10 @@ export function TradePanel({
         {Number.isFinite(riskUsdc) && riskUsdc > 0 && (
           <PayoutPreview
             riskUsdc={riskUsdc}
-            maxWin={displayPayout.maxWin}
-            multiple={quote?.multiple ?? payout.multiple}
+            maxWin={payout.maxWin}
+            multiple={payout.multiple}
             worstCase={riskUsdc}
+            symbol={sym}
           />
         )}
 
@@ -456,12 +508,26 @@ export function TradePanel({
           </p>
         )}
         {wallet && usdcBal != null && usdcBal <= 0n && (
-          <p className="text-xs text-white/40">
-            You need testnet USDC.{" "}
-            <a href={USDC_FAUCET_URL} target="_blank" rel="noopener noreferrer" className="text-[#d8c69a] underline">
-              Get USDC
-            </a>
-          </p>
+          <div className="flex flex-col items-center gap-2 text-xs text-white/40">
+            {settlement.isDemo ? (
+              <>
+                <p>You need demo {sym} to trade.</p>
+                <DemoFaucetButton symbol={sym} issuer={settlement.issuer} onSuccess={refreshBal} />
+              </>
+            ) : (
+              <p>
+                You need testnet USDC.{" "}
+                <a
+                  href={USDC_FAUCET_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#d8c69a] underline"
+                >
+                  Get USDC
+                </a>
+              </p>
+            )}
+          </div>
         )}
 
         {positionId != null && (
@@ -476,6 +542,7 @@ export function TradePanel({
                 : "Your belief is live. Watch the crowd move."
             }
             positionId={positionId}
+            symbol={sym}
             onShare={() => setShareOpen(true)}
           />
         )}
@@ -516,7 +583,7 @@ export function TradePanel({
         marketTitle={market.marketTitle ?? "Market"}
         call={callLabel}
         conviction={convictionText}
-        maxWin={`+${displayPayout.maxWin.toFixed(2)} USDC`}
+        maxWin={`+${displayPayout.maxWin.toFixed(2)} ${sym}`}
         onDownloadPng={
           market.kind === "scalar"
             ? () =>
@@ -525,7 +592,7 @@ export function TradePanel({
                   call: callLabel,
                   conviction: convictionText,
                   crowdTarget: crowdTargetLabel(consensusScalar.muWad),
-                  maxWin: `+${displayPayout.maxWin.toFixed(2)} USDC`,
+                  maxWin: `+${displayPayout.maxWin.toFixed(2)} ${sym}`,
                   consensus: consensusScalar,
                   yours: scalarBelief,
                   market: marketCurve,

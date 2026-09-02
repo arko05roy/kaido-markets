@@ -15,7 +15,7 @@ import {
   marketSubtitle,
 } from "@/lib/market-display";
 import { displayMarketQuestion } from "@/lib/market-metadata";
-import { getSavedMarketQuestion } from "@/lib/market-metadata-store";
+import { getSavedMarketMetadata, getSavedMarketQuestion } from "@/lib/market-metadata-store";
 import { getMarketEvents } from "@/lib/indexer";
 import { aggregateMarketStats24h } from "@/lib/market-stats";
 
@@ -105,6 +105,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
         : state.status.tag === "ResolvedVec"
           ? (await getResolvedOutcomes(id)).map((x) => x.toString())
           : [];
+    const savedMeta = getSavedMarketMetadata(activeNetworkId(), id);
     const view: TradeMarketView = {
       address: id,
       kind: isTraj ? "trajectory" : "scalar",
@@ -119,6 +120,12 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       windowLock: Number(mp.window.lock),
       capped: mp.capped,
       feeBps: mp.fee_bps,
+      ...(savedMeta?.marketStyle ? { marketStyle: savedMeta.marketStyle } : {}),
+      ...(savedMeta?.outcomeMin != null ? { outcomeMin: savedMeta.outcomeMin } : {}),
+      ...(savedMeta?.outcomeMax != null ? { outcomeMax: savedMeta.outcomeMax } : {}),
+      ...(savedMeta?.divisions ? { divisions: savedMeta.divisions } : {}),
+      ...(savedMeta?.optionLow ? { optionLow: savedMeta.optionLow } : {}),
+      ...(savedMeta?.optionHigh ? { optionHigh: savedMeta.optionHigh } : {}),
     };
     const settlement: SettlementMarketView = {
       address: id,

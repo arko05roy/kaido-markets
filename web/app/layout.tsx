@@ -62,6 +62,7 @@ export default function RootLayout({
           network={networkId}
           networkPassphrase={net.networkPassphrase}
           rpcUrl={net.rpcUrl}
+          horizonUrl={net.horizonUrl}
           usdcSacId={usdcSacId}
         >
           <ToastProvider>

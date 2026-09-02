@@ -17,7 +17,7 @@ export function CreateMarketHeader({ network }: { network: string }) {
             <NetworkBadge network={network} />
           </div>
           <p className="max-w-[52ch] text-sm leading-relaxed text-white/45">
-            Set the question, seed the crowd curve, and choose when trading opens and settles.
+            Name your market, pick binary or Kaido range, set the schedule, then configure outcomes.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">

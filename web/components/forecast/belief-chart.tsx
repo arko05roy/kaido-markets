@@ -86,6 +86,10 @@ export interface ScalarBeliefChartProps {
   anchorYToConsensus?: boolean;
   /** Realised outcome (real units), once known. */
   resolved?: number;
+  /** X-axis tick values (division markers). */
+  xTicks?: number[];
+  /** Label formatter for x-axis ticks. */
+  formatXTick?: (v: number) => string;
   height?: number;
 }
 
@@ -197,7 +201,8 @@ export function BeliefChart(props: BeliefChartProps) {
             dataKey="x"
             type="number"
             domain={[props.range.min, props.range.max]}
-            tickFormatter={fmtNum}
+            ticks={props.xTicks}
+            tickFormatter={(v) => (props.formatXTick ? props.formatXTick(Number(v)) : fmtNum(Number(v)))}
             tick={AXIS_TICK}
             stroke="rgba(255,255,255,0.15)"
             scale="linear"

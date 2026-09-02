@@ -10,6 +10,7 @@ import { useMemo, useState, useEffect } from "react";
 import { AdvancedBlock } from "@/components/app/advanced-block";
 import { Panel, SectionLabel } from "@/components/app/kaido-ui";
 import { BeliefChart } from "@/components/forecast/belief-chart";
+import { BinaryOddsBar } from "@/components/forecast/binary-odds-bar";
 import { CreateReviewModal, CreateSuccessModal } from "@/components/modals/first-visit-modal";
 import { SnappySlider } from "@/components/ui/snappy-slider";
 import { useWallet } from "@/components/wallet/provider";
@@ -18,10 +19,21 @@ import {
   convictionFromSigma,
   convictionHint,
   convictionLabel,
-  formatOutcome,
 } from "@/lib/market-display";
 import { cn } from "@/lib/utils";
-import { saveMarketQuestion } from "@/lib/market-metadata";
+import { saveMarketMetadata } from "@/lib/market-metadata";
+import {
+  chartRangeForConfig,
+  defaultBinaryConfig,
+  defaultKaidoConfig,
+  defaultOpeningCall,
+  defaultOpeningWidth,
+  evenDivisions,
+  formatXTick,
+  type MarketStyle,
+  type OutcomeConfig,
+} from "@/lib/outcome-scale";
+import { RangeSlider } from "@/components/forecast/range-slider";
 
 const { ResolverTier } = distributionMarket;
 
@@ -71,7 +83,9 @@ const TIERS = [
   },
 ];
 
-const STEPS = ["Question", "Market type", "Schedule", "Starting crowd", "Settlement"];
+const STEPS = ["Question", "Market type", "Schedule", "Outcomes", "Opening curve", "Settlement"];
+
+const DIVISION_PRESETS = [3, 4, 5, 6, 8, 10] as const;
 
 function toUnix(dtLocal: string): bigint {
   const ms = new Date(dtLocal).getTime();
@@ -97,6 +111,15 @@ export function CreateMarketWizard({
 
   const [mode, setMode] = useState<Mode>("scalar");
   const [question, setQuestion] = useState("");
+  const [marketStyle, setMarketStyle] = useState<MarketStyle>("binary");
+  const [optionLow, setOptionLow] = useState("No");
+  const [optionHigh, setOptionHigh] = useState("Yes");
+  const [rangeMin, setRangeMin] = useState("0");
+  const [rangeMax, setRangeMax] = useState("100");
+  const [divisionCount, setDivisionCount] = useState("5");
+  const [divisionValues, setDivisionValues] = useState<string[]>(() =>
+    evenDivisions(0, 100, 5).map(String),
+  );
   const [k, setK] = useState("1");
   const [b, setB] = useState("1");
   const [feeBps, setFeeBps] = useState("30");
@@ -118,6 +141,64 @@ export function CreateMarketWizard({
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
+
+  const outcomeConfig = useMemo((): OutcomeConfig | null => {
+    if (mode !== "scalar") return null;
+    if (marketStyle === "binary") {
+      return {
+        ...defaultBinaryConfig(),
+        optionLow: optionLow.trim() || "No",
+        optionHigh: optionHigh.trim() || "Yes",
+      };
+    }
+    const min = Number(rangeMin);
+    const max = Number(rangeMax);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) return null;
+    const divisions = divisionValues
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n));
+    if (divisions.length < 2) return null;
+    return { style: "kaido", min, max, divisions };
+  }, [mode, marketStyle, optionLow, optionHigh, rangeMin, rangeMax, divisionValues]);
+
+  const pickMarketStyle = (style: MarketStyle) => {
+    setMarketStyle(style);
+    setMode("scalar");
+    if (style === "binary") {
+      const cfg = defaultBinaryConfig();
+      setOptionLow(cfg.optionLow ?? "No");
+      setOptionHigh(cfg.optionHigh ?? "Yes");
+      setMu0(defaultOpeningCall(cfg));
+      setSigma0(defaultOpeningWidth(cfg));
+      setTierIdx(2);
+      setResolverAddr(resolvers.optimistic);
+      return;
+    }
+    const cfg = defaultKaidoConfig();
+    setRangeMin(String(cfg.min));
+    setRangeMax(String(cfg.max));
+    setDivisionCount("5");
+    setDivisionValues(cfg.divisions.map(String));
+    setMu0(defaultOpeningCall(cfg));
+    setSigma0(defaultOpeningWidth(cfg));
+    setTierIdx(0);
+    setResolverAddr(resolvers.reflector);
+  };
+
+  useEffect(() => {
+    if (marketStyle !== "kaido" || mode !== "scalar") return;
+    const min = Number(rangeMin);
+    const max = Number(rangeMax);
+    const n = Number(divisionCount);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min) || !Number.isFinite(n)) return;
+    setDivisionValues(evenDivisions(min, max, n).map(String));
+  }, [marketStyle, mode, rangeMin, rangeMax, divisionCount]);
+
+  useEffect(() => {
+    if (mode !== "scalar" || !outcomeConfig) return;
+    if (mu0.trim() === "") setMu0(defaultOpeningCall(outcomeConfig));
+    if (sigma0.trim() === "") setSigma0(defaultOpeningWidth(outcomeConfig));
+  }, [mode, outcomeConfig, mu0, sigma0]);
 
   const kWad = useMemo(() => safeWad(k), [k]);
   const bWad = useMemo(() => safeWad(b), [b]);
@@ -142,11 +223,15 @@ export function CreateMarketWizard({
 
   const convictionRange = useMemo(() => {
     if (sigmaMin == null) return null;
-    const anchor = muReal ?? 100_000;
-    const span = Math.max(anchor * 0.2, sigmaMin * 8);
+    const lo = outcomeConfig?.min;
+    const hi = outcomeConfig?.max;
+    const span =
+      lo != null && hi != null && hi > lo
+        ? hi - lo
+        : Math.max((muReal ?? 100_000) * 0.2, sigmaMin * 8);
     const sigmaMax = Math.max(span / 2, sigmaMin * 16);
     return { sigmaMin, sigmaMax };
-  }, [sigmaMin, muReal]);
+  }, [sigmaMin, muReal, outcomeConfig]);
 
   useEffect(() => {
     if (convictionRange == null || sigma0.trim() !== "") return;
@@ -207,8 +292,12 @@ export function CreateMarketWizard({
 
       let id: string;
       if (mode === "scalar") {
-        const m = required(safeWad(mu0), "crowd target");
-        const s = required(safeWad(sigma0), "starting conviction");
+        const m = required(safeWad(mu0), "opening call");
+        let sigRaw = safeWad(sigma0);
+        if (sigRaw == null && marketStyle === "binary" && outcomeConfig) {
+          sigRaw = safeWad(defaultOpeningWidth(outcomeConfig));
+        }
+        const s = required(sigRaw, "starting conviction");
         if (s <= 0n) throw new Error("starting conviction must be > 0");
         id = await kaido.createMarket(
           {
@@ -240,9 +329,22 @@ export function CreateMarketWizard({
         );
       }
       try {
-        await saveMarketQuestion(id, q);
+        await saveMarketMetadata(id, {
+          question: q,
+          ...(outcomeConfig
+            ? {
+                marketStyle: outcomeConfig.style,
+                outcomeMin: outcomeConfig.min,
+                outcomeMax: outcomeConfig.max,
+                divisions: outcomeConfig.divisions,
+                ...(outcomeConfig.style === "binary"
+                  ? { optionLow: outcomeConfig.optionLow, optionHigh: outcomeConfig.optionHigh }
+                  : {}),
+              }
+            : {}),
+        });
       } catch (e) {
-        console.warn("question saved on-chain but metadata write failed:", e);
+        console.warn("market deployed but metadata write failed:", e);
       }
       setCreatedId(id);
       setSuccessOpen(true);
@@ -287,25 +389,45 @@ export function CreateMarketWizard({
       </WizardSection>
 
       {/* 2 — Market type */}
-      <WizardSection step={2} label="What are traders calling?">
+      <WizardSection step={2} label="Binary or Kaido?">
         <p className="text-sm leading-relaxed text-white/55">
-          Most markets resolve to a single number — a price close, a score, a count. Path markets track
-          multiple checkpoints over time (power-user mode).
+          <span className="text-[#f3efe6]">Binary</span> — two outcomes (yes/no, or your own labels).
+          Best for events.{" "}
+          <span className="text-[#f3efe6]">Kaido</span> — a continuous range with tick marks traders
+          slide along (prices, scores, counts).
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <ChoiceButton active={mode === "scalar"} onClick={() => setMode("scalar")}>
-            One number
-          </ChoiceButton>
-          <ChoiceButton active={mode === "trajectory"} onClick={() => setMode("trajectory")}>
-            Path market
-          </ChoiceButton>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => pickMarketStyle("binary")}
+            className={cn(
+              "rounded-xl border p-5 text-left transition-colors",
+              marketStyle === "binary"
+                ? "border-[#d8c69a]/40 bg-[#d8c69a]/10"
+                : "border-white/[0.08] bg-[#141416]/50 hover:border-white/15",
+            )}
+          >
+            <p className="font-serif text-lg text-[#f3efe6]">Binary</p>
+            <p className="mt-2 text-xs leading-relaxed text-white/45">
+              Will GTA 6 release this year? Two options on the chart — settles at one or the other.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => pickMarketStyle("kaido")}
+            className={cn(
+              "rounded-xl border p-5 text-left transition-colors",
+              marketStyle === "kaido"
+                ? "border-[#d8c69a]/40 bg-[#d8c69a]/10"
+                : "border-white/[0.08] bg-[#141416]/50 hover:border-white/15",
+            )}
+          >
+            <p className="font-serif text-lg text-[#f3efe6]">Kaido range</p>
+            <p className="mt-2 text-xs leading-relaxed text-white/45">
+              Where does BTC close? Pick lower &amp; upper bounds and how many x-values to show.
+            </p>
+          </button>
         </div>
-        {mode === "trajectory" && (
-          <p className="mt-3 text-xs leading-relaxed text-white/40">
-            Traders share one pool across checkpoints. Each checkpoint gets its own crowd target and
-            conviction width.
-          </p>
-        )}
       </WizardSection>
 
       {/* 3 — Schedule */}
@@ -348,25 +470,119 @@ export function CreateMarketWizard({
         </div>
       </WizardSection>
 
-      {/* 4 — Starting crowd */}
-      <WizardSection step={4} label="Seed the starting crowd">
+      {/* 4 — Outcomes */}
+      <WizardSection step={4} label="Set the outcomes">
+        {marketStyle === "binary" ? (
+          <>
+            <p className="text-sm leading-relaxed text-white/55">
+              Name the two sides. The chart runs 0 → 100 internally; settlement posts one end or the
+              other.
+            </p>
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Low option (0)" hint="Left side of the chart">
+                <Input value={optionLow} onChange={setOptionLow} placeholder="No" />
+              </Field>
+              <Field label="High option (100)" hint="Right side of the chart">
+                <Input value={optionHigh} onChange={setOptionHigh} placeholder="Yes" />
+              </Field>
+            </div>
+            <div className="mt-4 rounded-xl border border-white/[0.06] bg-[#141416]/40 px-4 py-3 font-mono text-sm text-white/55">
+              <span className="text-[#d8c69a]">{optionLow || "No"}</span>
+              <span className="mx-3 text-white/25">←—— chart ——→</span>
+              <span className="text-[#d8c69a]">{optionHigh || "Yes"}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm leading-relaxed text-white/55">
+              Pick the lower and upper limits, then how many x-values appear on the chart. Traders
+              place beliefs anywhere on the line — the ticks are guides.
+            </p>
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Lower limit" hint="Left edge of the chart">
+                <Input value={rangeMin} onChange={setRangeMin} placeholder="60000" />
+              </Field>
+              <Field label="Upper limit" hint="Right edge of the chart">
+                <Input value={rangeMax} onChange={setRangeMax} placeholder="80000" />
+              </Field>
+            </div>
+            <div className="mt-4 space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
+                Divisions
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {DIVISION_PRESETS.map((n) => (
+                  <ChoiceButton
+                    key={n}
+                    active={divisionCount === String(n)}
+                    onClick={() => setDivisionCount(String(n))}
+                  >
+                    {n} ticks
+                  </ChoiceButton>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+              {divisionValues.map((val, i) => (
+                <Field key={i} label={`x${i + 1}`}>
+                  <Input
+                    value={val}
+                    onChange={(v) =>
+                      setDivisionValues((rows) => rows.map((x, j) => (j === i ? v : x)))
+                    }
+                  />
+                </Field>
+              ))}
+            </div>
+          </>
+        )}
+      </WizardSection>
+
+      {/* 5 — Opening curve / starting odds */}
+      <WizardSection
+        step={5}
+        label={marketStyle === "binary" ? "Starting odds" : "Opening curve"}
+      >
         <p className="text-sm leading-relaxed text-white/55">
-          Where does the crowd lean on day one? This becomes the baseline traders fade or follow.
-          You can leave defaults and let the first trades move it.
+          {marketStyle === "binary"
+            ? "Where does the crowd lean before the first trade? Slide toward your low or high option."
+            : "Where the crowd starts on the line plus how tight the consensus is."}
         </p>
 
         {mode === "scalar" ? (
           <div className="mt-5 space-y-5">
-            <Field label="Crowd target" hint="The number the crowd starts near">
-              <Input value={mu0} onChange={setMu0} placeholder="e.g. 105000" />
-            </Field>
-            {muReal != null && Number.isFinite(muReal) && (
+            {marketStyle === "binary" && outcomeConfig?.style === "binary" && muReal != null ? (
+              <BinaryOddsBar
+                config={outcomeConfig}
+                value={muReal}
+                onChange={(v) => setMu0(String(v))}
+                size="lg"
+              />
+            ) : outcomeConfig && muReal != null && Number.isFinite(muReal) ? (
+              <div className="space-y-1">
+                <RangeSlider
+                  label="Opening call"
+                  value={muReal}
+                  onChange={(v) => setMu0(String(v))}
+                  min={outcomeConfig.min}
+                  max={outcomeConfig.max}
+                  step={(outcomeConfig.max - outcomeConfig.min) / 200 || 1}
+                  format={(v) => formatXTick(outcomeConfig, v)}
+                  prominent
+                />
+              </div>
+            ) : (
+              <Field label="Opening call">
+                <Input value={mu0} onChange={setMu0} placeholder="50" />
+              </Field>
+            )}
+            {muReal != null && Number.isFinite(muReal) && outcomeConfig && marketStyle !== "binary" && (
               <p className="-mt-2 text-center font-serif text-2xl tabular-nums text-[#f3efe6]">
-                {formatOutcome(muReal)}
+                {formatXTick(outcomeConfig, muReal)}
               </p>
             )}
 
-            {convictionRange != null && convictionSnapValues.length > 0 ? (
+            {marketStyle !== "binary" && convictionRange != null && convictionSnapValues.length > 0 ? (
               <div className="space-y-1">
                 <SnappySlider
                   label="Starting conviction"
@@ -402,7 +618,7 @@ export function CreateMarketWizard({
                   Tighter starting crowd = sharper consensus. Wider = more room for disagreement early on.
                 </p>
               </div>
-            ) : (
+            ) : marketStyle !== "binary" ? (
               <Field
                 label="Starting conviction (width)"
                 hint="Set liquidity params in advanced settings to use the conviction slider"
@@ -413,7 +629,7 @@ export function CreateMarketWizard({
                   placeholder={sigmaMin != null ? `≥ ${sigmaMin.toPrecision(4)}` : "e.g. 2500"}
                 />
               </Field>
-            )}
+            ) : null}
           </div>
         ) : (
           <div className="mt-5 space-y-3">
@@ -454,11 +670,11 @@ export function CreateMarketWizard({
           </div>
         )}
 
-        {kWad != null && bWad != null && bWad > 0n && (
+        {kWad != null && bWad != null && bWad > 0n && marketStyle === "kaido" && (
           <div className="mt-6 space-y-3">
             <div className="flex items-center gap-3">
               <span className="h-px w-8 bg-[#d8c69a]/45" aria-hidden />
-              <SectionLabel>Starting payoff zone</SectionLabel>
+              <SectionLabel>Chart preview</SectionLabel>
             </div>
             <Panel className="relative overflow-hidden border-[#d8c69a]/12 p-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
               <div
@@ -479,11 +695,14 @@ export function CreateMarketWizard({
                   }
                   const muR = fromWad(muW);
                   const sigR = Math.max(1e-12, fromWad(sigW));
+                  const range = chartRangeForConfig(outcomeConfig, muR, sigR);
                   return (
                     <BeliefChart
                       mode="scalar"
                       market={{ kWad, bWad, capped }}
-                      range={{ min: muR - 5 * sigR, max: muR + 5 * sigR }}
+                      range={range}
+                      xTicks={outcomeConfig?.divisions}
+                      formatXTick={(v) => formatXTick(outcomeConfig, v)}
                       consensus={{ muWad: muW, sigmaWad: capped ? sigW : clampSigma(sigW, { kWad, bWad }) }}
                     />
                   );
@@ -515,10 +734,12 @@ export function CreateMarketWizard({
         )}
       </WizardSection>
 
-      {/* 5 — Settlement */}
-      <WizardSection step={5} label="How does it settle?">
+      {/* 6 — Settlement */}
+      <WizardSection step={6} label="How does it settle?">
         <p className="text-sm leading-relaxed text-white/55">
-          Pick how the final number gets on-chain. Oracle feed is the default for price markets.
+          {marketStyle === "binary"
+            ? "Binary markets usually need Optimistic or Designated — someone posts which option won."
+            : "Oracle feed works for on-chain prices. Custom numbers use Attested or Optimistic."}
         </p>
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {TIERS.map((t, i) => (
@@ -532,9 +753,22 @@ export function CreateMarketWizard({
       </WizardSection>
 
       {/* Advanced economics + resolver contract */}
-      <AdvancedBlock title="Advanced — liquidity, fees & resolver contract">
+      <AdvancedBlock title="Advanced — path markets, liquidity & resolver">
         <div className="space-y-6">
           <div>
+            <p className="mb-3 text-xs leading-relaxed text-white/45">
+              Path markets track multiple checkpoints over time (power-user mode).
+            </p>
+            <ChoiceButton active={mode === "trajectory"} onClick={() => setMode("trajectory")}>
+              Path market
+            </ChoiceButton>
+            {mode === "trajectory" && (
+              <p className="mt-2 text-xs text-white/40">
+                Switches off binary/kaido scalar flow — configure checkpoints in opening curve below.
+              </p>
+            )}
+          </div>
+          <div className="border-t border-white/10 pt-6">
             <p className="mb-4 text-xs leading-relaxed text-white/45">
               These on-chain parameters control pool depth, max payout, and trading fees. Defaults work
               for testnet launches.
@@ -624,7 +858,7 @@ export function CreateMarketWizard({
         open={reviewOpen}
         onOpenChange={setReviewOpen}
         question={question.trim() || "—"}
-        marketType={mode === "scalar" ? "Range market" : "Path market"}
+        marketType={marketStyle === "binary" ? "Binary" : mode === "trajectory" ? "Path market" : "Kaido range"}
         schedule={`Opens ${windowOpen} · Closes ${windowLock}`}
         resolverLabel={TIERS[tierIdx].label}
         onDeploy={() => void submit()}

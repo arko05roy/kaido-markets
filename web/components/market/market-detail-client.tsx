@@ -3,6 +3,8 @@
 import { type KaidoConfig } from "@kaido/sdk";
 import { useMemo, useState } from "react";
 
+import { useLedgerNowSec } from "@/lib/use-ledger-now";
+
 import { AdvancedBlock } from "@/components/app/advanced-block";
 import { Panel } from "@/components/app/kaido-ui";
 import { ConsensusChart } from "@/components/forecast/consensus-chart";
@@ -57,7 +59,7 @@ export function MarketDetailClient({
 }) {
   const [yourBelief, setYourBelief] = useState<GaussianBelief | null>(null);
   const [positionRefresh, setPositionRefresh] = useState(0);
-  const [nowSec] = useState(() => Math.floor(Date.now() / 1000));
+  const nowSec = useLedgerNowSec(config.rpcUrl);
 
   const tradingOpen = isTradingWindowOpen(
     view.statusTag,

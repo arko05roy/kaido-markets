@@ -45,22 +45,10 @@ FRIENDBOT="${FRIENDBOT_URL:-$(read_cfg friendbotUrl)}"
 [[ -n "${RPC}" ]] || { echo "no RPC url for '${NETWORK}'. Set RPC_URL in .env (mainnet needs a third-party provider)." >&2; exit 2; }
 
 # --- per-network values that must be resolved (never hardcoded) ----------
-# Sprint 2: the USDC SAC id is load-bearing (distribution-market init and
-# blend-adapter take it as a constructor/init arg — never hardcoded). Require it
-# from the environment with no default; fail loudly if unset.
-: "${USDC_SAC_ID:?set USDC_SAC_ID (the USDC Stellar Asset Contract id for ${STELLAR_NETWORK:-this network}); see .env.example}"
-# BlendTap spine (liquidity-plan §5.3). Optional — when unset, markets deploy without JIT borrow.
+# Hackathon demo: KAIDO_DEMO=1 mints a demo token and skips BlendTap (see demo-token.sh).
+KAIDO_DEMO="${KAIDO_DEMO:-0}"
+# BlendTap spine (liquidity-plan §5.3). Cleared when KAIDO_DEMO=1.
 BLEND_POOL_ID="${BLEND_POOL_ID:-}"
-BLEND_USDC_SAC_ID="${BLEND_USDC_SAC_ID:-${USDC_SAC_ID}}"
-if [[ -n "${BLEND_POOL_ID}" && "${BLEND_USDC_SAC_ID}" != "${USDC_SAC_ID}" ]]; then
-  echo "warning: BLEND_USDC_SAC_ID != USDC_SAC_ID — BlendTap markets need the same SAC as the pool reserve." >&2
-fi
-# Optional Reflector feed + asset for the T0 resolver constructor; if unset we
-# point the demo resolver at a placeholder so the deploy still completes.
-: "${REFLECTOR_FEED_ID:=${USDC_SAC_ID}}"
-: "${REFLECTOR_ASSET_SYMBOL:=BTC}"
-: "${REFLECTOR_FEED_ID:=}"
-: "${ADMIN_ADDRESS:=}"
 
 if [[ "${NETWORK}" == "mainnet" ]]; then
   : "${USDC_SAC_ID:?mainnet deploy requires USDC_SAC_ID}"
@@ -95,11 +83,38 @@ else
 fi
 SOURCE_ARG=(--source-account "${SOURCE}")
 
+if [[ "${KAIDO_DEMO}" == "1" ]]; then
+  BLEND_POOL_ID=""
+  echo "-- KAIDO_DEMO=1: minting demo token, skipping BlendTap --"
+  USDC_SAC_ID="$( "${ROOT}/contracts/scripts/demo-token.sh" "${NETWORK}" | tail -1 | tr -d '[:space:]')"
+  KAIDO_ISSUER="${DEPLOYER_ADDR}"
+  SETTLEMENT_SYMBOL="${KAIDO_ASSET_CODE:-KAIDO}"
+  DEMO_MODE_JSON="true"
+  B18="${DEMO_B_WAD:-100000000000000000000000}" # 10k * 1e18
+else
+  : "${USDC_SAC_ID:?set USDC_SAC_ID (the USDC Stellar Asset Contract id for ${STELLAR_NETWORK:-this network}); see .env.example}"
+  KAIDO_ISSUER=""
+  SETTLEMENT_SYMBOL="USDC"
+  DEMO_MODE_JSON="false"
+  B18="100000000000000000000" # 100 * 1e18
+fi
+BLEND_USDC_SAC_ID="${BLEND_USDC_SAC_ID:-${USDC_SAC_ID}}"
+if [[ -n "${BLEND_POOL_ID}" && "${BLEND_USDC_SAC_ID}" != "${USDC_SAC_ID}" ]]; then
+  echo "warning: BLEND_USDC_SAC_ID != USDC_SAC_ID — BlendTap markets need the same SAC as the pool reserve." >&2
+fi
+# Optional Reflector feed + asset for the T0 resolver constructor; if unset we
+# point the demo resolver at a placeholder so the deploy still completes.
+: "${REFLECTOR_FEED_ID:=${USDC_SAC_ID}}"
+: "${REFLECTOR_ASSET_SYMBOL:=BTC}"
+: "${REFLECTOR_FEED_ID:=}"
+: "${ADMIN_ADDRESS:=}"
+
 echo "network        : ${NETWORK}"
 echo "rpc            : ${RPC}"
 echo "passphrase     : ${PASSPHRASE}"
 echo "deployer       : ${DEPLOYER_ADDR} ${DEPLOYER_DESC}"
-echo "usdc sac id    : ${USDC_SAC_ID:-<unset — resolve before trading goes live>}"
+echo "settlement   : ${SETTLEMENT_SYMBOL} ${USDC_SAC_ID:-<unset>}"
+echo "demo mode    : ${DEMO_MODE_JSON}"
 echo "reflector feed : ${REFLECTOR_FEED_ID:-<unset — see Reflector /oracles tab>}"
 echo "admin          : ${ADMIN_ADDRESS:-<unset>}"
 echo
@@ -243,7 +258,6 @@ done
 # prove the round-trip. This market is a demo seed; a fresh one is deployed on
 # every run (testnet resets ~2-4×/yr — build.md §0a).
 WAD18="1000000000000000000"            # 1e18
-B18="100000000000000000000"            # 100 * 1e18
 MU0_18="50000000000000000000"          # 50 * 1e18
 NOW="$(date +%s)"
 W_OPEN="${NOW}"; W_LOCK="$(( NOW + 3600 ))"; W_RESOLVE="$(( NOW + 7200 ))"
@@ -340,6 +354,9 @@ cat > "${OUT}" <<EOF
   "deployer": "${DEPLOYER_ADDR}",
   "external": {
     "usdcSacId": $(json_or_null "${USDC_SAC_ID}"),
+    "settlementSymbol": $(json_or_null "${SETTLEMENT_SYMBOL}"),
+    "demoMode": ${DEMO_MODE_JSON},
+    "kaidoIssuer": $(json_or_null "${KAIDO_ISSUER}"),
     "reflectorFeedId": $(json_or_null "${REFLECTOR_FEED_ID}"),
     "adminAddress": $(json_or_null "${ADMIN_ADDRESS}")
   },
@@ -358,6 +375,9 @@ if [[ -n "${DEMO_MKT}" ]]; then
   if [[ -n "${ID_blend_adapter:-}" ]]; then
     echo "Next: trade on ${DEMO_MKT} — BlendTap JIT borrow fires on first trade"
     echo "       or: ./contracts/scripts/blend-lifecycle-e2e.sh ${NETWORK}"
+  elif [[ "${DEMO_MODE_JSON}" == "true" ]]; then
+    echo "Next: make seed:${NETWORK}  # LP-seed demo markets with KAIDO"
+    echo "       set KAIDO_DEMO=1 in .env — traders claim KAIDO via /api/faucet"
   else
     echo "Next: make seed:${NETWORK}  # lifecycle fixture for integration tests"
   fi

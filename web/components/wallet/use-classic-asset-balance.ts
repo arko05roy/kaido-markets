@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchUsdcBalance7dp, formatUsdcBalance } from "@/lib/stellar/usdc";
+import { fetchClassicAssetBalance7dp, formatUsdcBalance } from "@/lib/stellar/usdc";
 
-export function useUsdcBalance(
-  rpcUrl: string | undefined,
-  networkPassphrase: string,
-  usdcSacId: string | undefined,
+/** Horizon classic balance — matches Freighter for a specific code + issuer. */
+export function useClassicAssetBalance(
+  horizonUrl: string | undefined,
+  assetCode: string | undefined,
+  assetIssuer: string | undefined,
   accountId: string | undefined,
 ): {
   balance7dp: bigint | null;
@@ -21,13 +22,13 @@ export function useUsdcBalance(
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
-    if (!rpcUrl || !usdcSacId || !accountId) {
+    if (!horizonUrl || !assetCode || !assetIssuer || !accountId) {
       setBalance(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    void fetchUsdcBalance7dp(rpcUrl, networkPassphrase, usdcSacId, accountId)
+    void fetchClassicAssetBalance7dp(horizonUrl, accountId, assetCode, assetIssuer)
       .then((b) => {
         if (!cancelled) setBalance(b);
       })
@@ -37,7 +38,7 @@ export function useUsdcBalance(
     return () => {
       cancelled = true;
     };
-  }, [rpcUrl, networkPassphrase, usdcSacId, accountId, tick]);
+  }, [horizonUrl, assetCode, assetIssuer, accountId, tick]);
 
   return {
     balance7dp,
