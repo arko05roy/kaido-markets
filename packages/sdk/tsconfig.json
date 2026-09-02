@@ -4,7 +4,14 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
-    "lib": ["ES2022", "DOM"]
+    "lib": ["ES2022", "DOM"],
+    // The generated `@kaido/contract-bindings` source is pulled into this
+    // program (no prebuilt .d.ts); the `stellar contract bindings` generator
+    // omits `override` on the `txFromJSON`/`spec` members of every emitted
+    // `Client`. Consumers rely on the exported *types*, not on re-checking the
+    // generated impl, so relax this one rule here (mirrors the contract-bindings
+    // package's own loose tsconfig — build.md Sprint 3).
+    "noImplicitOverride": false
   },
   "include": ["src/**/*.ts"]
 }
