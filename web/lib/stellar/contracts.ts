@@ -2,9 +2,10 @@
  * Resolves the *deployed* Kaido contract ids for the active network.
  *
  * Source of truth: `config/networks.<network>.json` — rewritten on every
- * `make deploy:<network>` run (build.md §0a). Values are injected into
- * `NEXT_PUBLIC_KAIDO_*` env vars at Next startup (see `next.config.ts`).
+ * `make deploy:<network>` run (build.md §0a). Env vars win when set; otherwise
+ * we read the JSON file (also mirrored to `web/config/` for Vercel).
  */
+import { readNetworkConfigFile } from "./load-network-file";
 import { activeNetworkId, type StellarNetworkId } from "./networks";
 
 export interface DeployedContracts {
@@ -85,16 +86,17 @@ function envBool(key: string): boolean {
 
 export function deployedConfig(): DeployedConfig {
   const network = activeNetworkId();
+  const file = readNetworkConfigFile(network);
 
   const contracts: Partial<Record<keyof DeployedContracts, string>> = {};
   const missing: string[] = [];
   for (const key of REQUIRED_KEYS) {
-    const id = process.env[CONTRACT_ENV_KEYS[key]];
+    const id = process.env[CONTRACT_ENV_KEYS[key]] ?? file?.contracts?.[key]?.id;
     if (id) contracts[key] = id;
     else missing.push(`${key} (${CONTRACT_ENV_KEYS[key]})`);
   }
   for (const key of OPTIONAL_KEYS) {
-    const id = process.env[CONTRACT_ENV_KEYS[key]];
+    const id = process.env[CONTRACT_ENV_KEYS[key]] ?? file?.contracts?.[key]?.id;
     if (id) contracts[key] = id;
   }
   if (missing.length > 0) {
@@ -106,20 +108,23 @@ export function deployedConfig(): DeployedConfig {
 
   const fixtures: Record<string, string> = {};
   for (const [key, envKey] of Object.entries(FIXTURE_ENV_KEYS)) {
-    const id = process.env[envKey];
+    const id = process.env[envKey] ?? file?.fixtures?.[key];
     if (id) fixtures[key] = id;
   }
 
+  const ext = file?.external;
   return {
     network,
     contracts: contracts as DeployedContracts,
     external: {
-      usdcSacId: process.env[EXTERNAL_ENV_KEYS.usdcSacId] ?? null,
-      settlementSymbol: process.env[EXTERNAL_ENV_KEYS.settlementSymbol] ?? null,
-      demoMode: envBool(EXTERNAL_ENV_KEYS.demoMode),
-      kaidoIssuer: process.env[EXTERNAL_ENV_KEYS.kaidoIssuer] ?? null,
-      reflectorFeedId: process.env[EXTERNAL_ENV_KEYS.reflectorFeedId] ?? null,
-      adminAddress: process.env[EXTERNAL_ENV_KEYS.adminAddress] ?? null,
+      usdcSacId: process.env[EXTERNAL_ENV_KEYS.usdcSacId] ?? ext?.usdcSacId ?? null,
+      settlementSymbol:
+        process.env[EXTERNAL_ENV_KEYS.settlementSymbol] ?? ext?.settlementSymbol ?? null,
+      demoMode: envBool(EXTERNAL_ENV_KEYS.demoMode) || ext?.demoMode === true,
+      kaidoIssuer: process.env[EXTERNAL_ENV_KEYS.kaidoIssuer] ?? ext?.kaidoIssuer ?? null,
+      reflectorFeedId:
+        process.env[EXTERNAL_ENV_KEYS.reflectorFeedId] ?? ext?.reflectorFeedId ?? null,
+      adminAddress: process.env[EXTERNAL_ENV_KEYS.adminAddress] ?? ext?.adminAddress ?? null,
     },
     fixtures: fixtures as NetworkFixtures,
   };

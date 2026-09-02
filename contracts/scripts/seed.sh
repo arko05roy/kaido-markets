@@ -195,8 +195,13 @@ j.seededAt=new Date().toISOString();
 fs.writeFileSync(path, JSON.stringify(j, null, 2) + '\n');
 "
 
+WEB_OUT="${ROOT}/web/config/networks.${NETWORK}.json"
+mkdir -p "$(dirname "${WEB_OUT}")"
+cp "${NET_FILE}" "${WEB_OUT}"
+
 echo
 echo "OK: seeded fixtures on ${NETWORK}; updated ${NET_FILE#${ROOT}/}"
+echo "  mirrored ${WEB_OUT#${ROOT}/}"
 echo "  demo market      : ${DEMO_MARKET}"
 echo "  lifecycle market : ${LIFECYCLE_MARKET}"
 echo "  export NEXT_PUBLIC_KAIDO_DEMO_MARKET=${DEMO_MARKET}"

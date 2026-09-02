@@ -384,8 +384,13 @@ cat > "${OUT}" <<EOF
 }
 EOF
 
+WEB_OUT="${ROOT}/web/config/networks.${NETWORK}.json"
+mkdir -p "$(dirname "${WEB_OUT}")"
+cp "${OUT}" "${WEB_OUT}"
+
 echo
 echo "OK: deployed ${N} contracts to ${NETWORK}; wrote ${OUT#${ROOT}/}"
+echo "  mirrored ${WEB_OUT#${ROOT}/}"
 if [[ -n "${DEMO_MKT}" ]]; then
   echo
   echo "Demo market (factory-registered): ${DEMO_MKT}"
