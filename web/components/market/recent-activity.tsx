@@ -88,14 +88,14 @@ export async function RecentActivity({ marketId }: { marketId: string }) {
 
   if (error) {
     return (
-      <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-        Couldn’t read recent activity: {error}
+      <p className="border border-dashed border-white/15 px-5 py-4 text-sm text-white/45">
+        Couldn&apos;t read recent activity: {error}
       </p>
     );
   }
   if (events.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+      <p className="border border-dashed border-white/15 px-5 py-4 text-sm text-white/45">
         No activity in the last day.
       </p>
     );
@@ -103,16 +103,16 @@ export async function RecentActivity({ marketId }: { marketId: string }) {
   // RPC returns oldest-first; reverse for "most recent first".
   const ordered = [...events].reverse();
   return (
-    <ul className="divide-y rounded-lg border bg-card">
+    <ul className="divide-y divide-white/10 border border-white/10 bg-[#0a0a0b]">
       {ordered.map((e) => {
         const d = detail(e);
         return (
-          <li key={e.id} className="flex items-center justify-between gap-2 px-4 py-2 text-sm">
+          <li key={e.id} className="flex items-center justify-between gap-2 px-5 py-3 text-sm">
             <span className="flex flex-wrap items-baseline gap-2">
-              <span className="font-medium">{fmt(e)}</span>
-              {d ? <span className="text-muted-foreground">{d}</span> : null}
+              <span className="font-medium text-[#f3efe6]">{fmt(e)}</span>
+              {d ? <span className="text-white/45">{d}</span> : null}
             </span>
-            <span className="font-mono text-xs text-muted-foreground" title={e.txHash}>
+            <span className="font-mono text-xs text-white/35" title={e.txHash}>
               ledger {e.ledger} · {fmtTime(e.ledgerClosedAt)}
             </span>
           </li>

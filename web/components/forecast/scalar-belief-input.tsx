@@ -19,7 +19,7 @@ import {
 } from "@/lib/curve";
 
 export interface ScalarBeliefInputProps {
-  market: { kWad: bigint; bWad: bigint };
+  market: { kWad: bigint; bWad: bigint; capped?: boolean };
   /** Current consensus belief — the preview shows it faintly, and it's the default. */
   consensus: GaussianBelief;
   /** Optional explicit outcome-value window (real units); else derived from the consensus. */
@@ -76,7 +76,7 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
     <div className="flex flex-col gap-3">
       <BeliefChart mode="scalar" market={market} range={win} consensus={consensus} you={belief} />
       <RangeSlider
-        label="Center (μ) — where you think it lands"
+        label="Where you think it lands"
         value={muReal}
         onChange={setMuReal}
         min={win.min}
@@ -85,8 +85,8 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
         disabled={disabled}
       />
       <RangeSlider
-        label="Width (σ) — how spread your belief is"
-        hint="left = tight / confident (at the market's σ-min) · right = wide / unsure"
+        label="How spread your belief is"
+        hint="left = confident · right = unsure"
         value={sigmaReal}
         onChange={setSigmaReal}
         min={sigmaMin}

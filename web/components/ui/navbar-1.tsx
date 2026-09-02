@@ -10,6 +10,9 @@ import { Menu, X } from "lucide-react";
 import { NavbarWallet } from "@/components/wallet/navbar-wallet";
 
 const NAV_ITEMS = [
+  { label: "Markets", href: "/markets" },
+  { label: "Create", href: "/create" },
+  { label: "Leaderboard", href: "/leaderboard" },
   { label: "Whitepaper", href: "/whitepaper" },
 ];
 

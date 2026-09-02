@@ -1,12 +1,9 @@
 /**
- * /create — permissionless market-creation wizard (build.md E3). Server
- * component: resolves the live network + deployed-contract config (nothing
- * hardcoded — `config/networks.<network>.json` via `deployedConfig()`),
- * pre-fills the default resolver address per tier, and renders the client
- * wizard inside a `WalletProvider`. `force-dynamic` (no build-time RPC).
+ * /create — permissionless market-creation wizard (build.md E3).
  */
 import { type KaidoConfig } from "@kaido/sdk";
 
+import { AppShell, ErrorState, PageEyebrow, PageTitle } from "@/components/app/kaido-ui";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 
@@ -14,12 +11,15 @@ import { CreateMarketWizard, type DefaultResolvers } from "./_wizard";
 
 export const dynamic = "force-dynamic";
 
-function Notice({ children }: { children: React.ReactNode }) {
+function ConfigNotice({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-      <h1 className="text-2xl font-semibold">Create a market</h1>
-      <p className="max-w-xl text-sm text-muted-foreground">{children}</p>
-    </main>
+    <AppShell>
+      <div className="space-y-5">
+        <PageEyebrow>Market factory</PageEyebrow>
+        <PageTitle title="Create a market" />
+        <ErrorState title="Configuration required" body={children} />
+      </div>
+    </AppShell>
   );
 }
 
@@ -28,24 +28,25 @@ export default function CreateMarketPage() {
   const networkId = activeNetworkId();
   if (!net.rpcUrl) {
     return (
-      <Notice>
-        No Stellar RPC URL for network “{networkId}”. Set <code className="font-mono">RPC_URL</code>.
-      </Notice>
+      <ConfigNotice>
+        No Stellar RPC URL for network “{networkId}”. Set <code className="font-mono text-[#d8c69a]">RPC_URL</code>.
+      </ConfigNotice>
     );
   }
   let deployed: ReturnType<typeof deployedConfig>;
   try {
     deployed = deployedConfig();
   } catch (e) {
-    return <Notice>{e instanceof Error ? e.message : "Kaido contracts not configured."}</Notice>;
+    return <ConfigNotice>{e instanceof Error ? e.message : "Kaido contracts not configured."}</ConfigNotice>;
   }
   const usdcSacId = deployed.external.usdcSacId ?? process.env.NEXT_PUBLIC_KAIDO_USDC_SAC;
   if (!usdcSacId) {
     return (
-      <Notice>
-        USDC SAC id not configured for network “{networkId}”. Set <code className="font-mono">external.usdcSacId</code> in{" "}
-        <code className="font-mono">config/networks.{networkId}.json</code>.
-      </Notice>
+      <ConfigNotice>
+        USDC SAC id not configured for network “{networkId}”. Set{" "}
+        <code className="font-mono text-[#d8c69a]">external.usdcSacId</code> in{" "}
+        <code className="font-mono text-[#d8c69a]">config/networks.{networkId}.json</code>.
+      </ConfigNotice>
     );
   }
 
@@ -64,8 +65,21 @@ export default function CreateMarketPage() {
   };
 
   return (
-    <main className="flex flex-1 flex-col p-6 sm:p-8">
-      <CreateMarketWizard config={config} resolvers={resolvers} />
-    </main>
+    <AppShell>
+      <div className="space-y-10">
+        <div className="space-y-5">
+          <PageEyebrow>Permissionless · {networkId}</PageEyebrow>
+          <PageTitle
+            title={
+              <>
+                Create a <span className="text-white/40">market</span>
+              </>
+            }
+            subtitle="Deploy a distribution market via MarketFactory. Set the outcome space, resolver tier, trading window, and initial consensus belief."
+          />
+        </div>
+        <CreateMarketWizard config={config} resolvers={resolvers} />
+      </div>
+    </AppShell>
   );
 }

@@ -105,68 +105,79 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
   };
 
   return (
-    <section className="rounded-lg border p-4">
-      <h2 className="mb-3 text-sm font-semibold">Liquidity (LP)</h2>
-      <dl className="mb-4 space-y-1 text-sm">
+    <div className="space-y-4">
+      <h2 className="kaido-section-title">Liquidity</h2>
+      <dl className="mb-5 mt-4 space-y-2 text-sm">
         <div className="flex justify-between">
-          <dt className="text-muted-foreground">Pool collateral</dt>
-          <dd>{fromWad(pool / 10_000_000_000n).toFixed(4)} USDC</dd>
+          <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Pool collateral</dt>
+          <dd className="text-[#f3efe6]">{fromWad(pool / 10_000_000_000n).toFixed(4)} USDC</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-muted-foreground">Free to LP</dt>
-          <dd>{fromWad(freeWad).toFixed(4)} / {fromWad(BigInt(market.bWad)).toFixed(4)} USDC</dd>
+          <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Free to LP</dt>
+          <dd className="text-[#f3efe6]">{fromWad(freeWad).toFixed(4)} / {fromWad(BigInt(market.bWad)).toFixed(4)} USDC</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-muted-foreground">Your shares</dt>
-          <dd>
+          <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Your shares</dt>
+          <dd className="text-[#f3efe6]">
             {myShares > 0n && totalShares > 0n
               ? `${((Number(myShares) / Number(totalShares)) * 100).toFixed(1)}%`
               : "—"}
           </dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-muted-foreground">Accrued LP fees (pool)</dt>
-          <dd>{fromWad(feePool / 10_000_000_000n).toFixed(6)} USDC</dd>
+          <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Accrued LP fees</dt>
+          <dd className="text-[#f3efe6]">{fromWad(feePool / 10_000_000_000n).toFixed(6)} USDC</dd>
         </div>
         {wallet && usdcBal != null && (
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">Your USDC</dt>
-            <dd>{fmt7dp(usdcBal)}</dd>
+            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Your USDC</dt>
+            <dd className="font-mono text-[#f3efe6]">{fmt7dp(usdcBal)}</dd>
           </div>
         )}
       </dl>
 
       {market.canAdd && (
-        <div className="mb-3 flex flex-wrap items-end gap-2">
+        <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            Scale (% of free collateral)
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Scale (% of free)</span>
             <input
               type="number"
               min={1}
               max={100}
               value={scalePct}
               onChange={(e) => setScalePct(e.target.value)}
-              className="mt-1 block w-24 rounded border bg-background px-2 py-1"
+              className="kaido-input mt-1.5 block w-24"
             />
           </label>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-white/40">
             ≈ {fmt7dp(estDeposit7dp)} USDC
           </span>
-          <Button type="button" disabled={!wallet || busy || scaleWad <= 0n} onClick={() => void addLp()}>
+          <Button
+            type="button"
+            disabled={!wallet || busy || scaleWad <= 0n}
+            onClick={() => void addLp()}
+            className="rounded-full bg-[#f3efe6] text-[#0b0b0c] hover:bg-white"
+          >
             Add liquidity
           </Button>
         </div>
       )}
 
       {market.canRemove && myShares > 0n && (
-        <Button type="button" variant="outline" disabled={!wallet || busy} onClick={() => void removeLp()}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!wallet || busy}
+          onClick={() => void removeLp()}
+          className="border-white/20 text-[#f3efe6] hover:bg-white/5"
+        >
           Remove all LP shares
         </Button>
       )}
 
-      {!wallet && <p className="text-sm text-muted-foreground">Connect Freighter to add or remove liquidity.</p>}
-      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
-      {lastTx && <p className="mt-2 text-sm text-muted-foreground">{lastTx}</p>}
-    </section>
+      {!wallet && <p className="text-sm text-white/45">Connect Freighter to add or remove liquidity.</p>}
+      {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+      {lastTx && <p className="text-sm text-white/50">{lastTx}</p>}
+    </div>
   );
 }

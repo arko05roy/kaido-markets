@@ -93,13 +93,13 @@ export function ResultCard(props: ResultCardProps) {
 
   return (
     <div
-      className="overflow-hidden rounded-xl border-2 border-primary/20 bg-gradient-to-b from-card to-muted/30 p-4 shadow-sm"
+      className="overflow-hidden border border-[#d8c69a]/25 bg-[#0a0a0b] p-5"
       data-testid="result-card"
     >
       <div className="mb-3 space-y-1">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Result</p>
-        <h3 className="text-lg font-semibold tracking-tight">{marketLabel}</h3>
-        <p className="font-mono text-xs text-muted-foreground">Position #{positionId}</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">Result</p>
+        <h3 className="font-serif text-xl text-[#f3efe6]">{marketLabel}</h3>
+        <p className="font-mono text-xs text-white/40">Position #{positionId}</p>
       </div>
 
       {chart}
@@ -107,32 +107,41 @@ export function ResultCard(props: ResultCardProps) {
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         {resolvedScalar != null && (
           <>
-            <dt className="text-muted-foreground">Outcome</dt>
-            <dd className="text-right font-mono">{resolvedScalar.toPrecision(6)}</dd>
+            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Outcome</dt>
+            <dd className="text-right font-mono text-[#f3efe6]">{resolvedScalar.toPrecision(6)}</dd>
           </>
         )}
         {collateral7dp != null && (
           <>
-            <dt className="text-muted-foreground">Collateral</dt>
-            <dd className="text-right font-mono">{formatUsdc7dp(collateral7dp)} USDC</dd>
+            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Collateral</dt>
+            <dd className="text-right font-mono text-[#f3efe6]">{formatUsdc7dp(collateral7dp)} USDC</dd>
           </>
         )}
-        <dt className="text-muted-foreground">Payout</dt>
-        <dd className="text-right font-mono">{formatUsdc7dp(payout7dp)} USDC</dd>
-        <dt className="font-medium">P&L</dt>
+        <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Payout</dt>
+        <dd className="text-right font-mono text-[#f3efe6]">{formatUsdc7dp(payout7dp)} USDC</dd>
+        <dt className="font-medium text-[#f3efe6]">P&L</dt>
         <dd
-          className={`text-right font-mono font-semibold ${pnl7dp >= 0n ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+          className={`text-right font-mono font-semibold ${pnl7dp >= 0n ? "text-emerald-400" : "text-red-400"}`}
         >
           {pnlLabel} USDC
         </dd>
       </dl>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={() => void copyShare()}>
+        <Button
+          size="sm"
+          onClick={() => void copyShare()}
+          className="rounded-full bg-[#f3efe6] text-[#0b0b0c] hover:bg-white"
+        >
           {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
           {copied ? "Copied" : "Copy"}
         </Button>
-        <Button size="sm" variant="outline" onClick={() => void nativeShare()}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void nativeShare()}
+          className="border-white/20 text-[#f3efe6] hover:bg-white/5"
+        >
           <Share2 className="size-4" />
           Share
         </Button>

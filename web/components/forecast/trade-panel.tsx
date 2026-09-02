@@ -22,7 +22,6 @@ import { useUsdcBalance } from "@/components/wallet/use-usdc-balance";
 import { fromWad, type GaussianBelief } from "@/lib/curve";
 import { savePosition } from "@/lib/positions";
 import {
-  TESTNET_USDC_ISSUER,
   USDC_FAUCET_URL,
 } from "@/lib/stellar/usdc";
 
@@ -40,6 +39,8 @@ export interface TradeMarketView {
   checkpoints: number[];
   /** True once the market is locked/resolved (no more trades). */
   tradingOpen: boolean;
+  /** Capped-Gaussian flag — affects chart rendering. */
+  capped?: boolean;
 }
 
 const USDC_DECIMALS = 7;
@@ -56,7 +57,7 @@ export function TradePanel({
 }) {
   const { wallet, connecting } = useWallet();
   const kaido = useMemo(() => new Kaido(config), [config]);
-  const { balance7dp: usdcBal, formatted: usdcFormatted } = useUsdcBalance(
+  const { balance7dp: usdcBal } = useUsdcBalance(
     config.rpcUrl,
     config.networkPassphrase,
     config.usdcSacId,
@@ -123,18 +124,21 @@ export function TradePanel({
 
   if (!market.tradingOpen) {
     return (
-      <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+      <div className="border border-dashed border-white/15 px-5 py-4 text-sm text-white/50">
         Trading is closed for this market (locked or resolved).
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold tracking-tight">Take a position</h2>
+    <div className="flex flex-col gap-5 border border-white/10 bg-[#0a0a0b] p-6">
+      <div>
+        <h2 className="kaido-section-title">Take a position</h2>
+        <p className="mt-1 kaido-section-sub">Drag the sliders to set where you think the number lands.</p>
+      </div>
       {market.kind === "scalar" ? (
         <ScalarBeliefInput
-          market={{ kWad, bWad }}
+          market={{ kWad, bWad, capped: market.capped }}
           consensus={consensusScalar}
           disabled={submitting}
           onChange={setScalarBelief}
@@ -148,66 +152,53 @@ export function TradePanel({
           onChange={setTrajBelief}
         />
       )}
-      <label className="flex max-w-xs flex-col gap-1.5 text-sm">
-        <span className="font-medium">Max collateral (USDC)</span>
+      <label className="flex max-w-xs flex-col gap-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">Max to spend (USDC)</span>
         <input
           type="number"
           min={0}
           step="0.0000001"
           value={maxUsdc}
           onChange={(e) => setMaxUsdc(e.target.value)}
-          className="rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="kaido-input"
           disabled={submitting}
         />
-        <span className="text-[11px] text-muted-foreground">
-          Slippage guard — the trade reverts if it would lock more than this.
-        </span>
       </label>
       <div className="flex flex-wrap items-center gap-3">
         {!wallet ? (
-          <span className="text-sm text-muted-foreground">{connecting ? "connecting…" : "connect a wallet to trade"}</span>
+          <span className="text-sm text-white/50">{connecting ? "Connecting…" : "Connect Freighter to trade"}</span>
         ) : (
           <Button
             onClick={() => void submit()}
             disabled={submitting || (usdcBal != null && usdcBal <= 0n)}
+            className="rounded-full bg-[#f3efe6] px-6 text-[12px] uppercase tracking-[0.16em] text-[#0b0b0c] hover:bg-white"
           >
             {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
             {submitting ? "Submitting…" : "Submit position"}
           </Button>
         )}
         {positionId != null && (
-          <span className="text-sm">
-            Position <span className="font-mono">#{positionId.toString()}</span> opened.{" "}
-            <Link href={`/markets/${market.address}`} className="underline">refresh</Link>
+          <span className="text-sm text-white/55">
+            Position opened.{" "}
+            <Link href={`/markets/${market.address}`} className="text-[#d8c69a] underline underline-offset-4">Refresh</Link>
           </span>
         )}
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {wallet && usdcBal != null && (
-        <p className="text-xs text-muted-foreground">
-          USDC balance: <span className="font-mono">{usdcFormatted ?? "0"}</span>
-          {usdcBal <= 0n && (
-            <>
-              {" "}
-              — add a trustline to{" "}
-              <code className="font-mono text-[10px]">USDC:{TESTNET_USDC_ISSUER}</code> and fund via{" "}
-              <a
-                href={USDC_FAUCET_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2"
-              >
-                Circle testnet faucet
-              </a>
-              .
-            </>
-          )}
+      {error && <p className="text-sm text-red-300">{error}</p>}
+      {wallet && usdcBal != null && usdcBal <= 0n && (
+        <p className="text-xs text-white/40">
+          You need testnet USDC to trade.{" "}
+          <a
+            href={USDC_FAUCET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#d8c69a] underline underline-offset-2"
+          >
+            Get USDC from the faucet
+          </a>
+          .
         </p>
       )}
-      <p className="text-[11px] text-muted-foreground">
-        Trading needs a USDC trustline on your wallet (testnet issuer{" "}
-        <code className="font-mono">USDC:{TESTNET_USDC_ISSUER}</code>).
-      </p>
     </div>
   );
 }

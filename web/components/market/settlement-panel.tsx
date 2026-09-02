@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { AdvancedBlock } from "@/components/app/advanced-block";
 import { ResultCard } from "@/components/market/result-card";
 import { useWallet } from "@/components/wallet/provider";
 import { fromWad, toWad } from "@/lib/curve";
@@ -51,15 +52,15 @@ function derivePhase(view: SettlementMarketView, nowSec: number): Phase {
 function phaseLabel(phase: Phase): string {
   switch (phase) {
     case "open":
-      return "Trading open";
+      return "Trading is open";
     case "locked":
-      return "Trading closed — awaiting resolution";
+      return "Trading closed — waiting for the outcome";
     case "awaiting_resolve":
-      return "Ready to resolve";
+      return "Outcome pending";
     case "resolved":
-      return "Resolved — claim your positions";
+      return "Claim your payout";
     case "disputable":
-      return "Disputable — resolver stale or contested";
+      return "Outcome disputed";
   }
 }
 
@@ -519,31 +520,95 @@ export function SettlementPanel({
         : null;
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border bg-card p-4" data-positions-epoch={refreshKey}>
+    <div className="flex flex-col gap-5 border border-white/10 bg-[#0a0a0b] p-6" data-positions-epoch={refreshKey}>
       <div>
-        <h2 className="text-lg font-semibold tracking-tight">Settlement</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{phaseLabel(phase)}</p>
-        {nextEvent && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {nextEvent.label} in {fmtCountdown(nextEvent.at, nowSec)} (
-            {new Date(nextEvent.at * 1000).toLocaleString()})
+        <h2 className="kaido-section-title">
+          {isResolved ? "Your payout" : "After trading closes"}
+        </h2>
+        <p className="mt-1 kaido-section-sub">{phaseLabel(phase)}</p>
+        {nextEvent && !isResolved && (
+          <p className="mt-1 text-xs text-white/40">
+            {nextEvent.label} in{" "}
+            <span className="font-mono text-[#d8c69a]">{fmtCountdown(nextEvent.at, nowSec)}</span>
           </p>
         )}
       </div>
 
       {resolvedOutcomes?.length ? (
-        <p className="text-sm">
-          Outcome:{" "}
-          <span className="font-mono">
+        <p className="text-sm text-white/65">
+          Final outcome:{" "}
+          <span className="font-mono text-lg text-[#d8c69a]">
             {resolvedOutcomes.map((x) => fromWad(x).toPrecision(6)).join(" · ")}
           </span>
         </p>
       ) : null}
 
-      {pendingFees && (pendingFees.treasury > 0n || pendingFees.creator > 0n) && wallet && (
-        <div className="rounded-md border px-3 py-2 text-sm">
-          <p className="font-medium">Accrued protocol fees</p>
-          <p className="text-xs text-muted-foreground">
+      {wallet && isResolved && (
+        <div className="space-y-2">
+          {loadingChain && positions.length === 0 && (
+            <p className="text-xs text-white/40">Loading your positions…</p>
+          )}
+          {positions.length > 0 ? (
+            <ul className="space-y-2">
+              {positions.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-2 border border-white/10 px-4 py-3 text-sm"
+                >
+                  {p.claimedAt != null && p.payout7dp != null ? (
+                    <span className="text-white/55">
+                      Paid out {formatUsdc7dp(BigInt(p.payout7dp))} USDC
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-white/55">Position ready to claim</span>
+                      <Button
+                        size="sm"
+                        disabled={claimingId === p.id}
+                        onClick={() => void claimPosition(p.id)}
+                        className="rounded-full bg-[#f3efe6] text-[#0b0b0c] hover:bg-white"
+                      >
+                        {claimingId === p.id ? <Loader2 className="size-4 animate-spin" /> : null}
+                        {claimingId === p.id ? "Claiming…" : "Claim payout"}
+                      </Button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            !loadingChain && (
+              <p className="text-sm text-white/45">No positions on this market for your wallet.</p>
+            )
+          )}
+        </div>
+      )}
+
+      {!wallet && (
+        <p className="text-sm text-white/45">Connect Freighter to claim your payout.</p>
+      )}
+
+      {error && <p className="text-sm text-red-300">{error}</p>}
+
+      {lastClaim && resolvedOutcomes?.length && market.kWad && market.bWad && market.kind === "scalar" && (
+        <ResultCard
+          marketLabel="Market"
+          kind="scalar"
+          market={{ kWad: BigInt(market.kWad), bWad: BigInt(market.bWad) }}
+          yourBelief={lastClaim.belief}
+          resolvedWad={resolvedOutcomes}
+          collateral7dp={lastClaim.collateral7dp}
+          payout7dp={lastClaim.payout7dp}
+          positionId={lastClaim.positionId}
+        />
+      )}
+
+      <AdvancedBlock title="Resolver & admin">
+        <div className="flex flex-col gap-4">
+        {pendingFees && (pendingFees.treasury > 0n || pendingFees.creator > 0n) && wallet && (
+        <div className="border border-white/10 px-4 py-3 text-sm">
+          <p className="font-medium text-[#f3efe6]">Accrued protocol fees</p>
+          <p className="text-xs text-white/45">
             Treasury: {formatUsdc7dp(pendingFees.treasury / 10_000_000_000n)} USDC · Creator:{" "}
             {formatUsdc7dp(pendingFees.creator / 10_000_000_000n)} USDC
           </p>
@@ -573,10 +638,10 @@ export function SettlementPanel({
       )}
 
       {canT1Actions && (
-        <div className="flex flex-col gap-2 rounded-md border border-dashed px-3 py-2 text-sm">
-          <span className="font-medium">T1 attested resolver</span>
+        <div className="flex flex-col gap-2 border border-dashed border-white/15 px-4 py-3 text-sm">
+          <span className="font-medium text-[#f3efe6]">T1 attested resolver</span>
           {attestedPhase != null && (
-            <span className="text-xs text-muted-foreground">phase: {attestedPhase}</span>
+            <span className="text-xs text-white/40">phase: {attestedPhase}</span>
           )}
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1">
@@ -585,7 +650,7 @@ export function SettlementPanel({
                 type="text"
                 value={reportValue}
                 onChange={(e) => setReportValue(e.target.value)}
-                className="w-40 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+                className="kaido-input w-40 font-mono"
               />
             </label>
             <Button
@@ -624,10 +689,10 @@ export function SettlementPanel({
       )}
 
       {canT2Actions && (
-        <div className="flex flex-col gap-2 rounded-md border border-dashed px-3 py-2 text-sm">
-          <span className="font-medium">T2 optimistic resolver</span>
+        <div className="flex flex-col gap-2 border border-dashed border-white/15 px-4 py-3 text-sm">
+          <span className="font-medium text-[#f3efe6]">T2 optimistic resolver</span>
           {optPhase != null && (
-            <span className="text-xs text-muted-foreground">phase: {optPhase}</span>
+            <span className="text-xs text-white/40">phase: {optPhase}</span>
           )}
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1">
@@ -636,7 +701,7 @@ export function SettlementPanel({
                 type="text"
                 value={reportValue}
                 onChange={(e) => setReportValue(e.target.value)}
-                className="w-36 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+                className="kaido-input w-36 font-mono"
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -645,7 +710,7 @@ export function SettlementPanel({
                 type="text"
                 value={optBond}
                 onChange={(e) => setOptBond(e.target.value)}
-                className="w-24 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+                className="kaido-input w-24 font-mono"
               />
             </label>
             <Button size="sm" disabled={resolverBusy != null} onClick={() => void proposeOptimistic()}>
@@ -657,7 +722,7 @@ export function SettlementPanel({
                 type="text"
                 value={optAltValue}
                 onChange={(e) => setOptAltValue(e.target.value)}
-                className="w-36 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+                className="kaido-input w-36 font-mono"
               />
             </label>
             <Button size="sm" variant="secondary" disabled={resolverBusy != null} onClick={() => void disputeOptimistic()}>
@@ -671,15 +736,15 @@ export function SettlementPanel({
       )}
 
       {canReportT3 && (
-        <div className="flex flex-wrap items-end gap-2 rounded-md border border-dashed px-3 py-2">
+        <div className="flex flex-wrap items-end gap-2 border border-dashed border-white/15 px-4 py-3">
           <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">T3 designated report (outcome value)</span>
+            <span className="font-medium text-[#f3efe6]">T3 designated report (outcome value)</span>
             <input
               type="text"
               value={reportValue}
               onChange={(e) => setReportValue(e.target.value)}
               placeholder="e.g. 65000"
-              className="w-40 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+              className="kaido-input w-40 font-mono"
             />
           </label>
           <Button size="sm" onClick={() => void reportT3()} disabled={reporting || !reportValue.trim()}>
@@ -689,93 +754,43 @@ export function SettlementPanel({
       )}
 
       {wallet && canResolve && !isResolved && (
-        <Button size="sm" onClick={() => void resolveMarket()} disabled={resolving}>
+        <Button
+          size="sm"
+          onClick={() => void resolveMarket()}
+          disabled={resolving}
+          className="rounded-full bg-[#f3efe6] text-[#0b0b0c] hover:bg-white"
+        >
           {resolving ? <Loader2 className="size-4 animate-spin" /> : null}
           {resolving ? "Resolving…" : "Resolve market"}
         </Button>
       )}
 
       {wallet && isResolved && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Your positions</h3>
-          {loadingChain && positions.length === 0 && (
-            <p className="text-xs text-muted-foreground">Loading on-chain trades…</p>
-          )}
-          {positions.length > 0 ? (
-            <ul className="space-y-2">
-              {positions.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
-                >
-                  <span className="font-mono">#{p.id}</span>
-                  {p.claimedAt != null && p.payout7dp != null ? (
-                    <span className="text-muted-foreground">
-                      Claimed · {formatUsdc7dp(BigInt(p.payout7dp))} USDC
-                    </span>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={claimingId === p.id}
-                      onClick={() => void claimPosition(p.id)}
-                    >
-                      {claimingId === p.id ? <Loader2 className="size-4 animate-spin" /> : null}
-                      {claimingId === p.id ? "Claiming…" : "Claim payout"}
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            !loadingChain && (
-              <p className="text-sm text-muted-foreground">
-                No open positions found for this wallet on this market.
-              </p>
-            )
-          )}
-          <div className="flex flex-wrap items-end gap-2 border-t pt-3">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">Claim by position #</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="e.g. 1"
-                value={manualId}
-                onChange={(e) => setManualId(e.target.value)}
-                className="w-32 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
-              />
-            </label>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!manualId.trim() || claimingId != null}
-              onClick={() => void claimPosition(manualId.trim())}
-            >
-              Claim
-            </Button>
-          </div>
+        <div className="flex flex-wrap items-end gap-2 border-t border-white/10 pt-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium text-[#f3efe6]">Claim by position #</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="e.g. 1"
+              value={manualId}
+              onChange={(e) => setManualId(e.target.value)}
+              className="kaido-input w-32 font-mono"
+            />
+          </label>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!manualId.trim() || claimingId != null}
+            onClick={() => void claimPosition(manualId.trim())}
+            className="border-white/20 text-[#f3efe6] hover:bg-white/5"
+          >
+            Claim
+          </Button>
         </div>
       )}
-
-      {!wallet && (
-        <p className="text-sm text-muted-foreground">Connect a wallet to resolve or claim payouts.</p>
-      )}
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      {lastClaim && resolvedOutcomes?.length && market.kWad && market.bWad && market.kind === "scalar" && (
-        <ResultCard
-          marketLabel="Scalar market"
-          kind="scalar"
-          market={{ kWad: BigInt(market.kWad), bWad: BigInt(market.bWad) }}
-          yourBelief={lastClaim.belief}
-          resolvedWad={resolvedOutcomes}
-          collateral7dp={lastClaim.collateral7dp}
-          payout7dp={lastClaim.payout7dp}
-          positionId={lastClaim.positionId}
-        />
-      )}
+        </div>
+      </AdvancedBlock>
     </div>
   );
 }

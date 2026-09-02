@@ -107,7 +107,52 @@
 .kaido-marquee {
   animation: kaido-marquee 60s linear infinite;
 }
-.kaido-landing ::selection {
+.kaido-landing ::selection,
+.kaido-app ::selection {
   background: #d8c69a;
   color: #0b0b0c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kaido-fade,
+  .kaido-marquee {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* In-app surfaces — override shadcn light tokens on dark ink background */
+.kaido-app {
+  --background: #0b0b0c;
+  --foreground: #f3efe6;
+  --card: #0a0a0b;
+  --card-foreground: #f3efe6;
+  --popover: #0a0a0b;
+  --popover-foreground: #f3efe6;
+  --primary: #d8c69a;
+  --primary-foreground: #0b0b0c;
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #f3efe6;
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: rgba(255, 255, 255, 0.45);
+  --accent: rgba(255, 255, 255, 0.06);
+  --accent-foreground: #f3efe6;
+  --destructive: oklch(0.65 0.2 25);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #d8c69a;
+  color: #ece9e2;
+}
+
+.kaido-input {
+  @apply w-full border border-white/15 bg-[#0b0b0c] px-3 py-2.5 text-sm text-[#f3efe6] outline-none transition-colors placeholder:text-white/25 focus-visible:border-[#d8c69a]/40 focus-visible:ring-1 focus-visible:ring-[#d8c69a]/30;
+}
+
+.kaido-section-title {
+  @apply font-serif text-xl tracking-tight text-[#f3efe6];
+}
+
+.kaido-section-sub {
+  @apply text-sm text-white/50;
 }

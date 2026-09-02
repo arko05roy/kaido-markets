@@ -35,7 +35,7 @@ export function WindowCountdown({
 
   if (statusTag === "Resolved" || statusTag === "ResolvedVec") {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-white/45">
         Market resolved · window ended {new Date(windowResolve * 1000).toUTCString()}
       </p>
     );
@@ -51,17 +51,17 @@ export function WindowCountdown({
           : { label: "Ready to resolve", at: windowResolve };
 
   return (
-    <p className="text-sm text-muted-foreground">
-      <span className="font-medium text-foreground">{next.label}</span>
+    <p className="text-sm text-white/45">
+      <span className="font-medium text-[#f3efe6]">{next.label}</span>
       {nowSec < windowResolve ? (
         <>
           {" "}
-          in <span className="font-mono tabular-nums">{fmtCountdown(next.at, nowSec)}</span>
+          in <span className="font-mono tabular-nums text-[#d8c69a]">{fmtCountdown(next.at, nowSec)}</span>
         </>
       ) : (
         " — call resolve when the oracle has reported"
       )}
-      <span className="ml-2 text-xs">({new Date(next.at * 1000).toUTCString()})</span>
+      <span className="ml-2 text-xs text-white/30">({new Date(next.at * 1000).toLocaleString()})</span>
     </p>
   );
 }

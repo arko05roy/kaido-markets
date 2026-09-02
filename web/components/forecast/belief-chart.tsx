@@ -31,11 +31,14 @@ import { fromWad, gridOverRange, renderGaussian, type GaussianBelief } from "@/l
 const GRID_POINTS = 96;
 
 const COLORS = {
-  you: "var(--primary, #2563eb)",
-  consensus: "var(--muted-foreground, #71717a)",
-  samples: "var(--chart-1, #f59e0b)",
-  band: "var(--primary, #2563eb)",
+  you: "#d8c69a",
+  consensus: "rgba(255,255,255,0.35)",
+  samples: "#d8c69a",
+  band: "rgba(216,198,154,0.25)",
 } as const;
+
+const AXIS_TICK = { fontSize: 11, fill: "rgba(255,255,255,0.42)" };
+const GRID_STROKE = "rgba(255,255,255,0.06)";
 
 function fmtNum(v: number): string {
   if (!Number.isFinite(v)) return "";
@@ -47,9 +50,9 @@ function fmtNum(v: number): string {
 
 function Frame({ height, children, empty }: { height: number; children: React.ReactNode; empty?: boolean }) {
   return (
-    <div className="w-full rounded-lg border bg-card p-2" style={{ height }}>
+    <div className="w-full border border-white/10 bg-[#0b0b0c] p-2" style={{ height }}>
       {empty ? (
-        <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+        <div className="flex h-full items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
           no data yet
         </div>
       ) : (
@@ -134,13 +137,14 @@ export function BeliefChart(props: BeliefChartProps) {
     return (
       <Frame height={height}>
         <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+          <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
           <XAxis
             dataKey="x"
             type="number"
             domain={[props.range.min, props.range.max]}
             tickFormatter={fmtNum}
-            tick={{ fontSize: 11 }}
+            tick={AXIS_TICK}
+            stroke="rgba(255,255,255,0.15)"
           />
           <YAxis hide domain={[0, Math.max(peak, bReal) * 1.05]} />
           {bReal <= peak * 1.2 && (
@@ -181,9 +185,16 @@ export function BeliefChart(props: BeliefChartProps) {
   return (
     <Frame height={height}>
       <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-        <XAxis dataKey="x" type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11 }} tickFormatter={fmtNum} />
-        <YAxis tickFormatter={fmtNum} tick={{ fontSize: 11 }} width={56} domain={["auto", "auto"]} />
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+        <XAxis
+          dataKey="x"
+          type="number"
+          domain={["dataMin", "dataMax"]}
+          tick={AXIS_TICK}
+          stroke="rgba(255,255,255,0.15)"
+          tickFormatter={fmtNum}
+        />
+        <YAxis tickFormatter={fmtNum} tick={AXIS_TICK} stroke="rgba(255,255,255,0.15)" width={56} domain={["auto", "auto"]} />
         {samples.length > 1 && (
           <Line
             data={samples}

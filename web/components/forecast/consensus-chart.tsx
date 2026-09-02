@@ -32,7 +32,7 @@ export function ConsensusChart({
     return (
       <BeliefChart
         mode="scalar"
-        market={{ kWad, bWad }}
+        market={{ kWad, bWad, capped: view.capped }}
         range={{ min: muReal - 5 * sigmaReal, max: muReal + 5 * sigmaReal }}
         consensus={{ muWad, sigmaWad }}
         resolved={resolved?.[0] != null ? fromWad(BigInt(resolved[0])) : undefined}

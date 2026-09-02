@@ -1,12 +1,16 @@
 /**
- * Single market page — live params + consensus distribution + a trade panel,
- * read on-chain (Sprint 5 "distribution mode", build.md E11). Belief input is
- * slider-driven (`web/components/forecast`), not freehand. `force-dynamic`:
- * every read is per-request and a testnet reset must not bake in stale ids.
+ * /markets/[id] — trade, claim, and optional advanced on-chain details.
  */
 import { type KaidoConfig } from "@kaido/sdk";
-import Link from "next/link";
 
+import { AdvancedBlock } from "@/components/app/advanced-block";
+import {
+  AppShell,
+  ErrorState,
+  GhostLink,
+  Panel,
+  StatusPill,
+} from "@/components/app/kaido-ui";
 import { ConsensusChart } from "@/components/forecast/consensus-chart";
 import { type TradeMarketView } from "@/components/forecast/trade-panel";
 import { RecentActivity } from "@/components/market/recent-activity";
@@ -15,11 +19,8 @@ import { type SettlementMarketView } from "@/components/market/settlement-panel"
 import { MarketActions } from "./market-actions";
 import { WindowCountdown } from "@/components/market/window-countdown";
 import { deployedConfig } from "@/lib/stellar/contracts";
-import { fmtHouseUsdc, getHouseCap, getHouseExposure } from "@/lib/stellar/house";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 import {
-  WAD,
-  formatWad,
   getBeliefs,
   checkpointsFromOutcomeSpace,
   getMarketInfo,
@@ -27,25 +28,11 @@ import {
   getResolvedOutcomes,
   statusLabel,
   tierLabel,
-  type MarketInfo,
   type MarketParams,
   type MarketState,
 } from "@/lib/stellar/kaido";
 
 export const dynamic = "force-dynamic";
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 border-b py-2 last:border-0">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="text-right text-sm font-medium">{value}</dd>
-    </div>
-  );
-}
-
-function fmtTime(unixSeconds: bigint): string {
-  return new Date(Number(unixSeconds) * 1000).toUTCString();
-}
 
 function kaidoConfig(): KaidoConfig | null {
   try {
@@ -66,11 +53,26 @@ function kaidoConfig(): KaidoConfig | null {
   }
 }
 
+function fmtTime(unixSeconds: bigint): string {
+  return new Date(Number(unixSeconds) * 1000).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-white/10 py-2.5 last:border-0">
+      <dt className="text-xs text-white/40">{label}</dt>
+      <dd className="text-right text-sm text-[#f3efe6]">{value}</dd>
+    </div>
+  );
+}
+
 export default async function MarketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let data:
     | {
-        info: MarketInfo;
         params: MarketParams;
         state: MarketState;
         view: TradeMarketView;
@@ -81,7 +83,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
     | null = null;
   let error: string | null = null;
   try {
-    const [info, { params: mp, state }] = await Promise.all([
+    const [, { params: mp, state }] = await Promise.all([
       getMarketInfo(id),
       getMarketState(id),
     ]);
@@ -109,6 +111,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       consensusSigmasWad,
       checkpoints,
       tradingOpen: state.status.tag === "Open",
+      capped: mp.capped,
     };
     const settlement: SettlementMarketView = {
       address: id,
@@ -130,142 +133,95 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       canAdd: state.status.tag === "Open",
       canRemove: state.status.tag === "Open" || state.status.tag === "Resolved" || state.status.tag === "ResolvedVec",
     };
-    data = { info, params: mp, state, view, settlement, resolved, lpMarket };
+    data = { params: mp, state, view, settlement, resolved, lpMarket };
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
 
   const config = kaidoConfig();
-  let houseExposure: bigint | null = null;
-  let houseCap: bigint | null = null;
-  if (data) {
-    try {
-      const deployed = deployedConfig();
-      const vaultId = deployed.fixtures.houseVault ?? deployed.contracts.houseVault;
-      [houseExposure, houseCap] = await Promise.all([
-        getHouseExposure(vaultId, id),
-        getHouseCap(vaultId, id),
-      ]);
-    } catch {
-      /* vault read optional */
-    }
-  }
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 space-y-6 p-6 sm:p-10">
-      <div>
-        <Link href="/markets" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
-          ← Markets
-        </Link>
-      </div>
+    <AppShell>
+      <div className="mx-auto w-full max-w-3xl space-y-8">
+        <GhostLink href="/markets">← All markets</GhostLink>
 
-      {error || !data ? (
-        <>
-          <h1 className="text-2xl font-semibold tracking-tight">Market</h1>
-          <p className="font-mono text-sm text-muted-foreground">{id}</p>
-          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Couldn’t read this market.</p>
-            <p className="mt-1">{error ?? "Unknown error."}</p>
+        {error || !data ? (
+          <div className="space-y-4">
+            <h1 className="font-serif text-3xl text-[#f3efe6]">Market</h1>
+            <ErrorState title="Couldn't read this market" body={error ?? "Unknown error."} />
           </div>
-        </>
-      ) : (
-        <>
-          <header className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                {data.view.kind === "trajectory" ? "Trajectory market" : "Scalar market"}
-              </h1>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {statusLabel(data.state.status)}
-              </span>
-              <span
-                className="rounded-full border px-2 py-0.5 text-xs font-medium"
-                title="Resolver trust tier — rendered from on-chain state (ADR-5)"
-              >
-                {tierLabel(data.params.tier)}
-              </span>
-            </div>
-            <p className="font-mono text-xs text-muted-foreground">{id}</p>
-            <WindowCountdown
-              windowOpen={Number(data.params.window.open)}
-              windowLock={Number(data.params.window.lock)}
-              windowResolve={Number(data.params.window.resolve)}
-              statusTag={data.state.status.tag}
-            />
-          </header>
+        ) : (
+          <>
+            <header className="space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="font-serif text-[clamp(1.75rem,4vw,2.5rem)] leading-tight tracking-tight text-[#f3efe6]">
+                  Market
+                </h1>
+                <StatusPill label={statusLabel(data.state.status)} />
+              </div>
+              <WindowCountdown
+                windowOpen={Number(data.params.window.open)}
+                windowLock={Number(data.params.window.lock)}
+                windowResolve={Number(data.params.window.resolve)}
+                statusTag={data.state.status.tag}
+              />
+            </header>
 
-          <section className="space-y-2">
-            <h2 className="text-sm font-semibold">Consensus distribution</h2>
-            <ConsensusChart view={data.view} resolved={data.resolved.length ? data.resolved : undefined} />
-          </section>
+            <section className="space-y-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">
+                Crowd belief
+              </p>
+              <ConsensusChart view={data.view} resolved={data.resolved.length ? data.resolved : undefined} />
+            </section>
 
-          {config ? (
-            <section>
+            {config ? (
               <MarketActions
                 config={config}
                 tradeMarket={data.view}
                 settlementMarket={data.settlement}
                 lpMarket={data.lpMarket}
               />
-            </section>
-          ) : (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              Trading is unavailable: the network / USDC SAC config isn’t resolved (run{" "}
-              <code className="font-mono">make deploy:{activeNetworkId()}</code>).
-            </p>
-          )}
-
-          <section>
-            <h2 className="mb-2 text-sm font-semibold">Parameters</h2>
-            <dl className="rounded-lg border bg-card px-4">
-              <Field label="k (liquidity)" value={`${Number(data.params.k) / Number(WAD)}`} />
-              <Field label="b (collateral / outcome)" value={formatWad(data.params.b)} />
-              <Field label="Fee" value={`${data.params.fee_bps / 100}%`} />
-              <Field label="σ floor" value={formatWad(data.state.sigma_min)} />
-              <Field label="Capped Gaussian" value={data.params.capped ? "yes" : "no"} />
-              <Field
-                label="Resolver"
-                value={
-                  <span className="font-mono text-xs">
-                    {data.params.resolver.slice(0, 6)}…{data.params.resolver.slice(-6)}
-                  </span>
-                }
+            ) : (
+              <ErrorState
+                title="Trading unavailable"
+                body="This network isn't configured for trading yet."
               />
-            </dl>
-          </section>
+            )}
 
-          <section>
-            <h2 className="mb-2 text-sm font-semibold">Recent activity</h2>
-            <RecentActivity marketId={id} />
-          </section>
-
-          {houseExposure != null && houseExposure > 0n && (
-            <section>
-              <h2 className="mb-2 text-sm font-semibold">House liquidity</h2>
-              <p className="rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
-                HouseVault exposure:{" "}
-                <span className="font-mono text-foreground">{fmtHouseUsdc(houseExposure)} USDC</span>
-                {houseCap != null && houseCap > 0n && (
-                  <>
-                    {" "}
-                    · cap{" "}
-                    <span className="font-mono text-foreground">{fmtHouseUsdc(houseCap)} USDC</span>
-                  </>
-                )}
-              </p>
-            </section>
-          )}
-
-          <section>
-            <h2 className="mb-2 text-sm font-semibold">Window (UTC)</h2>
-            <dl className="rounded-lg border bg-card px-4">
-              <Field label="Opens" value={fmtTime(data.params.window.open)} />
-              <Field label="Locks" value={fmtTime(data.params.window.lock)} />
-              <Field label="Resolves" value={fmtTime(data.params.window.resolve)} />
-            </dl>
-          </section>
-        </>
-      )}
-    </main>
+            <AdvancedBlock title="Market details">
+              <div className="space-y-6">
+                <Panel className="px-4">
+                  <dl>
+                    <DetailRow
+                      label="Type"
+                      value={data.view.kind === "trajectory" ? "Trajectory" : "Scalar"}
+                    />
+                    <DetailRow label="Fee" value={`${data.params.fee_bps / 100}%`} />
+                    <DetailRow label="Oracle" value={tierLabel(data.params.tier)} />
+                    <DetailRow label="Trading opens" value={fmtTime(data.params.window.open)} />
+                    <DetailRow label="Trading locks" value={fmtTime(data.params.window.lock)} />
+                    <DetailRow label="Resolves" value={fmtTime(data.params.window.resolve)} />
+                    <DetailRow
+                      label="Contract"
+                      value={
+                        <span className="font-mono text-xs">
+                          {id.slice(0, 8)}…{id.slice(-8)}
+                        </span>
+                      }
+                    />
+                  </dl>
+                </Panel>
+                <div>
+                  <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">
+                    Recent activity
+                  </p>
+                  <RecentActivity marketId={id} />
+                </div>
+              </div>
+            </AdvancedBlock>
+          </>
+        )}
+      </div>
+    </AppShell>
   );
 }

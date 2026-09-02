@@ -48,8 +48,8 @@ export function RangeSlider({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="font-medium">{label}</span>
-        <span className="font-mono text-xs tabular-nums text-muted-foreground">{format(clamped)}</span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/55">{label}</span>
+        <span className="font-mono text-xs tabular-nums text-[#d8c69a]">{format(clamped)}</span>
       </div>
       <Slider
         aria-label={ariaLabel ?? label}
@@ -63,7 +63,7 @@ export function RangeSlider({
           if (typeof next === "number" && Number.isFinite(next)) onChange(next);
         }}
       />
-      {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+      {hint && <span className="text-[11px] text-white/35">{hint}</span>}
     </div>
   );
 }

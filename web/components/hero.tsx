@@ -128,14 +128,21 @@ function HeroFold() {
           </p>
 
           <div
-            className="kaido-fade mt-10 flex flex-wrap items-center gap-x-6 gap-y-4"
+            className="kaido-fade mt-10 flex flex-wrap items-center gap-x-4 gap-y-4"
             style={{ animationDelay: "560ms" }}
           >
             <Link
-              href="/whitepaper"
+              href="/markets"
               className="group inline-flex items-center gap-3 rounded-full bg-[#f3efe6] px-7 py-4 text-[13px] font-medium uppercase tracking-[0.18em] text-[#0b0b0c] transition-all hover:bg-white"
             >
-              Read whitepaper
+              Browse markets
+              <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
+            </Link>
+            <Link
+              href="/create"
+              className="group inline-flex items-center gap-3 rounded-full border border-white/25 px-7 py-4 text-[13px] font-medium uppercase tracking-[0.18em] text-[#f3efe6] transition-all hover:border-white/45 hover:bg-white/5"
+            >
+              Create a market
               <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
             </Link>
           </div>

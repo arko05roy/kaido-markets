@@ -1,29 +1,19 @@
 "use client";
 
 /**
- * Market-creation wizard (build.md E3) — calls `MarketFactory` via `@kaido/sdk`.
- *
- * Pick a scalar or trajectory outcome space, set `k`/`b`/fee, choose a resolver
- * tier (the deployed default resolver for that tier is pre-filled; you can paste
- * any resolver address — its declared tier is what the badge will show), set the
- * open/lock/resolve window, and give the initial consensus belief. The wizard
- * previews `σ_min(k,b)` so you can't ship a belief the contract's solvency
- * re-check would reject. Numbers are entered in human units; everything is
- * converted to WAD (1e18) on the way in (`web/lib/curve` `toWad`, the same
- * scale `kaido-math` uses).
+ * Market-creation wizard — calls `MarketFactory` via `@kaido/sdk`.
  */
 import { Kaido, type KaidoConfig, distributionMarket } from "@kaido/sdk";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { Panel, SectionLabel } from "@/components/app/kaido-ui";
 import { BeliefChart } from "@/components/forecast/belief-chart";
-import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/provider";
 import { clampSigma, fromWad, sigmaFloor, toWad } from "@/lib/curve";
 
 const { ResolverTier } = distributionMarket;
 
-/** The deployed default resolver address for each tier, from `config/networks.*.json`. */
 export interface DefaultResolvers {
   reflector: string;
   attested: string;
@@ -34,17 +24,16 @@ export interface DefaultResolvers {
 type Mode = "scalar" | "trajectory";
 
 interface CheckpointRow {
-  /** datetime-local string. */
   at: string;
   mu0: string;
   sigma0: string;
 }
 
 const TIERS = [
-  { tier: ResolverTier.Reflector, key: "reflector" as const, label: "T0 · Reflector oracle" },
-  { tier: ResolverTier.Attested, key: "attested" as const, label: "T1 · Attested" },
-  { tier: ResolverTier.Optimistic, key: "optimistic" as const, label: "T2 · Optimistic" },
-  { tier: ResolverTier.Designated, key: "designated" as const, label: "T3 · Designated" },
+  { tier: ResolverTier.Reflector, key: "reflector" as const, label: "T0 · Reflector", short: "T0" },
+  { tier: ResolverTier.Attested, key: "attested" as const, label: "T1 · Attested", short: "T1" },
+  { tier: ResolverTier.Optimistic, key: "optimistic" as const, label: "T2 · Optimistic", short: "T2" },
+  { tier: ResolverTier.Designated, key: "designated" as const, label: "T3 · Designated", short: "T3" },
 ];
 
 function toUnix(dtLocal: string): bigint {
@@ -55,7 +44,6 @@ function toUnix(dtLocal: string): bigint {
 
 function nowPlus(mins: number): string {
   const d = new Date(Date.now() + mins * 60_000);
-  // datetime-local wants local time without the Z.
   const off = d.getTimezoneOffset() * 60_000;
   return new Date(d.getTime() - off).toISOString().slice(0, 16);
 }
@@ -71,7 +59,6 @@ export function CreateMarketWizard({
   const kaido = useMemo(() => new Kaido(config), [config]);
 
   const [mode, setMode] = useState<Mode>("scalar");
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [k, setK] = useState("1");
   const [b, setB] = useState("1");
   const [feeBps, setFeeBps] = useState("30");
@@ -169,195 +156,272 @@ export function CreateMarketWizard({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Create a market</h1>
-        <p className="text-sm text-muted-foreground">
-          Permissionless. This calls <code className="font-mono">MarketFactory</code> on{" "}
-          <span className="font-mono">{config.network}</span> via your connected wallet.
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-px bg-white/10">
+      {/* Outcome space */}
+      <WizardSection label="Outcome space">
+        <p className="text-sm leading-relaxed text-white/55">
+          Scalar — one resolved number (a price, a margin, a count). Trajectory markets share one collateral pool across checkpoints.
         </p>
-      </header>
-
-      <Field label="Outcome space">
-        <p className="text-sm text-muted-foreground">
-          Scalar — one resolved value (e.g. a price at a time, an election margin).
-        </p>
-        <details
-          className="mt-2 rounded-md border px-3 py-2"
-          open={showAdvanced}
-          onToggle={(e) => {
-            const open = (e.target as HTMLDetailsElement).open;
-            setShowAdvanced(open);
-            if (!open) setMode("scalar");
-          }}
-        >
-          <summary className="cursor-pointer text-sm font-medium">Advanced — trajectory markets</summary>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Multiple checkpoints sharing one collateral pool. Technical μ/σ per checkpoint — simplified UX later.
+        <div className="mt-4 flex flex-wrap gap-2">
+          <ChoiceButton active={mode === "scalar"} onClick={() => setMode("scalar")}>
+            Scalar
+          </ChoiceButton>
+          <ChoiceButton
+            active={mode === "trajectory"}
+            onClick={() => setMode("trajectory")}
+          >
+            Trajectory
+          </ChoiceButton>
+        </div>
+        {mode === "trajectory" && (
+          <p className="mt-3 text-xs text-white/40">
+            Technical μ/σ per checkpoint — simplified trajectory UX ships later.
           </p>
-          <div className="mt-2 flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === "scalar" ? "default" : "outline"}
-              onClick={() => setMode("scalar")}
-            >
-              Scalar
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === "trajectory" ? "default" : "outline"}
-              onClick={() => setMode("trajectory")}
-            >
-              Trajectory
-            </Button>
-          </div>
-        </details>
-      </Field>
-
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="k (liquidity, L²-norm)"><Input value={k} onChange={setK} /></Field>
-        <Field label="b (max payout per outcome)"><Input value={b} onChange={setB} /></Field>
-        <Field label="fee (bps)"><Input value={feeBps} onChange={setFeeBps} /></Field>
-      </div>
-      <p className="-mt-3 text-xs text-muted-foreground">
-        σ-floor for these k, b:{" "}
-        <span className="font-mono">{sigmaMinWad != null ? fromWad(sigmaMinWad).toPrecision(6) : "—"}</span>
-        {capped ? (
-          <> — capped mode: sharp beliefs allowed (no σ floor).</>
-        ) : (
-          <> — every belief σ must be ≥ this or the contract rejects it.</>
         )}
-      </p>
+      </WizardSection>
 
-      <Field label="Belief shape">
-        <label className="flex items-center gap-2 text-sm">
+      {/* Economics */}
+      <WizardSection label="Market economics">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Field label="k — liquidity (L²-norm)"><Input value={k} onChange={setK} /></Field>
+          <Field label="b — max payout"><Input value={b} onChange={setB} /></Field>
+          <Field label="Fee (bps)"><Input value={feeBps} onChange={setFeeBps} /></Field>
+        </div>
+        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">
+          σ-floor:{" "}
+          <span className="text-[#d8c69a]">
+            {sigmaMinWad != null ? fromWad(sigmaMinWad).toPrecision(6) : "—"}
+          </span>
+          {capped ? " · capped mode allows sharp beliefs" : " · beliefs below this are rejected"}
+        </p>
+
+        <label className="mt-5 flex cursor-pointer items-start gap-3">
           <input
             type="checkbox"
             checked={capped}
             onChange={(e) => setCapped(e.target.checked)}
-            className="size-4 rounded border"
+            className="mt-0.5 size-4 rounded border-white/20 bg-transparent accent-[#d8c69a]"
           />
-          Capped Gaussian — allow σ below σ<sub>min</sub>; payout density is capped at <code className="font-mono">b</code>
+          <span className="text-sm text-white/65">
+            <span className="text-[#f3efe6]">Capped Gaussian</span> — allow σ below σ<sub>min</sub>; payout density capped at b
+          </span>
         </label>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Uncapped (default) enforces the solvency σ-floor. Capped markets use min(b, λφ) so traders can express sharp views.
-        </p>
-      </Field>
+      </WizardSection>
 
-      <Field label="Resolver tier">
-        <div className="flex flex-wrap gap-2">
+      {/* Resolver */}
+      <WizardSection label="Resolver">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {TIERS.map((t, i) => (
-            <Button key={t.key} type="button" size="sm" variant={tierIdx === i ? "default" : "outline"} onClick={() => onPickTier(i)}>
-              {t.label}
-            </Button>
+            <ChoiceButton key={t.key} active={tierIdx === i} onClick={() => onPickTier(i)}>
+              {t.short}
+            </ChoiceButton>
           ))}
         </div>
-      </Field>
-      <Field label="Resolver contract address">
-        <Input value={resolverAddr} onChange={setResolverAddr} mono />
-        <p className="mt-1 text-xs text-muted-foreground">
-          Pre-filled with the deployed default for the tier. Paste any resolver — its declared tier is the badge users see.
-        </p>
-      </Field>
-
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Window — open"><Input type="datetime-local" value={windowOpen} onChange={setWindowOpen} /></Field>
-        <Field label="lock (no more trades)"><Input type="datetime-local" value={windowLock} onChange={setWindowLock} /></Field>
-        <Field label="resolve"><Input type="datetime-local" value={windowResolve} onChange={setWindowResolve} /></Field>
-      </div>
-
-      {mode === "scalar" ? (
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="initial consensus μ"><Input value={mu0} onChange={setMu0} placeholder="e.g. 65000" /></Field>
-          <Field label="initial consensus σ"><Input value={sigma0} onChange={setSigma0} placeholder={`≥ ${sigmaMinWad != null ? fromWad(sigmaMinWad).toPrecision(4) : "σ_min"}`} /></Field>
+        <p className="mt-3 text-xs text-white/45">{TIERS[tierIdx].label}</p>
+        <div className="mt-4">
+          <Field label="Resolver contract">
+            <Input value={resolverAddr} onChange={setResolverAddr} mono />
+          </Field>
+          <p className="mt-2 text-xs text-white/40">
+            Pre-filled with the deployed default. Paste any resolver — its declared tier is the badge users see.
+          </p>
         </div>
-      ) : (
-        <Field label="Checkpoints (time · initial μ · initial σ)">
-          <div className="flex flex-col gap-2">
+      </WizardSection>
+
+      {/* Window */}
+      <WizardSection label="Trading window">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Field label="Open"><Input type="datetime-local" value={windowOpen} onChange={setWindowOpen} /></Field>
+          <Field label="Lock trades"><Input type="datetime-local" value={windowLock} onChange={setWindowLock} /></Field>
+          <Field label="Resolve"><Input type="datetime-local" value={windowResolve} onChange={setWindowResolve} /></Field>
+        </div>
+      </WizardSection>
+
+      {/* Initial belief */}
+      <WizardSection label="Initial consensus belief">
+        {mode === "scalar" ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="μ — center"><Input value={mu0} onChange={setMu0} placeholder="e.g. 65000" /></Field>
+            <Field label="σ — width">
+              <Input
+                value={sigma0}
+                onChange={setSigma0}
+                placeholder={`≥ ${sigmaMinWad != null ? fromWad(sigmaMinWad).toPrecision(4) : "σ_min"}`}
+              />
+            </Field>
+          </div>
+        ) : (
+          <div className="space-y-3">
             {checkpoints.map((c, i) => (
               <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2">
                 <Input type="datetime-local" value={c.at} onChange={(v) => updateCp(setCheckpoints, i, { at: v })} />
                 <Input value={c.mu0} onChange={(v) => updateCp(setCheckpoints, i, { mu0: v })} placeholder="μ" />
                 <Input value={c.sigma0} onChange={(v) => updateCp(setCheckpoints, i, { sigma0: v })} placeholder="σ" />
-                <Button type="button" size="sm" variant="ghost" onClick={() => setCheckpoints((cs) => cs.filter((_, j) => j !== i))} disabled={checkpoints.length <= 1}>
+                <IconButton
+                  onClick={() => setCheckpoints((cs) => cs.filter((_, j) => j !== i))}
+                  disabled={checkpoints.length <= 1}
+                  label="Remove checkpoint"
+                >
                   ✕
-                </Button>
+                </IconButton>
               </div>
             ))}
-            <Button type="button" size="sm" variant="outline" className="self-start" onClick={() => setCheckpoints((cs) => [...cs, { at: nowPlus(13 + cs.length), mu0: "", sigma0: "" }])}>
-              + checkpoint
-            </Button>
+            <ChoiceButton
+              active={false}
+              onClick={() => setCheckpoints((cs) => [...cs, { at: nowPlus(13 + cs.length), mu0: "", sigma0: "" }])}
+            >
+              + Add checkpoint
+            </ChoiceButton>
           </div>
-        </Field>
-      )}
+        )}
 
-      {kWad != null && bWad != null && bWad > 0n && (
-        <div className="space-y-1">
-          <span className="text-sm font-medium">Initial belief preview</span>
-          {mode === "scalar"
-            ? (() => {
-                const muW = safeWad(mu0);
-                const sigW = safeWad(sigma0);
-                if (muW == null || sigW == null) {
-                  return <p className="text-xs text-muted-foreground">enter μ and σ to preview the curve.</p>;
-                }
-                const muReal = fromWad(muW);
-                const sigReal = Math.max(1e-12, fromWad(sigW));
-                return (
-                  <BeliefChart
-                    mode="scalar"
-                    market={{ kWad, bWad, capped }}
-                    range={{ min: muReal - 5 * sigReal, max: muReal + 5 * sigReal }}
-                    consensus={{ muWad: muW, sigmaWad: capped ? sigW : clampSigma(sigW, { kWad, bWad }) }}
-                  />
-                );
-              })()
-            : (() => {
-                const cps = checkpoints.map((c) => {
-                  const ms = new Date(c.at).getTime();
-                  return Number.isFinite(ms) ? Math.floor(ms / 1000) : NaN;
-                });
-                const musW = checkpoints.map((c) => safeWad(c.mu0));
-                const sigsW = checkpoints.map((c) => safeWad(c.sigma0));
-                if (cps.some((x) => !Number.isFinite(x)) || musW.some((v) => v == null) || sigsW.some((v) => v == null)) {
-                  return <p className="text-xs text-muted-foreground">fill every checkpoint to preview the path.</p>;
-                }
-                return (
-                  <BeliefChart
-                    mode="trajectory"
-                    market={{ kWad }}
-                    checkpoints={cps}
-                    consensusMus={[]}
-                    youMus={musW.map((v) => fromWad(v as bigint))}
-                    youSigmas={sigsW.map((v) => fromWad(clampSigma(v as bigint, { kWad, bWad })))}
-                  />
-                );
-              })()}
+        {kWad != null && bWad != null && bWad > 0n && (
+          <div className="mt-6 space-y-2">
+            <SectionLabel>Curve preview</SectionLabel>
+            {mode === "scalar"
+              ? (() => {
+                  const muW = safeWad(mu0);
+                  const sigW = safeWad(sigma0);
+                  if (muW == null || sigW == null) {
+                    return <p className="text-xs text-white/40">Enter μ and σ to preview the curve.</p>;
+                  }
+                  const muReal = fromWad(muW);
+                  const sigReal = Math.max(1e-12, fromWad(sigW));
+                  return (
+                    <BeliefChart
+                      mode="scalar"
+                      market={{ kWad, bWad, capped }}
+                      range={{ min: muReal - 5 * sigReal, max: muReal + 5 * sigReal }}
+                      consensus={{ muWad: muW, sigmaWad: capped ? sigW : clampSigma(sigW, { kWad, bWad }) }}
+                    />
+                  );
+                })()
+              : (() => {
+                  const cps = checkpoints.map((c) => {
+                    const ms = new Date(c.at).getTime();
+                    return Number.isFinite(ms) ? Math.floor(ms / 1000) : NaN;
+                  });
+                  const musW = checkpoints.map((c) => safeWad(c.mu0));
+                  const sigsW = checkpoints.map((c) => safeWad(c.sigma0));
+                  if (cps.some((x) => !Number.isFinite(x)) || musW.some((v) => v == null) || sigsW.some((v) => v == null)) {
+                    return <p className="text-xs text-white/40">Fill every checkpoint to preview the path.</p>;
+                  }
+                  return (
+                    <BeliefChart
+                      mode="trajectory"
+                      market={{ kWad }}
+                      checkpoints={cps}
+                      consensusMus={[]}
+                      youMus={musW.map((v) => fromWad(v as bigint))}
+                      youSigmas={sigsW.map((v) => fromWad(clampSigma(v as bigint, { kWad, bWad })))}
+                    />
+                  );
+                })()}
+          </div>
+        )}
+      </WizardSection>
+
+      {/* Submit */}
+      <Panel className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          {!wallet ? (
+            <p className="text-sm text-white/50">
+              {connecting ? "Connecting wallet…" : "Connect Freighter to deploy the market."}
+            </p>
+          ) : createdId ? (
+            <p className="text-sm text-white/65">
+              Market deployed.{" "}
+              <Link className="font-mono text-[#d8c69a] underline underline-offset-4" href={`/markets/${createdId}`}>
+                {createdId.slice(0, 10)}…
+              </Link>
+            </p>
+          ) : (
+            <p className="text-sm text-white/50">
+              Submits via <span className="font-mono text-white/65">MarketFactory</span> on{" "}
+              <span className="font-mono text-[#d8c69a]">{config.network}</span>
+            </p>
+          )}
         </div>
-      )}
 
-      <div className="flex items-center gap-3">
-        {!wallet ? (
-          <span className="text-sm text-muted-foreground">{connecting ? "connecting…" : "connect a wallet to create"}</span>
-        ) : (
-          <Button onClick={() => void submit()} disabled={submitting}>
+        {wallet && !createdId && (
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={submitting}
+            className="inline-flex items-center justify-center rounded-full bg-[#f3efe6] px-8 py-3.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#0b0b0c] transition-all hover:bg-white disabled:opacity-50"
+          >
             {submitting ? "Creating…" : "Create market"}
-          </Button>
+          </button>
         )}
-        {createdId && (
-          <span className="text-sm">
-            Created <Link className="font-mono underline" href={`/markets/${createdId}`}>{createdId.slice(0, 8)}…</Link>
-          </span>
-        )}
-      </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      </Panel>
+
+      {error && (
+        <Panel className="border-red-500/30 bg-red-500/5 px-6 py-4">
+          <p className="text-sm text-red-300">{error}</p>
+        </Panel>
+      )}
     </div>
   );
 }
 
-// --- small form helpers ----------------------------------------------------
+// --- helpers ----------------------------------------------------------------
+
+function WizardSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Panel className="p-6 sm:p-8">
+      <SectionLabel>{label}</SectionLabel>
+      <div className="mt-4">{children}</div>
+    </Panel>
+  );
+}
+
+function ChoiceButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${
+        active
+          ? "border-[#d8c69a]/50 bg-[#d8c69a]/15 text-[#f3efe6]"
+          : "border-white/15 text-white/45 hover:border-white/30 hover:text-white/70"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white/45 transition-colors hover:border-white/30 hover:text-white/70 disabled:opacity-30"
+    >
+      {children}
+    </button>
+  );
+}
 
 function safeWad(s: string): bigint | null {
   const t = s.trim();
@@ -386,8 +450,8 @@ function updateCp(
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5 text-sm">
-      <span className="font-medium">{label}</span>
+    <label className="flex flex-col gap-2 text-sm">
+      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">{label}</span>
       {children}
     </label>
   );
@@ -412,7 +476,7 @@ function Input({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className={`rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${mono ? "font-mono text-xs" : ""}`}
+      className={`w-full border border-white/15 bg-[#0b0b0c] px-3 py-2.5 text-sm text-[#f3efe6] outline-none transition-colors placeholder:text-white/25 focus-visible:border-[#d8c69a]/40 focus-visible:ring-1 focus-visible:ring-[#d8c69a]/30 ${mono ? "font-mono text-xs" : ""}`}
     />
   );
 }
