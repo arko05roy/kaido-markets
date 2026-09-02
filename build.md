@@ -309,9 +309,54 @@ Engineering tasks:
 
 ---
 
-### Sprint 2 — Trading, settlement, σ-floor, T0 resolver, HouseVault v0, Canvas spike
+### Sprint 2 — Trading, settlement, σ-floor, T0 resolver, HouseVault v0, Canvas spike — ✅ COMPLETE (2026-05-12)
 
 **Goal:** end-to-end happy path on chain: create market → HouseVault seeds it → a trader trades → market resolves via Reflector → payouts. Plus a throwaway canvas spike.
+
+> **Status: done.** Commits `1ceeff3` (contracts) + `c014c50` (trade-sequence
+> proptest). `kaido-common` gained the `Resolver` interface
+> (`#[contractclient] ResolverClient`: `resolve()->i128`,
+> `status()->ResolverStatus{Pending|Resolved(i128)|Stale}`), the
+> `Trade`/`LiquidityAdded`/`LiquidityRemoved`/`Resolved` events, and appended
+> error variants (35+). `distribution-market` now has real `trade`
+> (`require_auth`, window + σ-floor + `peak ≤ b` checks, `worst_case_collateral`
+> + fee, ceil-to-7dp charging, USDC `transfer`, position mint, belief advance),
+> `resolve` (reads the resolver's `status()`: Pending → err, Stale →
+> `MarketStatus::Disputable`, Resolved(x₀) → settle), `claim`
+> (`collateral + (g(x₀)−f(x₀))` clamped ≥ 0, LP pool credited/debited the net),
+> a **minimal** `add_liquidity`/`remove_liquidity` (the `y·(b−f)` curve-scaling
+> LP + fee-split engine stay Sprint 5, E8), and `get_position`/`lp_shares`/
+> `pool_state` views. Money is 7-dp `i128` at the contract boundary, WAD inside
+> (`MONEY_SCALE = 1e11`). `init` now also takes the USDC SAC `Address`.
+> `resolver-reflector` is a real T0 resolver over the `sep-40-oracle`
+> `PriceFeedClient` — `__constructor(oracle, asset, resolve_time, twap_records)`,
+> computes a TWAP from `prices(asset, N)` (falls back to `lastprice`), converts
+> oracle-decimals → WAD, caches the first successful read; non-trapping
+> `status()`. `house-vault` is real — `__constructor(admin, usdc)`,
+> `deposit(from, amt)`, admin-gated `seed_market(market, amt, cap)` (per-market
+> cumulative exposure ≤ cap; acts as an ordinary L1 LP), `withdraw_proportional`,
+> `exposure(market)` view; stays owner-gated (finalised Sprint 4). Tests:
+> `tests/tests/lifecycle.rs` runs USDC SAC → mock SEP-40 oracle →
+> `resolver-reflector` → `distribution-market` → `house-vault` seeds it → trader
+> trades → advance time → `resolve` → `claim`, asserting exact USDC conservation;
+> plus the sub-floor-σ revert and the stale-oracle → `Disputable` path. The
+> `distribution-market` `random_trade_sequences_preserve_invariants` proptest
+> (48 cases) checks the §6-item-2 invariants over random trade/LP sequences:
+> `σ ≥ σ_min`, live curve `peak ≤ b`, stored collateral = the contract's own
+> `worst_case_collateral` ± 1 money-unit, trader debited ≥ that collateral, every
+> `claim` at an arbitrary x₀ is ≥ 0 (collateral posted ≥ realised loss), USDC
+> conserved across the whole lifecycle. `scripts/deploy.sh` now requires
+> `USDC_SAC_ID` from the env (no default) and passes the constructor args for
+> `house-vault` / `resolver-reflector`. The canvas spike was prototyped under
+> `web/app/(spike)/canvas-spike/` and then discarded (build.md says "throwaway,
+> do not merge to the main flow"). `cargo make ci` (fmt + clippy `-D warnings` +
+> `cargo test --workspace` + wasm build) green. **Outstanding (nightly / external,
+> not blocking):** the `cargo-fuzz` target in `fuzz/` (needs nightly; the proptest
+> gives equivalent coverage on CI) and the flaky-tolerant real-Reflector-testnet
+> smoke run (needs network). **Deferred per the plan:** full LP curve-scaling +
+> fee-split engine (S5); the "never under-collateralised vs brute-force grid
+> oracle" hardening of `worst_case_collateral` (S4); trajectory markets / capped
+> Gaussians; HouseVault governance (S4).
 
 User stories:
 - *As a trader, I submit a belief `(μ₂, σ₂)`, the contract scales it by `λ₂`, computes my position `g − f` and required collateral, takes USDC, and updates the market curve to `g`.*
