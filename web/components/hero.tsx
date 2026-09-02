@@ -13,10 +13,7 @@ export function Hero({ network }: { network: string }) {
     <div className="kaido-landing relative w-full bg-[#0b0b0c] text-[#ece9e2]">
       <HeroFold />
       <ThesisSection />
-      <CanvasSection />
-      <HowItWorks />
-      <ExamplesSection />
-      <MechanismSection />
+      <BeliefSection />
       <BuildersSection />
       <PaperCTA />
       <LandingFooter network={network} />
@@ -135,10 +132,10 @@ function HeroFold() {
             style={{ animationDelay: "560ms" }}
           >
             <Link
-              href="/markets"
+              href="/whitepaper"
               className="group inline-flex items-center gap-3 rounded-full bg-[#f3efe6] px-7 py-4 text-[13px] font-medium uppercase tracking-[0.18em] text-[#0b0b0c] transition-all hover:bg-white"
             >
-              Enter markets
+              Read whitepaper
               <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
             </Link>
           </div>
@@ -175,195 +172,17 @@ function HeroFold() {
 
 function ThesisSection() {
   return (
-    <section className="relative border-t border-white/10 px-6 py-28 sm:px-10 lg:py-40">
+    <section className="relative border-t border-white/10 px-6 py-32 sm:px-10 lg:py-48">
       <div className="mx-auto max-w-[1400px]">
         <motion.div
           variants={reveal}
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-12 gap-x-6 gap-y-10"
         >
-          <div className="col-span-12 lg:col-span-3">
-            <SectionLabel num="§ 01" title="The primitive" />
-          </div>
-          <div className="col-span-12 lg:col-span-9">
-            <h2 className="font-serif text-5xl italic leading-[1] tracking-[-0.01em] text-[#f3efe6] sm:text-6xl lg:text-[5.5rem]">
-              A market for every number.
-            </h2>
-            <p className="mt-8 max-w-xl text-[15px] leading-[1.6] text-white/55">
-              Beliefs aren&apos;t coin flips. They&apos;re shapes. Kaido lets you trade the whole
-              shape.
-            </p>
-          </div>
-        </motion.div>
-
-        <div className="mt-20 grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-10">
-          <motion.div
-            variants={reveal}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <YesNoPanel />
-          </motion.div>
-          <motion.div
-            variants={reveal}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ delay: 0.12 }}
-          >
-            <CurvePanel />
-          </motion.div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function YesNoPanel() {
-  return (
-    <div className="group relative flex h-full flex-col border border-white/10 p-8 transition-colors hover:border-white/20 lg:p-10">
-      <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-        <span>Yes / No</span>
-        <span>1 bit</span>
-      </div>
-      <div className="mt-14 flex flex-1 items-end justify-center gap-8">
-        <div className="flex flex-col items-center">
-          <motion.div
-            initial={{ height: 0 }}
-            whileInView={{ height: 176 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
-            className="w-20 origin-bottom rounded-sm bg-white/15"
-          />
-          <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-            Yes · 70%
-          </div>
-        </div>
-        <div className="flex flex-col items-center">
-          <motion.div
-            initial={{ height: 0 }}
-            whileInView={{ height: 78 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, ease: "easeOut", delay: 0.35 }}
-            className="w-20 origin-bottom rounded-sm bg-white/10"
-          />
-          <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-            No · 30%
-          </div>
-        </div>
-      </div>
-      <div className="mt-14 border-t border-white/10 pt-6 font-serif text-lg italic leading-snug text-white/55">
-        Everyone built the same thing.
-        <span className="block text-white/35">Coin flips with a price tag.</span>
-      </div>
-    </div>
-  );
-}
-
-function CurvePanel() {
-  return (
-    <div className="group relative flex h-full flex-col overflow-hidden border border-[#d8c69a]/40 bg-[#d8c69a]/[0.04] p-8 lg:p-10">
-      {/* soft amber glow */}
-      <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#d8c69a]/10 blur-3xl" />
-      <div className="relative flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">
-        <span>Distribution · Kaido</span>
-        <span>the whole shape</span>
-      </div>
-      <div className="relative mt-8 flex-1">
-        <svg viewBox="0 0 600 220" className="h-auto w-full" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="curveFill2" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#d8c69a" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#d8c69a" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {[0, 1, 2, 3].map((i) => (
-            <line key={i} x1={i * 200} y1="0" x2={i * 200} y2="200" stroke="rgba(255,255,255,0.06)" />
-          ))}
-          <line x1="0" y1="200" x2="600" y2="200" stroke="rgba(255,255,255,0.18)" />
-          <motion.path
-            d="M0,200 C 100,200 160,190 220,150 C 260,115 285,40 320,40 C 360,40 395,110 440,160 C 490,195 540,200 600,200 L 600,200 L 0,200 Z"
-            fill="url(#curveFill2)"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.2, delay: 0.3 }}
-          />
-          <motion.path
-            d="M0,200 C 100,200 160,190 220,150 C 260,115 285,40 320,40 C 360,40 395,110 440,160 C 490,195 540,200 600,200"
-            fill="none"
-            stroke="#d8c69a"
-            strokeWidth="1.5"
-            initial={{ pathLength: 0 }}
-            whileInView={{ pathLength: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.6, ease: "easeOut", delay: 0.1 }}
-          />
-          <motion.line
-            x1="320"
-            y1="40"
-            x2="320"
-            y2="200"
-            stroke="rgba(216,198,154,0.45)"
-            strokeDasharray="2 4"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 1.4 }}
-          />
-          <motion.circle
-            cx="320"
-            cy="40"
-            r="4"
-            fill="#d8c69a"
-            initial={{ scale: 0 }}
-            whileInView={{ scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 1.5, type: "spring", stiffness: 300, damping: 18 }}
-          />
-        </svg>
-      </div>
-      <div className="relative mt-3 flex items-baseline justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-        <span>outcome →</span>
-        <span className="text-[#d8c69a]">μ · 68.2k · σ · 1.4k</span>
-      </div>
-      <div className="relative mt-10 border-t border-white/10 pt-6 font-serif text-lg italic leading-snug text-white/80">
-        Where you think it lands.
-        <span className="block text-[#d8c69a]">How sure you are.</span>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- */
-/* § 02 — CANVAS — you draw your forecast                            */
-/* ---------------------------------------------------------------- */
-
-function CanvasSection() {
-  return (
-    <section className="relative overflow-hidden border-t border-white/10 px-6 py-28 sm:px-10 lg:py-40">
-      {/* subtle radial atmosphere */}
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[900px] w-[900px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.08),transparent_60%)]" />
-      <div className="relative mx-auto max-w-[1400px]">
-        <motion.div
-          variants={reveal}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-12 gap-x-6 gap-y-10"
-        >
-          <div className="col-span-12 lg:col-span-3">
-            <SectionLabel num="§ 02" title="The canvas" />
-          </div>
-          <div className="col-span-12 lg:col-span-9">
-            <h2 className="font-serif text-5xl italic leading-[1] tracking-[-0.01em] text-[#f3efe6] sm:text-6xl lg:text-[5.5rem]">
-              You don&apos;t read order books.
-              <span className="block text-white/40">You draw.</span>
-            </h2>
-          </div>
+          <h2 className="font-serif text-[3.25rem] leading-[0.9] tracking-[-0.035em] text-[#f3efe6] sm:text-[6rem] lg:text-[11rem]">
+            Belief was never binary.
+          </h2>
         </motion.div>
 
         <motion.div
@@ -371,480 +190,401 @@ function CanvasSection() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="mt-16 grid grid-cols-12 gap-6 lg:gap-10"
+          className="mt-20"
         >
-          <div className="col-span-12 lg:col-span-8">
-            <CanvasChart />
-          </div>
-          <aside className="col-span-12 flex flex-col justify-end gap-8 lg:col-span-4">
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">
-                · Trajectory mode
-              </div>
-              <p className="mt-3 font-serif text-2xl italic leading-snug text-[#f3efe6]">
-                For things that move.
-              </p>
-              <p className="mt-3 text-[14px] leading-[1.6] text-white/55">
-                Live charts of prices, scores, polls. Drag the line where you think it goes.
-              </p>
-            </div>
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">
-                · Distribution mode
-              </div>
-              <p className="mt-3 font-serif text-2xl italic leading-snug text-[#f3efe6]">
-                For things that land.
-              </p>
-              <p className="mt-3 text-[14px] leading-[1.6] text-white/55">
-                Election margins, box office, CPI prints. Draw a hump over a number line — where
-                and how sure.
-              </p>
-            </div>
-          </aside>
+          <DistributionDemo />
         </motion.div>
       </div>
     </section>
   );
 }
 
-function CanvasChart() {
+function DistributionDemo() {
+  // shared price axis: $60k → $80k, threshold at $70k (left 2/3 of canvas)
+  // bell μ=68.2k σ=1.4k. Above $70k area ≈ 8%, below ≈ 92% under this curve.
+  // We use 38/62 as the *market's* current binary odds (independent quote) to
+  // show the dramatic resolution gap — the binary view is structurally lossy
+  // regardless of the underlying belief.
   return (
     <div className="relative overflow-hidden border border-white/10 bg-[#0a0a0b]">
-      {/* header */}
-      <div className="flex items-center justify-between border-b border-white/10 px-6 py-3">
-        <div className="flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.22em] text-white/55">
-          <span className="text-[#d8c69a]">● live</span>
-          <span>BTC/USD · 90s</span>
-          <span className="hidden sm:inline text-white/30">trajectory</span>
+      {/* very subtle accent — research-doc neutral */}
+      <div className="pointer-events-none absolute -left-40 -top-40 h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.05),transparent_70%)]" />
+
+      {/* top bar — market metadata + the question */}
+      <div className="relative border-b border-white/10 px-6 py-5 sm:px-8">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-[0.22em]">
+          <span className="flex items-center gap-2 text-[#d8c69a]">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#d8c69a] opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#d8c69a]" />
+            </span>
+            live
+          </span>
+          <span className="text-white/40">BTC · 24h close</span>
+          <span className="hidden text-white/25 sm:inline">·</span>
+          <span className="hidden text-white/40 sm:inline">range $60k–$80k</span>
+          <span className="ml-auto text-white/35">market · GC4F…Z2QA</span>
         </div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-          T0 · trustless
+        <h3 className="mt-4 font-serif text-2xl leading-[1.1] tracking-[-0.01em] text-[#f3efe6] sm:text-[28px] lg:text-[32px]">
+          Where does BTC close on Friday?
+        </h3>
+      </div>
+
+      <div className="relative grid grid-cols-12">
+        {/* THE CURVE — Kaido */}
+        <div className="relative col-span-12 flex flex-col border-b border-white/10 lg:col-span-8 lg:border-b-0 lg:border-r">
+          <div className="flex items-baseline justify-between px-6 pt-6 sm:px-8">
+            <div className="flex items-baseline gap-3 font-mono text-[10px] uppercase tracking-[0.22em]">
+              <span className="text-[#d8c69a]">Kaido</span>
+              <span className="text-white/30">·</span>
+              <span className="text-white/55">continuous</span>
+            </div>
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+              μ 68.2k · σ 1.4k
+            </span>
+          </div>
+
+          <BellCurveChart />
+
+          {/* position readout — feels like a real trade */}
+          <div className="mt-auto grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 font-mono text-[10px] uppercase tracking-[0.22em]">
+            <div className="px-6 py-4 sm:px-8">
+              <div className="text-white/35">Cost to open</div>
+              <div className="mt-1.5 font-serif text-lg normal-case tracking-normal text-[#f3efe6]">
+                12.40 <span className="text-white/40">XLM</span>
+              </div>
+            </div>
+            <div className="px-6 py-4 sm:px-8">
+              <div className="text-white/35">Max payout</div>
+              <div className="mt-1.5 font-serif text-lg normal-case tracking-normal text-[#f3efe6]">
+                180 <span className="text-white/40">XLM</span>
+              </div>
+            </div>
+            <div className="px-6 py-4 sm:px-8">
+              <div className="text-white/35">Resolution</div>
+              <div className="mt-1.5 font-serif text-lg normal-case tracking-normal text-[#d8c69a]">
+                continuous
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* THE BINARY — old way (now a punchline panel) */}
+        <div className="relative col-span-12 bg-[#08080a] lg:col-span-4">
+          <BinaryBars />
         </div>
       </div>
 
-      {/* chart */}
-      <div className="relative">
-        <svg viewBox="0 0 800 360" className="block h-auto w-full" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="canvasForecast" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#d8c69a" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#d8c69a" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id="canvasHist" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#f3efe6" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="#f3efe6" stopOpacity="0" />
-            </linearGradient>
-            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="b" />
-              <feMerge>
-                <feMergeNode in="b" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* grid */}
-          {[60, 120, 180, 240, 300].map((y) => (
-            <line key={y} x1="0" x2="800" y1={y} y2={y} stroke="rgba(255,255,255,0.04)" />
-          ))}
-          {[0, 100, 200, 300, 400, 500, 600, 700, 800].map((x) => (
-            <line key={x} x1={x} x2={x} y1="0" y2="360" stroke="rgba(255,255,255,0.03)" />
-          ))}
-
-          {/* divider — present moment */}
-          <line x1="440" y1="0" x2="440" y2="360" stroke="rgba(216,198,154,0.3)" strokeDasharray="3 4" />
-          <text
-            x="448"
-            y="22"
-            fill="#d8c69a"
-            fontFamily="var(--font-jetbrains-mono), monospace"
-            fontSize="10"
-            letterSpacing="2"
-            opacity="0.7"
-          >
-            NOW
-          </text>
-
-          {/* historical area */}
-          <motion.path
-            d="M0,260 L20,255 L50,250 L80,240 L110,235 L140,230 L170,220 L200,210 L230,215 L260,200 L290,195 L320,180 L350,185 L380,170 L410,175 L440,160 L440,360 L0,360 Z"
-            fill="url(#canvasHist)"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1 }}
-          />
-          {/* historical line */}
-          <motion.path
-            d="M0,260 L20,255 L50,250 L80,240 L110,235 L140,230 L170,220 L200,210 L230,215 L260,200 L290,195 L320,180 L350,185 L380,170 L410,175 L440,160"
-            fill="none"
-            stroke="#f3efe6"
-            strokeWidth="1.5"
-            strokeOpacity="0.85"
-            initial={{ pathLength: 0 }}
-            whileInView={{ pathLength: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.6, ease: "easeOut" }}
-          />
-
-          {/* forecast area */}
-          <motion.path
-            d="M440,160 L470,140 L500,150 L540,120 L580,110 L620,95 L660,100 L700,85 L740,80 L780,70 L780,360 L440,360 Z"
-            fill="url(#canvasForecast)"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, delay: 1.6 }}
-          />
-          {/* forecast line */}
-          <motion.path
-            d="M440,160 L470,140 L500,150 L540,120 L580,110 L620,95 L660,100 L700,85 L740,80 L780,70"
-            fill="none"
-            stroke="#d8c69a"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            filter="url(#glow)"
-            initial={{ pathLength: 0 }}
-            whileInView={{ pathLength: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.4, ease: "easeOut", delay: 1.6 }}
-          />
-          {/* forecast endpoint */}
-          <motion.circle
-            cx="780"
-            cy="70"
-            r="5"
-            fill="#d8c69a"
-            initial={{ scale: 0, opacity: 0 }}
-            whileInView={{ scale: 1, opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 3, type: "spring", stiffness: 300, damping: 18 }}
-          />
-          <motion.circle
-            cx="780"
-            cy="70"
-            r="10"
-            fill="none"
-            stroke="#d8c69a"
-            strokeOpacity="0.4"
-            initial={{ scale: 0, opacity: 0 }}
-            whileInView={{ scale: 1, opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 3.05, duration: 0.6 }}
-          />
-
-          {/* y-axis ticks */}
-          <text x="10" y="56" fill="rgba(255,255,255,0.35)" fontFamily="var(--font-jetbrains-mono), monospace" fontSize="9" letterSpacing="1">68.8k</text>
-          <text x="10" y="176" fill="rgba(255,255,255,0.35)" fontFamily="var(--font-jetbrains-mono), monospace" fontSize="9" letterSpacing="1">68.4k</text>
-          <text x="10" y="296" fill="rgba(255,255,255,0.35)" fontFamily="var(--font-jetbrains-mono), monospace" fontSize="9" letterSpacing="1">68.0k</text>
-        </svg>
-
-        {/* annotation card */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 3.2, duration: 0.5 }}
-          className="absolute right-4 top-4 hidden border border-[#d8c69a]/40 bg-[#0b0b0c]/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] backdrop-blur sm:block"
+      {/* footer — forward action */}
+      <div className="relative flex flex-wrap items-center justify-between gap-4 border-t border-white/10 px-6 py-5 sm:px-8">
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+          Same question · two resolutions · one is structurally lossy
+        </span>
+        <Link
+          href="/markets"
+          className="group inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.22em] text-[#f3efe6] transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
         >
-          <div className="text-[#d8c69a]">Your forecast</div>
-          <div className="mt-1 text-white/50">+0.6% · 45s</div>
-        </motion.div>
-      </div>
-
-      {/* footer scrubber */}
-      <div className="flex items-center justify-between border-t border-white/10 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-        <span>00:00</span>
-        <span className="text-white/55">— drag to draw —</span>
-        <span>00:90</span>
+          Open this market on testnet
+          <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
+        </Link>
       </div>
     </div>
   );
 }
 
-/* ---------------------------------------------------------------- */
-/* § 03 — THE LOOP                                                   */
-/* ---------------------------------------------------------------- */
+function BellCurveChart() {
+  // viewBox 800 x 360; baseline y=290; peak y=70
+  // price axis $60k → $80k mapped to x: 40 → 760 (720px wide)
+  //   $60k→40, $64k→184, $68k→328, $70k→400, $72k→472, $76k→616, $80k→760
+  // μ=68.2k → x≈335. σ=1.4k → 50.4px
+  const xMu = 335;
+  const xThreshold = 400; // $70k
+  const sigmaPx = 50.4;
+  // bell path approximation
+  const bellD = `M 40 290 C 160 290 260 70 ${xMu} 70 C 410 70 520 290 760 290`;
+  const bellFillD = `${bellD} L 760 290 L 40 290 Z`;
 
-function HowItWorks() {
-  const steps = [
-    {
-      n: "01",
-      title: "Draw",
-      body: "A curve over the outcome — where, and how sure.",
-      glyph: <GlyphCurve />,
-    },
-    {
-      n: "02",
-      title: "Position",
-      body: "The AMM prices your shape against the market. Loss is bounded.",
-      glyph: <GlyphBalance />,
-    },
-    {
-      n: "03",
-      title: "Settle",
-      body: "Oracle posts the truth. Soroban pays the closest forecasters.",
-      glyph: <GlyphTarget />,
-    },
-  ];
   return (
-    <section className="relative border-t border-white/10 bg-[#08080a] px-6 py-28 sm:px-10 lg:py-40">
-      <div className="mx-auto max-w-[1400px]">
-        <motion.div
-          variants={reveal}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-12 gap-x-6 gap-y-6"
+    <div className="relative mt-8 px-6 pb-6 sm:px-8">
+      <svg
+        viewBox="0 0 800 360"
+        className="block h-auto w-full"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Bell curve over BTC closing price, peaking at $68.2k with σ $1.4k"
+      >
+        <defs>
+          <linearGradient id="bellFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#d8c69a" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#d8c69a" stopOpacity="0" />
+          </linearGradient>
+          <filter id="bellStroke" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="2.5" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* grid */}
+        {[110, 170, 230].map((y) => (
+          <line key={y} x1="40" x2="760" y1={y} y2={y} stroke="rgba(255,255,255,0.04)" />
+        ))}
+
+        {/* σ-band (μ ± σ) */}
+        <motion.rect
+          x={xMu - sigmaPx}
+          y="70"
+          width={sigmaPx * 2}
+          height="220"
+          fill="rgba(216,198,154,0.07)"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, delay: 1.4 }}
+        />
+
+        {/* baseline axis */}
+        <line x1="40" y1="290" x2="760" y2="290" stroke="rgba(255,255,255,0.22)" />
+
+        {/* tickmarks + labels */}
+        {[
+          [60, "$60k"],
+          [64, "$64k"],
+          [68, "$68k"],
+          [72, "$72k"],
+          [76, "$76k"],
+          [80, "$80k"],
+        ].map(([v, label]) => {
+          const x = 40 + (((v as number) - 60) / 20) * 720;
+          return (
+            <g key={label as string}>
+              <line x1={x} y1="290" x2={x} y2="296" stroke="rgba(255,255,255,0.3)" />
+              <text
+                x={x}
+                y="316"
+                textAnchor="middle"
+                fontSize="10"
+                fontFamily="var(--font-jetbrains-mono), monospace"
+                letterSpacing="1.5"
+                fill="rgba(255,255,255,0.42)"
+              >
+                {label}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* curve fill */}
+        <motion.path
+          d={bellFillD}
+          fill="url(#bellFill)"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 1, delay: 0.5 }}
+        />
+        {/* curve stroke */}
+        <motion.path
+          d={bellD}
+          fill="none"
+          stroke="#d8c69a"
+          strokeWidth="2"
+          strokeLinecap="round"
+          filter="url(#bellStroke)"
+          initial={{ pathLength: 0 }}
+          whileInView={{ pathLength: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 1.6, ease: "easeOut", delay: 0.3 }}
+        />
+
+        {/* μ marker */}
+        <motion.line
+          x1={xMu}
+          y1="70"
+          x2={xMu}
+          y2="290"
+          stroke="rgba(216,198,154,0.55)"
+          strokeDasharray="2 4"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 1.6 }}
+        />
+        <motion.circle
+          cx={xMu}
+          cy="70"
+          r="5"
+          fill="#d8c69a"
+          initial={{ scale: 0 }}
+          whileInView={{ scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 1.8, type: "spring", stiffness: 300, damping: 18 }}
+        />
+        <motion.text
+          x={xMu}
+          y="52"
+          textAnchor="middle"
+          fontSize="10"
+          fontFamily="var(--font-jetbrains-mono), monospace"
+          letterSpacing="2"
+          fill="#d8c69a"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 2 }}
         >
-          <div className="col-span-12 lg:col-span-3">
-            <SectionLabel num="§ 03" title="The loop" />
-          </div>
-          <div className="col-span-12 lg:col-span-9">
-            <h2 className="font-serif text-4xl italic leading-[1] tracking-[-0.01em] text-[#f3efe6] sm:text-5xl lg:text-[4.5rem]">
-              Three steps.
-              <span className="block text-white/40">No order book.</span>
-            </h2>
-          </div>
-        </motion.div>
+          μ · 68.2k
+        </motion.text>
 
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-3">
-          {steps.map((s, i) => (
-            <motion.div
-              key={s.n}
-              variants={reveal}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ delay: i * 0.12 }}
-              className={`relative px-2 py-10 md:px-10 ${
-                i !== steps.length - 1 ? "md:border-r md:border-white/10" : ""
-              }`}
-            >
-              <div className="flex items-baseline justify-between">
-                <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#d8c69a]">
-                  {s.n}
-                </div>
-                <div className="text-white/30">{s.glyph}</div>
-              </div>
-              <h3 className="mt-8 font-serif text-4xl italic leading-tight text-[#f3efe6]">
-                {s.title}
-              </h3>
-              <p className="mt-4 max-w-xs text-[14px] leading-[1.55] text-white/55">{s.body}</p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function GlyphCurve() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-      <path d="M2 32 C 10 32, 14 26, 20 12 C 26 26, 30 32, 38 32" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <line x1="20" y1="12" x2="20" y2="32" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
-    </svg>
-  );
-}
-
-function GlyphBalance() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-      <line x1="6" y1="20" x2="34" y2="20" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="12" cy="20" r="4" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <rect x="24" y="14" width="10" height="12" stroke="currentColor" strokeWidth="1.2" fill="none" />
-    </svg>
-  );
-}
-
-function GlyphTarget() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-      <circle cx="20" cy="20" r="14" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="20" cy="20" r="8" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="20" cy="20" r="2" fill="currentColor" />
-    </svg>
-  );
-}
-
-/* ---------------------------------------------------------------- */
-/* § 04 — EXAMPLES                                                   */
-/* ---------------------------------------------------------------- */
-
-type Example = {
-  category: string;
-  question: string;
-  oracle: "T0" | "T1" | "T2" | "T3";
-  oracleLabel: string;
-  window: string;
-  marker: string;
-  /** sparkline path data (viewBox 200x60) */
-  path: string;
-};
-
-const EXAMPLES: Example[] = [
-  {
-    category: "Crypto · BTC/USD",
-    question: "Where does BTC drift in 90 seconds?",
-    oracle: "T0",
-    oracleLabel: "Trustless · Reflector",
-    window: "90s · trajectory",
-    marker: "μ · 68.2k",
-    path: "M0,45 C 30,42 50,38 80,30 C 110,22 140,12 170,10 C 185,9 195,8 200,7",
-  },
-  {
-    category: "Politics · US 2028",
-    question: "What is the popular-vote margin?",
-    oracle: "T1",
-    oracleLabel: "Attested · certified result",
-    window: "scalar · ± 20pp",
-    marker: "μ · +3.4",
-    path: "M0,50 C 30,48 50,40 80,22 C 95,14 105,12 120,18 C 140,28 160,46 200,52",
-  },
-  {
-    category: "Weather · Mumbai",
-    question: "How much rain falls tomorrow?",
-    oracle: "T1",
-    oracleLabel: "Attested · met. service",
-    window: "scalar · 0–300mm",
-    marker: "μ · 8mm",
-    path: "M0,52 C 20,40 35,14 55,16 C 75,18 90,42 120,50 C 150,55 180,55 200,55",
-  },
-  {
-    category: "Film · Opening weekend",
-    question: "How much does it gross domestically?",
-    oracle: "T2",
-    oracleLabel: "Optimistic · bonded dispute",
-    window: "scalar · $0–500M",
-    marker: "μ · $74M",
-    path: "M0,54 C 30,52 60,48 90,32 C 110,20 125,16 145,20 C 165,26 185,46 200,52",
-  },
-];
-
-function ExamplesSection() {
-  return (
-    <section className="relative border-t border-white/10 px-6 py-28 sm:px-10 lg:py-40">
-      <div className="mx-auto max-w-[1400px]">
-        <motion.div
-          variants={reveal}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-12 gap-x-6 gap-y-10"
+        {/* threshold cut — the dotted line where a binary market would slice */}
+        <motion.line
+          x1={xThreshold}
+          y1="20"
+          x2={xThreshold}
+          y2="290"
+          stroke="rgba(255,255,255,0.35)"
+          strokeDasharray="3 5"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 2.2, duration: 0.4 }}
+        />
+        <motion.text
+          x={xThreshold + 8}
+          y="34"
+          fontSize="10"
+          fontFamily="var(--font-jetbrains-mono), monospace"
+          letterSpacing="2"
+          fill="rgba(255,255,255,0.5)"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 2.3 }}
         >
-          <div className="col-span-12 lg:col-span-3">
-            <SectionLabel num="§ 04" title="In the wild" />
-          </div>
-          <div className="col-span-12 lg:col-span-9">
-            <h2 className="font-serif text-5xl italic leading-[1] tracking-[-0.01em] text-[#f3efe6] sm:text-6xl lg:text-[5.5rem]">
-              Anything quantifiable.
-              <span className="block text-white/40">Same primitive.</span>
-            </h2>
-            <p className="mt-8 max-w-xl text-[15px] leading-[1.6] text-white/55">
-              Supply an outcome space and a resolver. The protocol does the rest. Every tier is
-              clearly labeled — you always know what you&apos;re trusting.
-            </p>
-          </div>
-        </motion.div>
+          binary cuts here →
+        </motion.text>
+      </svg>
 
-        <div className="mt-20 grid grid-cols-1 gap-px bg-white/10 md:grid-cols-2">
-          {EXAMPLES.map((ex, i) => (
-            <motion.div
-              key={ex.question}
-              variants={reveal}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ delay: (i % 2) * 0.08 + Math.floor(i / 2) * 0.04 }}
-            >
-              <ExampleCard ex={ex} />
-            </motion.div>
-          ))}
+      {/* readout chip */}
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ delay: 2.4, duration: 0.5 }}
+        className="absolute right-8 top-8 hidden border border-[#d8c69a]/40 bg-[#0b0b0c]/85 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] backdrop-blur sm:block"
+      >
+        <div className="text-[#d8c69a]">Your forecast</div>
+        <div className="mt-1 text-white/55">μ 68.2k · σ 1.4k</div>
+      </motion.div>
+    </div>
+  );
+}
+
+function BinaryBars() {
+  return (
+    <div className="relative flex h-full flex-col px-6 pb-10 pt-10 sm:px-8 lg:pt-12">
+      {/* PUNCHLINE — dominates the panel */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 0.61, 0.36, 1] }}
+        className="relative z-10"
+      >
+        <p className="font-serif text-[36px] font-bold leading-[1] tracking-[-0.025em] text-[#f3efe6] sm:text-[44px] lg:text-[48px]">
+          Kaido is built for the{" "}
+          <span className="text-[#d8c69a]">interesting questions.</span>
+        </p>
+
+        <div className="mt-10 flex flex-col items-center text-center">
+          <p className="font-serif text-[18px] leading-[1.25] tracking-[-0.01em] text-white/55 sm:text-[20px]">
+            For questions that aren&apos;t just a
+          </p>
+          <p
+            className="relative mt-4 font-serif text-[52px] font-black leading-[0.95] tracking-[0.02em] text-[#f3efe6] sm:text-[68px] lg:text-[76px]"
+            style={{
+              textShadow:
+                "0 0 24px rgba(216,198,154,0.55), 0 0 52px rgba(216,198,154,0.28), 0 0 120px rgba(216,198,154,0.14)",
+            }}
+          >
+            <span className="relative inline-block">
+              YES <span className="text-white/35">OR</span> NO
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-[-4%] right-[-4%] top-1/2 h-px -translate-y-1/2 bg-gradient-to-r from-transparent via-[#d8c69a]/70 to-transparent"
+              />
+            </span>
+            <span className="text-[#d8c69a]">.</span>
+          </p>
+        </div>
+      </motion.div>
+
+      {/* BINARY — receding into the background, blurred + fading to nothing */}
+      <div
+        aria-hidden
+        className="pointer-events-none relative mt-10 select-none opacity-55 blur-[2px] [mask-image:linear-gradient(to_bottom,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.35)_55%,transparent_100%)]"
+      >
+        <div className="mb-6 flex items-baseline justify-between">
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+            Settles · BTC ≥ $70k
+          </span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/25">
+            Polymarket-style
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col items-center justify-center border border-white/12 bg-white/[0.02] px-3 py-5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/50">
+              Yes
+            </span>
+            <span className="mt-2 font-serif text-3xl tracking-[-0.01em] text-white/85">38¢</span>
+            <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/30">
+              above $70k
+            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center border border-white/12 bg-white/[0.02] px-3 py-5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/50">
+              No
+            </span>
+            <span className="mt-2 font-serif text-3xl tracking-[-0.01em] text-white/85">62¢</span>
+            <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/30">
+              at or below
+            </span>
+          </div>
         </div>
       </div>
-    </section>
+
+    </div>
   );
 }
 
-function ExampleCard({ ex }: { ex: Example }) {
-  return (
-    <article className="group relative flex h-full flex-col gap-10 bg-[#0b0b0c] p-8 transition-colors hover:bg-[#0e0e10] lg:p-12">
-      <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em]">
-        <span className="text-[#d8c69a]">{ex.category}</span>
-        <OracleBadge tier={ex.oracle} label={ex.oracleLabel} />
-      </div>
-
-      <h3 className="font-serif text-3xl italic leading-[1.05] text-[#f3efe6] lg:text-4xl">
-        {ex.question}
-      </h3>
-
-      <div className="mt-auto">
-        <svg viewBox="0 0 200 60" className="h-14 w-full" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id={`ex-${ex.oracle}-${ex.category}`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#d8c69a" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#d8c69a" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path d={`${ex.path} L 200,60 L 0,60 Z`} fill={`url(#ex-${ex.oracle}-${ex.category})`} />
-          <path d={ex.path} fill="none" stroke="#d8c69a" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-        <div className="mt-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-          <span>{ex.window}</span>
-          <span className="text-[#d8c69a]/80">{ex.marker}</span>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function OracleBadge({ tier, label }: { tier: "T0" | "T1" | "T2" | "T3"; label: string }) {
-  const tone = {
-    T0: "text-[#d8c69a] border-[#d8c69a]/40",
-    T1: "text-white/70 border-white/30",
-    T2: "text-white/55 border-white/20",
-    T3: "text-white/40 border-white/15",
-  }[tier];
-  return (
-    <span className={`inline-flex items-center gap-1.5 border px-2 py-1 ${tone}`}>
-      <span className="font-semibold">{tier}</span>
-      <span className="text-white/40">·</span>
-      <span className="text-white/45 normal-case tracking-normal">{label}</span>
-    </span>
-  );
-}
 
 /* ---------------------------------------------------------------- */
-/* § 05 — MECHANISM                                                  */
+/* § 02 — WHAT A BET LOOKS LIKE — lifecycle of one position          */
 /* ---------------------------------------------------------------- */
 
-function MechanismSection() {
+function BeliefSection() {
   return (
-    <section className="relative overflow-hidden border-t border-white/10 bg-[#08080a] px-6 py-28 sm:px-10 lg:py-40">
-      <div className="pointer-events-none absolute inset-0 opacity-[0.05] [background-image:radial-gradient(rgba(255,255,255,0.6)_1px,transparent_1px)] [background-size:3px_3px]" />
+    <section className="relative overflow-hidden border-t border-white/10 px-6 py-28 sm:px-10 lg:py-40">
+      <div className="pointer-events-none absolute -right-40 top-1/4 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.05),transparent_70%)]" />
+
       <div className="relative mx-auto max-w-[1400px]">
         <motion.div
           variants={reveal}
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-12 gap-x-6 gap-y-10"
         >
-          <div className="col-span-12 lg:col-span-3">
-            <SectionLabel num="§ 05" title="The mechanism" />
-          </div>
-          <div className="col-span-12 lg:col-span-9">
-            <h2 className="font-serif text-5xl italic leading-[1] tracking-[-0.01em] text-[#f3efe6] sm:text-6xl lg:text-[5.5rem]">
-              Geometry, not bookmakers.
-            </h2>
-            <p className="mt-8 max-w-2xl text-[15px] leading-[1.6] text-white/55">
-              An AMM with the <em className="font-serif text-[#f3efe6]">L²-norm</em> as its
-              invariant — like Uniswap&apos;s <em className="font-serif text-[#f3efe6]">xy=k</em>,
-              but for entire probability distributions. In equilibrium, the market&apos;s state
-              becomes the crowd&apos;s forecast.
-            </p>
-          </div>
+          <h2
+            className="w-full font-serif leading-[0.92] tracking-[-0.045em] text-[#f3efe6]"
+            style={{ fontSize: "clamp(2.5rem, 9vw, 12rem)" }}
+          >
+            <span className="block whitespace-nowrap">Your belief on a curve.</span>
+            <span className="block whitespace-nowrap text-white/40">your capital more efficient.</span>
+          </h2>
         </motion.div>
 
         <motion.div
@@ -852,29 +592,109 @@ function MechanismSection() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="mt-20 grid grid-cols-12 gap-6 lg:gap-10"
+          className="mt-20"
         >
-          {/* Sphere visualization */}
-          <div className="col-span-12 lg:col-span-5">
-            <SphereVisual />
+          <BetLifecycle />
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+function BetLifecycle() {
+  const cards = [
+    {
+      title: "Markets for numbers.",
+      label: "Outcome space",
+      body: "Any question that resolves to a number can be a market — a closing price, a vote margin, a CPI print, a box-office gross. Pick the range, pick the oracle, ship it.",
+    },
+    {
+      title: "Position is a shape.",
+      label: "Forecast",
+      body: "You set where you think the number lands and how confident you are. The AMM prices your whole curve against the crowd — one position, one trade, one click.",
+    },
+    {
+      title: "Closer pays more.",
+      label: "Settlement",
+      body: "When the truth arrives, your payout scales with how close your curve peaks to the realized number. Nail it tight and win big. Spread wider and play it safer.",
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-px bg-white/10 lg:grid-cols-3">
+      {cards.map((c, i) => (
+        <motion.article
+          key={c.title}
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.6, delay: i * 0.12, ease: [0.22, 0.61, 0.36, 1] }}
+          className="group flex min-h-[420px] flex-col justify-between bg-[#0a0a0b] p-10 transition-colors hover:bg-[#0e0e10] lg:min-h-[520px] lg:p-12"
+        >
+          <h3 className="font-serif text-[34px] font-medium leading-[1.05] tracking-[-0.025em] text-[#f3efe6] sm:text-[40px] lg:text-[44px]">
+            {c.title}
+          </h3>
+
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">
+              {c.label}
+            </div>
+            <p className="mt-4 max-w-[36ch] text-[15px] leading-[1.6] text-white/60">{c.body}</p>
+          </div>
+        </motion.article>
+      ))}
+    </div>
+  );
+}
+
+
+function BuildersSection() {
+  return (
+    <section className="relative overflow-hidden border-t border-white/10 px-6 py-28 sm:px-10 lg:py-44">
+      <div className="pointer-events-none absolute -left-40 bottom-1/4 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.05),transparent_70%)]" />
+
+      <div className="relative mx-auto max-w-[1400px]">
+        <motion.div
+          variants={reveal}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+        >
+          <h2
+            className="w-full whitespace-nowrap font-serif leading-[0.92] tracking-[-0.045em] text-[#f3efe6]"
+            style={{ fontSize: "clamp(2.5rem, 11.2vw, 16rem)" }}
+          >
+            Any market. <span className="text-white/40">One call.</span>
+          </h2>
+        </motion.div>
+
+        <motion.div
+          variants={reveal}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-80px" }}
+          className="mt-20 grid grid-cols-12 gap-px bg-white/10"
+        >
+          <div className="col-span-12 bg-[#0a0a0b] lg:col-span-7">
+            <CodeBlock />
           </div>
 
-          {/* Invariants */}
-          <div className="col-span-12 flex flex-col justify-center gap-px bg-white/10 lg:col-span-7">
-            <InvariantRow
-              eq="‖f‖₂ = k"
-              label="Position lives on a sphere"
-              body="Every aggregate trader curve has fixed L² length. Same role as xy = k."
+          <div className="col-span-12 flex flex-col gap-px bg-white/10 lg:col-span-5">
+            <SDKRow
+              label="Question"
+              body="Any prompt with a numeric answer — a price, a margin, a count, a score."
             />
-            <InvariantRow
-              eq="f(x) ≤ b"
-              label="Always solvent"
-              body="A σ-floor or capped-Gaussian keeps the payout function under the collateral, everywhere."
+            <SDKRow
+              label="Outcome"
+              body="A scalar range, or trajectory checkpoints. You define the space; the AMM handles the rest."
             />
-            <InvariantRow
-              eq="x* ∝ p"
-              label="Equilibrium = truth"
-              body="By Cauchy–Schwarz, arbitrageurs push the curve into the true distribution."
+            <SDKRow
+              label="Resolver"
+              body="Reflector feeds out of the box. Or plug your own — attested, optimistic, or designated."
+            />
+            <SDKRow
+              label="Lifecycle"
+              body="Open · lock · resolve. Soroban handles settlement. House vault seeds initial liquidity."
             />
           </div>
         </motion.div>
@@ -884,221 +704,176 @@ function MechanismSection() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-60px" }}
-          className="mt-16 flex flex-wrap items-baseline justify-between gap-4 border-t border-white/10 pt-8 font-mono text-[10px] uppercase tracking-[0.22em] text-white/40"
+          className="mt-10 flex flex-wrap items-center justify-between gap-6 border-t border-white/10 pt-8"
         >
-          <span>Mechanism: White, D. — &quot;Distribution Markets&quot; — Paradigm, Dec 2024</span>
-          <span>Kaido v0.1 working draft</span>
+          <div className="flex items-center gap-3 border border-white/12 bg-[#0a0a0b] px-5 py-3 font-mono text-[12px] tracking-[0.04em] text-white/80">
+            <span className="text-[#d8c69a]">$</span>
+            <span className="text-white/55">npm i</span>
+            <span>@kaido/sdk</span>
+            <span className="ml-2 hidden border-l border-white/10 pl-3 text-[10px] uppercase tracking-[0.22em] text-white/35 sm:inline">
+              v0.1 · testnet
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-3 font-mono text-[11px] uppercase tracking-[0.22em]">
+            <Link
+              href="/docs"
+              className="group inline-flex items-center gap-2 text-[#f3efe6] transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0c]"
+            >
+              Read the docs
+              <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
+            </Link>
+            <Link
+              href="https://github.com/kaido"
+              className="text-white/45 transition-colors hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0c]"
+            >
+              GitHub
+            </Link>
+            <Link
+              href="/whitepaper"
+              className="text-white/45 transition-colors hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0c]"
+            >
+              Whitepaper
+            </Link>
+          </div>
         </motion.div>
       </div>
     </section>
   );
 }
 
-function SphereVisual() {
+function SDKRow({ label, body }: { label: string; body: string }) {
   return (
-    <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden border border-white/10 bg-[#0b0b0c]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(216,198,154,0.18),transparent_60%)]" />
-      <svg viewBox="0 0 400 400" className="h-full w-full">
-        <defs>
-          <radialGradient id="sphereFill" cx="35%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="#d8c69a" stopOpacity="0.18" />
-            <stop offset="60%" stopColor="#d8c69a" stopOpacity="0.04" />
-            <stop offset="100%" stopColor="#d8c69a" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <circle cx="200" cy="200" r="150" fill="url(#sphereFill)" stroke="rgba(216,198,154,0.35)" strokeWidth="1" />
-        {/* latitude lines */}
-        {[140, 170, 200, 230, 260].map((y) => {
-          const rx = Math.sqrt(150 * 150 - (y - 200) * (y - 200));
-          return (
-            <ellipse
-              key={y}
-              cx="200"
-              cy={y}
-              rx={rx}
-              ry={rx * 0.18}
-              stroke="rgba(255,255,255,0.06)"
-              fill="none"
-            />
-          );
-        })}
-        {/* longitude */}
-        <ellipse cx="200" cy="200" rx="150" ry="40" stroke="rgba(255,255,255,0.08)" fill="none" />
-        <ellipse cx="200" cy="200" rx="40" ry="150" stroke="rgba(255,255,255,0.08)" fill="none" />
-
-        {/* the position vector / curve */}
-        <motion.line
-          x1="200"
-          y1="200"
-          x2="332"
-          y2="128"
-          stroke="#d8c69a"
-          strokeWidth="1.5"
-          initial={{ pathLength: 0 }}
-          whileInView={{ pathLength: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 1.2, ease: "easeOut", delay: 0.4 }}
-        />
-        <motion.circle
-          cx="332"
-          cy="128"
-          r="5"
-          fill="#d8c69a"
-          initial={{ scale: 0 }}
-          whileInView={{ scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 1.6, type: "spring", stiffness: 300, damping: 18 }}
-        />
-        <motion.circle
-          cx="332"
-          cy="128"
-          r="12"
-          fill="none"
-          stroke="#d8c69a"
-          strokeOpacity="0.3"
-          initial={{ scale: 0, opacity: 0 }}
-          whileInView={{ scale: 1, opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 1.7, duration: 0.6 }}
-        />
-        {/* center marker */}
-        <circle cx="200" cy="200" r="2" fill="rgba(255,255,255,0.5)" />
-      </svg>
-      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-        <span>Position vector · ‖x‖ = k</span>
-        <span className="text-[#d8c69a]/80">Hilbert space</span>
+    <div className="group flex flex-col gap-3 bg-[#0a0a0b] p-7 transition-colors hover:bg-[#0e0e10] lg:flex-row lg:items-baseline lg:gap-8 lg:p-8">
+      <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a] lg:w-28">
+        {label}
       </div>
+      <p className="flex-1 text-[15px] leading-[1.55] text-white/65">{body}</p>
     </div>
-  );
-}
-
-function InvariantRow({ eq, label, body }: { eq: string; label: string; body: string }) {
-  return (
-    <div className="group flex flex-col gap-3 bg-[#08080a] p-8 transition-colors hover:bg-[#0c0c0e] lg:flex-row lg:items-baseline lg:gap-10 lg:p-10">
-      <div className="font-serif text-3xl italic text-[#d8c69a] lg:w-48">{eq}</div>
-      <div className="flex-1">
-        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#f3efe6]">{label}</div>
-        <p className="mt-2 text-[14px] leading-[1.55] text-white/55">{body}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- */
-/* § 06 — BUILDERS                                                   */
-/* ---------------------------------------------------------------- */
-
-function BuildersSection() {
-  return (
-    <section className="relative border-t border-white/10 px-6 py-28 sm:px-10 lg:py-40">
-      <div className="mx-auto max-w-[1400px]">
-        <motion.div
-          variants={reveal}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-12 gap-x-6 gap-y-10"
-        >
-          <div className="col-span-12 lg:col-span-3">
-            <SectionLabel num="§ 06" title="For builders" />
-          </div>
-          <div className="col-span-12 lg:col-span-9">
-            <h2 className="font-serif text-5xl italic leading-[1] tracking-[-0.01em] text-[#f3efe6] sm:text-6xl lg:text-[5.5rem]">
-              One call.
-              <span className="block text-white/40">New market.</span>
-            </h2>
-            <p className="mt-8 max-w-xl text-[15px] leading-[1.6] text-white/55">
-              An SDK and a Soroban contract. Plug your own resolver. Embed Kaido markets anywhere.
-            </p>
-          </div>
-        </motion.div>
-
-        <motion.div
-          variants={reveal}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          className="mt-16 grid grid-cols-12 gap-6 lg:gap-10"
-        >
-          <div className="col-span-12 lg:col-span-7">
-            <CodeBlock />
-          </div>
-          <aside className="col-span-12 flex flex-col gap-px bg-white/10 lg:col-span-5">
-            <FieldRow k="OutcomeSpace" v="ℝ range · or trajectory checkpoints" />
-            <FieldRow k="Parameterization" v="Gaussian (μ, σ) · σ-floor" />
-            <FieldRow k="Resolver" v="T0 trustless · T1 attested · T2 optimistic · T3 designated" />
-            <FieldRow k="Window" v="open · lock · resolve" />
-            <FieldRow k="House liquidity" v="auto-seeded by HouseVault" />
-          </aside>
-        </motion.div>
-      </div>
-    </section>
   );
 }
 
 function CodeBlock() {
   return (
-    <div className="relative overflow-hidden border border-white/10 bg-[#08080a]">
-      <div className="flex items-center justify-between border-b border-white/10 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-        <span>@kaido/sdk</span>
-        <span>typescript</span>
+    <div className="relative flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 font-mono text-[10px] uppercase tracking-[0.22em]">
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-2 text-[#d8c69a]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#d8c69a]" />
+            @kaido/sdk
+          </span>
+          <span className="text-white/30">·</span>
+          <span className="text-white/45">typescript</span>
+        </div>
+        <span className="text-white/35">create.ts</span>
       </div>
-      <pre className="overflow-x-auto p-6 font-mono text-[12.5px] leading-[1.7] text-white/80 sm:text-[13px]">
+
+      <pre className="flex-1 overflow-x-auto p-6 font-mono text-[13px] leading-[1.75] text-white/85 sm:p-7 sm:text-[13.5px]">
         <code>
-          <span className="text-white/35">{`// any number can be a market`}</span>
-          {"\n"}
-          <span className="text-[#d8c69a]">await</span>{" "}
-          <span className="text-white">kaido</span>.
-          <span className="text-[#d8c69a]">createMarket</span>({"({"}
-          {"\n"}
-          {"  "}
-          <span className="text-white/90">outcome</span>:{" "}
-          <span className="text-[#a3b07a]">{`"scalar"`}</span>,{" "}
-          <span className="text-white/90">range</span>:{" "}
-          <span className="text-white">[</span>
-          <span className="text-[#e6a85c]">-20</span>,{" "}
-          <span className="text-[#e6a85c]">20</span>
-          <span className="text-white">]</span>,{"\n"}
-          {"  "}
-          <span className="text-white/90">parameterization</span>:{" "}
-          <span className="text-[#a3b07a]">{`"gaussian"`}</span>,{" "}
-          <span className="text-white/90">sigmaFloor</span>:{" "}
-          <span className="text-[#e6a85c]">0.5</span>,{"\n"}
-          {"  "}
-          <span className="text-white/90">resolver</span>:{" "}
-          <span className="text-white">{`{`}</span>{" "}
-          <span className="text-white/90">tier</span>:{" "}
-          <span className="text-[#a3b07a]">{`"T1"`}</span>,{" "}
-          <span className="text-white/90">attestor</span>:{" "}
-          <span className="text-[#a3b07a]">{`"GCERT…"`}</span>{" "}
-          <span className="text-white">{`}`}</span>,{"\n"}
-          {"  "}
-          <span className="text-white/90">window</span>:{" "}
-          <span className="text-white">{`{`}</span>{" "}
-          <span className="text-white/90">resolveAt</span>:{" "}
-          <span className="text-[#a3b07a]">{`"2028-11-10T00:00Z"`}</span>{" "}
-          <span className="text-white">{`}`}</span>,{"\n"}
-          {"  "}
-          <span className="text-white/90">fee</span>:{" "}
-          <span className="text-[#e6a85c]">100</span>{" "}
-          <span className="text-white/35">{`// bps`}</span>,{"\n"}
-          {"}"})
+          <CodeLine>
+            <CodeKw>import</CodeKw> <CodeText>{"{"} kaido {"}"}</CodeText>{" "}
+            <CodeKw>from</CodeKw> <CodeStr>{`"@kaido/sdk"`}</CodeStr>
+            <CodeText>;</CodeText>
+          </CodeLine>
+          <CodeLine />
+          <CodeLine>
+            <CodeKw>const</CodeKw> <CodeText>market</CodeText> <CodeOp>=</CodeOp>{" "}
+            <CodeKw>await</CodeKw> <CodeFn>kaido.createMarket</CodeFn>
+            <CodeText>{"({"}</CodeText>
+          </CodeLine>
+          <CodeLine indent={2}>
+            <CodeKey>question</CodeKey>
+            <CodeText>: </CodeText>
+            <CodeStr>{`"Where does BTC close on Friday?"`}</CodeStr>
+            <CodeText>,</CodeText>
+          </CodeLine>
+          <CodeLine indent={2}>
+            <CodeKey>outcome</CodeKey>
+            <CodeText>: {"{"} </CodeText>
+            <CodeKey>type</CodeKey>
+            <CodeText>: </CodeText>
+            <CodeStr>{`"scalar"`}</CodeStr>
+            <CodeText>, </CodeText>
+            <CodeKey>range</CodeKey>
+            <CodeText>: [</CodeText>
+            <CodeNum>60_000</CodeNum>
+            <CodeText>, </CodeText>
+            <CodeNum>80_000</CodeNum>
+            <CodeText>] {"}"},</CodeText>
+          </CodeLine>
+          <CodeLine indent={2}>
+            <CodeKey>resolver</CodeKey>
+            <CodeText>: {"{"} </CodeText>
+            <CodeKey>kind</CodeKey>
+            <CodeText>: </CodeText>
+            <CodeStr>{`"reflector"`}</CodeStr>
+            <CodeText>, </CodeText>
+            <CodeKey>feed</CodeKey>
+            <CodeText>: </CodeText>
+            <CodeStr>{`"BTC/USD"`}</CodeStr>
+            <CodeText> {"}"},</CodeText>
+          </CodeLine>
+          <CodeLine indent={2}>
+            <CodeKey>resolveAt</CodeKey>
+            <CodeText>: </CodeText>
+            <CodeStr>{`"2026-05-17T21:00Z"`}</CodeStr>
+            <CodeText>,</CodeText>
+          </CodeLine>
+          <CodeLine indent={2}>
+            <CodeKey>fee</CodeKey>
+            <CodeText>: </CodeText>
+            <CodeNum>100</CodeNum>
+            <CodeText>,</CodeText> <CodeCom>{`// bps`}</CodeCom>
+          </CodeLine>
+          <CodeLine>
+            <CodeText>{"});"}</CodeText>
+          </CodeLine>
         </code>
       </pre>
-      <div className="border-t border-white/10 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]/70">
-        → returns: <span className="text-white/55">MarketAddress · PositionNFT collection</span>
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 px-6 py-4 font-mono text-[10px] uppercase tracking-[0.22em] text-white/45">
+        <span className="text-[#d8c69a]/80">returns</span>
+        <span>market.address</span>
+        <span className="text-white/25">·</span>
+        <span>market.positionNFT</span>
+        <span className="text-white/25">·</span>
+        <span>market.resolve()</span>
       </div>
     </div>
   );
 }
 
-function FieldRow({ k, v }: { k: string; v: string }) {
+function CodeLine({ children, indent = 0 }: { children?: React.ReactNode; indent?: number }) {
   return (
-    <div className="flex flex-col gap-1 bg-[#0b0b0c] p-5 lg:p-6">
-      <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">{k}</div>
-      <div className="text-[13.5px] leading-[1.5] text-white/65">{v}</div>
+    <div className="whitespace-pre">
+      {" ".repeat(indent * 2)}
+      {children ?? " "}
     </div>
   );
+}
+function CodeKw({ children }: { children: React.ReactNode }) {
+  return <span className="text-[#d8c69a]">{children}</span>;
+}
+function CodeFn({ children }: { children: React.ReactNode }) {
+  return <span className="text-[#f3efe6]">{children}</span>;
+}
+function CodeKey({ children }: { children: React.ReactNode }) {
+  return <span className="text-white/90">{children}</span>;
+}
+function CodeStr({ children }: { children: React.ReactNode }) {
+  return <span className="text-[#a3b07a]">{children}</span>;
+}
+function CodeNum({ children }: { children: React.ReactNode }) {
+  return <span className="text-[#e6a85c]">{children}</span>;
+}
+function CodeOp({ children }: { children: React.ReactNode }) {
+  return <span className="text-white/55">{children}</span>;
+}
+function CodeText({ children }: { children: React.ReactNode }) {
+  return <span className="text-white/70">{children}</span>;
+}
+function CodeCom({ children }: { children: React.ReactNode }) {
+  return <span className="text-white/35">{children}</span>;
 }
 
 /* ---------------------------------------------------------------- */
@@ -1106,49 +881,135 @@ function FieldRow({ k, v }: { k: string; v: string }) {
 /* ---------------------------------------------------------------- */
 
 function PaperCTA() {
+  const toc = [
+    { n: "01", t: "The primitive", p: "03" },
+    { n: "02", t: "Distribution markets", p: "11" },
+    { n: "03", t: "The AMM", p: "24" },
+    { n: "04", t: "Oracle tiering", p: "38" },
+    { n: "05", t: "Settlement", p: "52" },
+    { n: "06", t: "Economics", p: "61" },
+    { n: "07", t: "Implementation", p: "73" },
+    { n: "08", t: "Road to mainnet", p: "84" },
+    { n: "09", t: "Future work", p: "92" },
+  ];
+
   return (
-    <section className="relative border-t border-white/10 px-6 py-28 sm:px-10 lg:py-36">
-      <div className="mx-auto max-w-[1400px]">
+    <section className="relative overflow-hidden border-t border-white/10 px-6 py-28 sm:px-10 lg:py-40">
+      {/* atmosphere */}
+      <div className="pointer-events-none absolute -right-32 -top-32 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.14),transparent_60%)]" />
+      <div className="pointer-events-none absolute -bottom-32 -left-24 h-[480px] w-[480px] rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.06),transparent_60%)]" />
+
+      <div className="relative mx-auto max-w-[1400px]">
         <motion.div
           variants={reveal}
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
-          className="relative overflow-hidden border border-white/10 bg-[#0a0a0b] p-10 sm:p-16 lg:p-24"
+          className="grid grid-cols-12 gap-x-6 gap-y-12 lg:gap-x-16"
         >
-          {/* atmospheric gradients */}
-          <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.18),transparent_60%)]" />
-          <div className="pointer-events-none absolute -bottom-32 -left-24 h-96 w-96 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.06),transparent_60%)]" />
-
-          <div className="relative grid grid-cols-12 gap-x-6 gap-y-8 items-end">
-            <div className="col-span-12 lg:col-span-7">
-              <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-[#d8c69a]">
-                · The whitepaper
+          {/* LEFT — editorial pitch */}
+          <div className="col-span-12 flex flex-col justify-between lg:col-span-7">
+            <div>
+              <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.28em] text-[#d8c69a]">
+                <span className="inline-block h-px w-8 bg-[#d8c69a]" />
+                The whitepaper
               </div>
-              <h2 className="mt-6 font-serif text-5xl italic leading-[0.98] tracking-[-0.01em] text-[#f3efe6] sm:text-6xl lg:text-[5.5rem]">
-                Read the working
-                <span className="block">draft.</span>
+              <h2 className="mt-8 font-serif text-[3rem] leading-[0.95] tracking-[-0.035em] text-[#f3efe6] sm:text-[5rem] lg:text-[7.5rem]">
+                Read the
+                <span className="block text-white/40">working draft.</span>
               </h2>
-              <p className="mt-8 max-w-xl text-[15px] leading-[1.6] text-white/55">
-                Mechanism, mathematics, oracle tiering, economics, and the road from testnet to
-                mainnet. Forty minutes if you read it carefully.
+              <p className="mt-10 max-w-[48ch] text-[17px] leading-[1.6] text-white/60 sm:text-[19px]">
+                The mechanism end-to-end. AMM construction, oracle tiering, economics, and the road
+                from testnet to mainnet — with footnotes you'll actually want to follow.
               </p>
             </div>
-            <div className="col-span-12 lg:col-span-5 lg:justify-self-end">
-              <div className="flex flex-col items-start gap-4 lg:items-end">
-                <Link
-                  href="/whitepaper"
-                  className="group inline-flex items-center gap-3 rounded-full bg-[#f3efe6] px-8 py-4 text-[13px] font-medium uppercase tracking-[0.18em] text-[#0b0b0c] transition-all hover:bg-white"
-                >
-                  Open the paper
-                  <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
-                </Link>
-                <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-                  v0.1 · ~10,000 words · 9 parts
+
+            <div className="mt-12 flex flex-wrap items-center gap-x-6 gap-y-5">
+              <Link
+                href="/whitepaper"
+                className="group inline-flex items-center gap-4 rounded-full bg-[#f3efe6] px-9 py-5 text-[13px] font-medium uppercase tracking-[0.2em] text-[#0b0b0c] shadow-[0_20px_60px_-15px_rgba(216,198,154,0.45)] transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_30px_80px_-15px_rgba(216,198,154,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-4 focus-visible:ring-offset-[#0b0b0c]"
+              >
+                Open the paper
+                <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
+              </Link>
+              <Link
+                href="/whitepaper.pdf"
+                className="group inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.22em] text-white/55 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0c]"
+              >
+                Download PDF
+                <span className="text-white/30 transition-colors group-hover:text-[#d8c69a]">↓</span>
+              </Link>
+            </div>
+
+          </div>
+
+          {/* RIGHT — paper as artifact (light, like the real thing) */}
+          <motion.div
+            initial={{ opacity: 0, y: 20, rotate: -1 }}
+            whileInView={{ opacity: 1, y: 0, rotate: -1 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: 0.9, delay: 0.25, ease: [0.22, 0.61, 0.36, 1] }}
+            className="col-span-12 lg:col-span-5"
+          >
+            <Link
+              href="/whitepaper"
+              className="group relative block transition-transform duration-500 hover:rotate-0 hover:-translate-y-2 focus-visible:outline-none focus-visible:rotate-0"
+              aria-label="Open Kaido whitepaper"
+            >
+              {/* paper drop shadow stack */}
+              <div className="pointer-events-none absolute -inset-4 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(216,198,154,0.18),transparent_60%)] blur-2xl" />
+
+              <div className="relative bg-[#f3efe6] p-7 text-[#0b0b0c] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7),0_8px_24px_-8px_rgba(216,198,154,0.4)] sm:p-9 lg:p-10">
+                {/* paper grain */}
+                <div className="pointer-events-none absolute inset-0 opacity-[0.05] [background-image:radial-gradient(rgba(0,0,0,0.6)_1px,transparent_1px)] [background-size:3px_3px]" />
+
+                <div className="relative">
+                  <div className="flex items-baseline justify-between font-mono text-[9px] uppercase tracking-[0.28em] text-[#0b0b0c]/55">
+                    <span>Kaido Labs</span>
+                    <span>v0.1 · 2026</span>
+                  </div>
+
+                  <h3 className="mt-7 font-serif text-[34px] leading-[0.95] tracking-[-0.02em] text-[#0b0b0c] sm:text-[40px]">
+                    Distribution
+                    <br />
+                    Markets
+                    <span className="mt-1 block text-[22px] tracking-[-0.01em] text-[#0b0b0c]/55 sm:text-[26px]">
+                      for Stellar
+                    </span>
+                  </h3>
+
+                  <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.22em] text-[#0b0b0c]/55">
+                    Kaido Labs · working draft
+                  </div>
+
+                  <ol className="mt-8 grid grid-cols-1 gap-1.5 border-t border-[#0b0b0c]/15 pt-5 font-mono text-[10.5px] uppercase tracking-[0.18em]">
+                    {toc.map((row, i) => (
+                      <li
+                        key={row.n}
+                        className={`flex items-baseline gap-3 ${
+                          i > 4 ? "text-[#0b0b0c]/30" : "text-[#0b0b0c]/65"
+                        }`}
+                      >
+                        <span className="w-9 text-[#0b0b0c]/35">§ {row.n}</span>
+                        <span className="flex-1 truncate">{row.t}</span>
+                        <span className="font-mono text-[#0b0b0c]/40">p. {row.p}</span>
+                      </li>
+                    ))}
+                  </ol>
+
+                  <div className="mt-7 flex items-center justify-between border-t border-dashed border-[#0b0b0c]/20 pt-4 font-mono text-[10px] uppercase tracking-[0.22em] text-[#0b0b0c]/55">
+                    <span className="flex items-center gap-2 text-[#0b0b0c]/75 transition-colors group-hover:text-[#0b0b0c]">
+                      Open the paper
+                      <span className="inline-block transition-transform group-hover:translate-x-1">
+                        →
+                      </span>
+                    </span>
+                    <span>9 parts</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </Link>
+          </motion.div>
         </motion.div>
       </div>
     </section>
