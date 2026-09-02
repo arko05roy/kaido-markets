@@ -188,6 +188,8 @@ fn full_lifecycle_conserves_usdc_with_blend_tap() {
         w.market.get_state().status,
         MarketStatus::Resolved(_)
     ));
+    assert!(adapter.outstanding_debt(&w.market.address) > 0);
+    assert!(w.market.blend_backed_usdc() > 0);
 
     let trader_got = w.market.claim(&id);
     assert_eq!(adapter.outstanding_debt(&w.market.address), 0);
@@ -218,6 +220,7 @@ fn blend_tap_first_trade_no_seed() {
         .trade(&trader, &(55 * WAD), &(2 * WAD), &10_000_000_000i128);
 
     assert!(adapter.outstanding_debt(&w.market.address) > 0);
+    assert!(w.market.blend_backed_usdc() > 0);
 }
 
 #[test]

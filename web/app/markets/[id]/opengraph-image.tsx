@@ -11,7 +11,7 @@ export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const saved = getSavedMarketQuestion(activeNetworkId(), id);
+  const saved = await getSavedMarketQuestion(activeNetworkId(), id);
   let crowd = "";
   try {
     const { state } = await getMarketState(id);

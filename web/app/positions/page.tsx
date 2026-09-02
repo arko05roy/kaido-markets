@@ -2,7 +2,7 @@ import { PositionsBoard } from "@/components/positions/positions-board";
 import { ErrorState, Panel } from "@/components/app/kaido-ui";
 import { displayMarketQuestion } from "@/lib/market-metadata";
 import { buildKaidoConfig } from "@/lib/kaido-config";
-import { loadMarketMetadataStore } from "@/lib/market-metadata-store";
+import { loadMarketMetadataForNetwork } from "@/lib/market-metadata-store";
 import { activeNetworkId } from "@/lib/stellar/networks";
 import { listMarkets } from "@/lib/stellar/kaido";
 
@@ -18,7 +18,7 @@ export default async function PositionsPage() {
     error = e instanceof Error ? e.message : String(e);
   }
 
-  const metadata = loadMarketMetadataStore()[network] ?? {};
+  const metadata = await loadMarketMetadataForNetwork(network);
   const titlesByMarket: Record<string, string> = {};
   for (const m of markets ?? []) {
     titlesByMarket[m.address] = displayMarketQuestion(

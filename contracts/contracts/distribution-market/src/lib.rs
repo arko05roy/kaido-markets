@@ -116,6 +116,8 @@ enum DataKey {
     ResolvedOutcomes,
     /// Optional BlendTap adapter — `None` disables JIT borrow (local tests).
     BlendAdapter,
+    /// `i128` — USDC (7-dp) from Blend borrows still held by the market.
+    BlendBackedUsdc,
 }
 
 #[contract]
@@ -218,6 +220,7 @@ impl DistributionMarket {
         storage.set(&DataKey::CreatorFees, &0i128);
         storage.set(&DataKey::LockedCollateral, &0i128);
         storage.set(&DataKey::BlendAdapter, &blend_adapter);
+        storage.set(&DataKey::BlendBackedUsdc, &0i128);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
         MarketCreated {
@@ -409,7 +412,7 @@ impl DistributionMarket {
         env.storage()
             .persistent()
             .remove(&DataKey::Position(position_id));
-        maybe_blend_unwind_claim(&env);
+        maybe_blend_unwind_claim(&env, returned_7dp);
         if returned_7dp > 0 {
             let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
             token::TokenClient::new(&env, &usdc).transfer(
@@ -746,6 +749,7 @@ impl DistributionMarket {
         storage.set(&DataKey::CreatorFees, &0i128);
         storage.set(&DataKey::LockedCollateral, &0i128);
         storage.set(&DataKey::BlendAdapter, &blend_adapter);
+        storage.set(&DataKey::BlendBackedUsdc, &0i128);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
         // reuse `MarketCreated` with the first checkpoint's belief as a summary.
@@ -966,6 +970,14 @@ impl DistributionMarket {
         }
     }
 
+    /// USDC (7-dp) from Blend borrows still held by this market's wallet.
+    pub fn blend_backed_usdc(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::BlendBackedUsdc)
+            .unwrap_or(0)
+    }
+
     /// `(treasury_fees_wad, creator_fees_wad)`.
     pub fn pending_fees(env: Env) -> (i128, i128) {
         let s = env.storage().instance();
@@ -1133,7 +1145,12 @@ fn maybe_blend_tap_trade(env: &Env, collateral_7dp: i128) {
         borrow_7dp,
     ));
     adapter_client.borrow_for_market(&market, &collateral_7dp, &borrow_7dp);
+    let backed: i128 = storage.get(&DataKey::BlendBackedUsdc).unwrap_or(0);
+    storage.set(&DataKey::BlendBackedUsdc, &(backed + borrow_7dp));
 }
+
+/// Matches `blend-adapter::REPAY_INTEREST_BUFFER_7DP`.
+const BLEND_INTEREST_BUFFER_7DP: i128 = 10_000;
 
 /// BlendTap: repay outstanding debt from a loser's forfeit at claim time.
 #[allow(dead_code)]
@@ -1160,7 +1177,9 @@ fn maybe_blend_repay_claim(env: &Env, collateral_wad: i128, returned_wad: i128) 
 }
 
 /// BlendTap: withdraw posted collateral and clear outstanding debt before payout.
-fn maybe_blend_unwind_claim(env: &Env) {
+/// Prepay is capped to blend-borrow proceeds (plus a small interest buffer) and
+/// never sweeps unrelated settlement reserves or the current claim payout.
+fn maybe_blend_unwind_claim(env: &Env, reserve_payout_7dp: i128) {
     let storage = env.storage().instance();
     let adapter: Option<Address> = storage.get(&DataKey::BlendAdapter).unwrap_or(None);
     let adapter = match adapter {
@@ -1172,14 +1191,26 @@ fn maybe_blend_unwind_claim(env: &Env) {
     let tok = token::TokenClient::new(env, &usdc);
     let debt = BlendAdapterClient::new(env, &adapter).outstanding_debt(&market);
     if debt > 0 {
-        // Fund adapter for repay + accrued interest buffer before unwind.
-        let prepay = tok.balance(&market);
+        let market_bal = tok.balance(&market);
+        let available = market_bal.saturating_sub(reserve_payout_7dp);
+        let backed: i128 = storage.get(&DataKey::BlendBackedUsdc).unwrap_or(0);
+        let need = debt.saturating_add(BLEND_INTEREST_BUFFER_7DP);
+        let prepay = need
+            .min(backed.saturating_add(BLEND_INTEREST_BUFFER_7DP))
+            .min(available);
         if prepay > 0 {
             tok.transfer(&market, &adapter, &prepay);
+            storage.set(
+                &DataKey::BlendBackedUsdc,
+                &backed.saturating_sub(prepay.min(backed)),
+            );
         }
     }
     env.authorize_as_current_contract(adapter_unwind_auth(env, &adapter, &market));
     BlendAdapterClient::new(env, &adapter).unwind_for_claim(&market);
+    if BlendAdapterClient::new(env, &adapter).outstanding_debt(&market) == 0 {
+        storage.set(&DataKey::BlendBackedUsdc, &0i128);
+    }
 }
 
 fn adapter_borrow_auth(

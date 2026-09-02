@@ -5,7 +5,7 @@ import { getMarketEvents } from "@/lib/indexer";
 import { aggregateMarketStats24h } from "@/lib/market-stats";
 import { GhostLink } from "@/components/app/kaido-ui";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
-import { loadMarketMetadataStore } from "@/lib/market-metadata-store";
+import { loadMarketMetadataForNetwork } from "@/lib/market-metadata-store";
 import { isTradingWindowOpen } from "@/lib/market-display";
 import { getLedgerNowSec } from "@/lib/stellar/ledger";
 import { listMarkets } from "@/lib/stellar/kaido";
@@ -30,7 +30,7 @@ export default async function MarketsPage() {
     markets?.filter((m) =>
       isTradingWindowOpen(m.status?.tag, m.info.window, ledgerNowSec ?? undefined),
     ).length ?? 0;
-  const metadataByMarket = loadMarketMetadataStore()[network] ?? {};
+  const metadataByMarket = await loadMarketMetadataForNetwork(network);
 
   const statsByMarket: Record<string, MarketStats24h> = {};
   if (markets) {

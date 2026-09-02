@@ -304,7 +304,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                     },
                     {
-                      "i128": "6042038"
+                      "i128": "6042037"
                     }
                   ]
                 }
@@ -379,7 +379,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                     },
                     {
-                      "i128": "6019165"
+                      "i128": "6019163"
                     }
                   ]
                 }
@@ -454,7 +454,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                     },
                     {
-                      "i128": "2779059"
+                      "i128": "2779056"
                     }
                   ]
                 }
@@ -529,7 +529,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                     },
                     {
-                      "i128": "2458786"
+                      "i128": "2458785"
                     }
                   ]
                 }
@@ -880,6 +880,18 @@
                         ]
                       },
                       "val": "void"
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "BlendBackedUsdc"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
+                      }
                     },
                     {
                       "key": {

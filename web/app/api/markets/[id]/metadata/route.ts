@@ -34,7 +34,7 @@ export async function POST(
   }
 
   try {
-    const saved = saveMarketQuestionToStore(activeNetworkId(), id, {
+    const saved = await saveMarketQuestionToStore(activeNetworkId(), id, {
       question,
       ...(body.marketStyle === "binary" || body.marketStyle === "kaido"
         ? { marketStyle: body.marketStyle }

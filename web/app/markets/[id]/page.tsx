@@ -49,7 +49,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   try {
-    const saved = getSavedMarketQuestion(activeNetworkId(), id);
+    const saved = await getSavedMarketQuestion(activeNetworkId(), id);
     const title = saved ?? `Market ${id.slice(0, 8)}…`;
     return {
       title: `${title} · Kaido`,
@@ -106,7 +106,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
         : state.status.tag === "ResolvedVec"
           ? (await getResolvedOutcomes(id)).map((x) => x.toString())
           : [];
-    const savedMeta = getSavedMarketMetadata(activeNetworkId(), id);
+    const savedMeta = await getSavedMarketMetadata(activeNetworkId(), id);
     const view: TradeMarketView = {
       address: id,
       kind: isTraj ? "trajectory" : "scalar",
@@ -168,7 +168,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
   }
 
   const config = buildKaidoConfig();
-  const savedQuestion = getSavedMarketQuestion(activeNetworkId(), id);
+  const savedQuestion = await getSavedMarketQuestion(activeNetworkId(), id);
   const marketTitle =
     data && !error
       ? displayMarketQuestion(data.params, data.crowdMuWad, savedQuestion)
