@@ -216,9 +216,23 @@ Tooling: **pnpm** + **Turborepo** for JS; **cargo-make** (`Makefile.toml`) for R
 
 ---
 
-### Sprint 0 — Inception (1 week, pre-build)
+### Sprint 0 — Inception (1 week, pre-build) — ✅ COMPLETE (2026-05-11)
 
 **Goal:** repo skeleton, decisions, environments — nothing user-facing.
+
+> **Status: done.** Monorepo (pnpm/turbo + Cargo/cargo-make), Next.js 16 web shell
+> (React Compiler on, shadcn/ui, shared Tailwind preset in `packages/config`),
+> all 8 contract crates + `kaido-math` + `kaido-common` as compiling WASM
+> scaffolds with no-op fns, CI workflows (`ci-contracts`, `ci-web`,
+> `deploy-testnet`), `.env.example`, ADR-0/1/5, `make localnet`.
+> **Deviation:** the project develops/deploys against **Stellar Testnet** by
+> default (no local Docker node required) — `make localnet` is kept as the
+> optional offline path. `contracts/scripts/deploy.sh` is a working, idempotent
+> upload→deploy→record pipeline; the 8 scaffold contracts are deployed to
+> Testnet and recorded in `config/networks.testnet.json` (they'll be re-deployed
+> as real logic lands). Outstanding (repo-admin / external, not code):
+> branch protection on `main`; "README verified by a second person".
+> Tags: skeleton `b4f6f25`, testnet default + deploy `f405e35`.
 
 Tasks:
 - Init monorepo: `pnpm-workspace.yaml`, `turbo.json`, root `package.json`, `contracts/Cargo.toml` workspace, `rust-toolchain.toml`, `Makefile.toml`.

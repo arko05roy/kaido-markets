@@ -10,8 +10,9 @@ auto-paid against the truth.
   test strategy, SCF tranche mapping)
 - **Decisions:** [`docs/adr/`](docs/adr/)
 
-> Status: **Sprint 0 — skeleton.** Nothing user-facing yet. The contracts are
-> no-op scaffolds; the web app is a shell. Sprint 1 starts the math core + AMM.
+> Status: **Sprint 0 complete** (2026-05-11) — skeleton in place; develops/deploys
+> against Stellar Testnet. The contracts are still no-op scaffolds and the web app
+> is a shell. **Sprint 1 (math core + AMM walking skeleton) is next.**
 
 ## Repo layout
 
