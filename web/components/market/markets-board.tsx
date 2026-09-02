@@ -11,13 +11,22 @@ import {
   PrimaryLink,
 } from "@/components/app/kaido-ui";
 import { MarketCardItem } from "@/components/market/market-card";
+import {
+  MarketFilterSheet,
+  MobileFilterTrigger,
+} from "@/components/market/market-filter-sheet";
 import { statusLabel } from "@/lib/market-display";
 import type { SavedMarketMetadata } from "@/lib/market-metadata";
+import type { MarketStats24h } from "@/lib/market-stats";
 import type { MarketCard } from "@/lib/market-types";
 
-export type MarketFilter = "all" | "hot" | "closing" | "new" | "wide";
+export type MarketFilter = "all" | "hot" | "closing" | "new" | "wide" | "moves";
 
-function sortMarkets(markets: MarketCard[], filter: MarketFilter): MarketCard[] {
+function sortMarkets(
+  markets: MarketCard[],
+  filter: MarketFilter,
+  statsByMarket: Record<string, MarketStats24h>,
+): MarketCard[] {
   const now = Math.floor(Date.now() / 1000);
   const copy = [...markets];
   switch (filter) {
@@ -35,6 +44,21 @@ function sortMarkets(markets: MarketCard[], filter: MarketFilter): MarketCard[] 
       });
     }
     case "hot":
+      return copy.sort((a, b) => {
+        const volA = statsByMarket[a.address]?.volumeUsdc ?? 0;
+        const volB = statsByMarket[b.address]?.volumeUsdc ?? 0;
+        if (volB !== volA) return volB - volA;
+        const openA = statusLabel(a.status) === "Open" ? 1 : 0;
+        const openB = statusLabel(b.status) === "Open" ? 1 : 0;
+        if (openB !== openA) return openB - openA;
+        return Number(a.info.window.lock) - Number(b.info.window.lock);
+      });
+    case "moves":
+      return copy.sort((a, b) => {
+        const moveA = Math.abs(statsByMarket[a.address]?.crowdMovedPct ?? 0);
+        const moveB = Math.abs(statsByMarket[b.address]?.crowdMovedPct ?? 0);
+        return moveB - moveA;
+      });
     case "all":
     default:
       return copy.sort((a, b) => {
@@ -51,6 +75,7 @@ const FILTERS: { id: MarketFilter; label: string }[] = [
   { id: "hot", label: "Hot" },
   { id: "closing", label: "Closing soon" },
   { id: "wide", label: "Wide open" },
+  { id: "moves", label: "Biggest moves" },
   { id: "new", label: "New" },
 ];
 
@@ -62,6 +87,7 @@ function MarketsBoardHeader({
   onFilterChange,
   filteredCount,
   showFilters = true,
+  onMobileFilterOpen,
 }: {
   network: string;
   marketsCount: number;
@@ -70,6 +96,7 @@ function MarketsBoardHeader({
   onFilterChange: (f: MarketFilter) => void;
   filteredCount: number;
   showFilters?: boolean;
+  onMobileFilterOpen?: () => void;
 }) {
   return (
     <DashboardPageHeader
@@ -85,7 +112,7 @@ function MarketsBoardHeader({
       footer={
         showFilters ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-1 overflow-x-auto rounded-xl bg-[#141416]/60 p-1">
+            <div className="hidden gap-1 overflow-x-auto rounded-xl bg-[#141416]/60 p-1 sm:flex">
               {FILTERS.map((f) => (
                 <button
                   key={f.id}
@@ -101,6 +128,7 @@ function MarketsBoardHeader({
                 </button>
               ))}
             </div>
+            <MobileFilterTrigger onClick={() => onMobileFilterOpen?.()} />
             {filteredCount !== marketsCount && (
               <p className="shrink-0 font-mono text-[11px] text-white/35">
                 Showing {filteredCount} of {marketsCount}
@@ -118,14 +146,20 @@ export function MarketsBoard({
   openCount,
   network,
   metadataByMarket = {},
+  statsByMarket = {},
 }: {
   markets: MarketCard[];
   openCount: number;
   network: string;
   metadataByMarket?: Record<string, SavedMarketMetadata>;
+  statsByMarket?: Record<string, MarketStats24h>;
 }) {
   const [filter, setFilter] = useState<MarketFilter>("all");
-  const filtered = useMemo(() => sortMarkets(markets, filter), [markets, filter]);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const filtered = useMemo(
+    () => sortMarkets(markets, filter, statsByMarket),
+    [markets, filter, statsByMarket],
+  );
 
   if (markets.length === 0) {
     return (
@@ -153,6 +187,14 @@ export function MarketsBoard({
         filter={filter}
         onFilterChange={setFilter}
         filteredCount={filtered.length}
+        onMobileFilterOpen={() => setFilterSheetOpen(true)}
+      />
+
+      <MarketFilterSheet
+        open={filterSheetOpen}
+        onOpenChange={setFilterSheetOpen}
+        filter={filter}
+        onFilterChange={setFilter}
       />
 
       {filtered.length === 0 ? (
@@ -166,6 +208,7 @@ export function MarketsBoard({
               key={card.address}
               card={card}
               metadata={metadataByMarket[card.address]}
+              stats={statsByMarket[card.address]}
             />
           ))}
         </div>

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   BookOpen,
+  Crosshair,
   LayoutGrid,
   PlusCircle,
   Trophy,
@@ -26,6 +27,7 @@ import {
 
 const MAIN_NAV = [
   { href: "/markets", label: "Markets", icon: LayoutGrid },
+  { href: "/positions", label: "Positions", icon: Crosshair },
   { href: "/create", label: "Create", icon: PlusCircle },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/whitepaper", label: "How it works", icon: BookOpen },

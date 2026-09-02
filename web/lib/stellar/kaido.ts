@@ -7,8 +7,13 @@
  */
 import { registry, distributionMarket } from "@kaido/contract-bindings";
 
+import { checkpointsFromOutcomeSpace } from "@/lib/outcome-space";
+import type { MarketCard } from "@/lib/market-types";
+
 import { deployedConfig } from "./contracts";
 import { activeNetwork } from "./networks";
+
+export { checkpointsFromOutcomeSpace };
 
 export type MarketInfo = registry.MarketInfo;
 export type MarketParams = distributionMarket.MarketParams;
@@ -101,17 +106,6 @@ export async function getCheckpoints(market: string): Promise<bigint[]> {
   }
 }
 
-/** Normalize on-chain `OutcomeSpace` checkpoint list (trajectory only). */
-export function checkpointsFromOutcomeSpace(
-  outcomeSpace: MarketParams["outcome_space"],
-): number[] {
-  if (outcomeSpace.tag !== "Trajectory") return [];
-  const raw = outcomeSpace.values[0];
-  if (!Array.isArray(raw)) return [];
-  return raw.map((c) => Number(c));
-}
-
-/** Realised per-checkpoint outcomes for a resolved trajectory market; empty otherwise. */
 export async function getResolvedOutcomes(market: string): Promise<bigint[]> {
   try {
     return (await marketClient(market).resolved_outcomes()).result as bigint[];
@@ -119,8 +113,6 @@ export async function getResolvedOutcomes(market: string): Promise<bigint[]> {
     return [];
   }
 }
-
-import type { MarketCard } from "@/lib/market-types";
 
 export type { MarketCard };
 

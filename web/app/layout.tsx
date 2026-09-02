@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, Instrument_Serif, JetBrains_Mono } from "next/font/g
 import "./globals.css";
 
 import { ConditionalNavbar } from "@/components/app/conditional-navbar";
+import { FirstVisitGate } from "@/components/modals/first-visit-modal";
+import { ToastProvider } from "@/components/ui/toast";
 import { WalletProvider } from "@/components/wallet/provider";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
@@ -62,8 +64,11 @@ export default function RootLayout({
           rpcUrl={net.rpcUrl}
           usdcSacId={usdcSacId}
         >
-          <ConditionalNavbar />
-          {children}
+          <ToastProvider>
+            <ConditionalNavbar />
+            {children}
+            <FirstVisitGate />
+          </ToastProvider>
         </WalletProvider>
       </body>
     </html>

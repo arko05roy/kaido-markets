@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 
 import { Navbar1 } from "@/components/ui/navbar-1";
 
-const DASHBOARD_PREFIXES = ["/markets", "/positions", "/create"];
+const DASHBOARD_PREFIXES = ["/markets", "/positions", "/create", "/leaderboard"];
 
 /** Hide the landing pill navbar on dashboard routes that use the sidebar shell. */
 export function ConditionalNavbar() {

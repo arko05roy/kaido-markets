@@ -3,6 +3,7 @@
 import { Kaido, type KaidoConfig, WAD } from "@kaido/sdk";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { LpConfirmModal } from "@/components/modals/claim-modals";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/provider";
 import { useUsdcBalance } from "@/components/wallet/use-usdc-balance";
@@ -11,9 +12,7 @@ import { fromWad } from "@/lib/curve";
 export interface LpMarketView {
   id: string;
   bWad: string;
-  /** Whether trading is still open (LP add only while Open). */
   canAdd: boolean;
-  /** Whether LP can exit (Open after lock, or resolved). */
   canRemove: boolean;
 }
 
@@ -41,6 +40,7 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastTx, setLastTx] = useState<string | null>(null);
+  const [confirmMode, setConfirmMode] = useState<"add" | "remove" | null>(null);
 
   const refresh = useCallback(async () => {
     const c = kaido.market(market.id);
@@ -69,8 +69,13 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
   const estDeposit7dp = useMemo(() => {
     if (freeWad <= 0n || scaleWad <= 0n) return 0n;
     const depositWad = (scaleWad * freeWad) / WAD;
-    return depositWad / 10_000_000_000n; // MONEY_SCALE
+    return depositWad / 10_000_000_000n;
   }, [freeWad, scaleWad]);
+
+  const sharePct =
+    myShares > 0n && totalShares > 0n
+      ? `${((Number(myShares) / Number(totalShares)) * 100).toFixed(1)}%`
+      : "—";
 
   const addLp = async () => {
     if (!wallet || scaleWad <= 0n) return;
@@ -85,6 +90,7 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
       setError(e instanceof Error ? e.message : "add liquidity failed");
     } finally {
       setBusy(false);
+      setConfirmMode(null);
     }
   };
 
@@ -101,6 +107,7 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
       setError(e instanceof Error ? e.message : "remove liquidity failed");
     } finally {
       setBusy(false);
+      setConfirmMode(null);
     }
   };
 
@@ -118,11 +125,7 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
         </div>
         <div className="flex justify-between">
           <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Your shares</dt>
-          <dd className="text-[#f3efe6]">
-            {myShares > 0n && totalShares > 0n
-              ? `${((Number(myShares) / Number(totalShares)) * 100).toFixed(1)}%`
-              : "—"}
-          </dd>
+          <dd className="text-[#f3efe6]">{sharePct}</dd>
         </div>
         <div className="flex justify-between">
           <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Accrued LP fees</dt>
@@ -149,13 +152,11 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
               className="kaido-input mt-1.5 block w-24"
             />
           </label>
-          <span className="text-xs text-white/40">
-            ≈ {fmt7dp(estDeposit7dp)} USDC
-          </span>
+          <span className="text-xs text-white/40">≈ {fmt7dp(estDeposit7dp)} USDC</span>
           <Button
             type="button"
             disabled={!wallet || busy || scaleWad <= 0n}
-            onClick={() => void addLp()}
+            onClick={() => setConfirmMode("add")}
             className="rounded-full bg-[#f3efe6] text-[#0b0b0c] hover:bg-white"
           >
             Add liquidity
@@ -168,7 +169,7 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
           type="button"
           variant="outline"
           disabled={!wallet || busy}
-          onClick={() => void removeLp()}
+          onClick={() => setConfirmMode("remove")}
           className="border-white/20 text-[#f3efe6] hover:bg-white/5"
         >
           Remove all LP shares
@@ -178,6 +179,20 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
       {!wallet && <p className="text-sm text-white/45">Connect Freighter to add or remove liquidity.</p>}
       {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
       {lastTx && <p className="text-sm text-white/50">{lastTx}</p>}
+
+      <LpConfirmModal
+        open={confirmMode != null}
+        onOpenChange={(v) => !v && setConfirmMode(null)}
+        mode={confirmMode ?? "add"}
+        amountLabel={
+          confirmMode === "add"
+            ? `Add ≈ ${fmt7dp(estDeposit7dp)} USDC (${scalePct}% of free pool)`
+            : `Remove all shares (${sharePct} of pool)`
+        }
+        warning={confirmMode === "remove" ? "This burns your entire LP position on this market." : undefined}
+        onConfirm={() => void (confirmMode === "add" ? addLp() : removeLp())}
+        confirming={busy}
+      />
     </div>
   );
 }

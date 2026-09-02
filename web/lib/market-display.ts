@@ -12,7 +12,7 @@ type MarketCopyInput = Pick<MarketInfo, "outcome_space" | "tier" | "window">;
 export type { MarketCopyInput };
 const { ResolverTier } = registry;
 
-function tierLabel(tier: registry.ResolverTier): string {
+export function tierLabel(tier: registry.ResolverTier): string {
   switch (tier) {
     case ResolverTier.Reflector:
       return "T0 · Reflector oracle";
@@ -109,7 +109,7 @@ export function formatContractTradeError(message: string): string {
     return "Slippage guard tripped — raise your max USDC risk amount.";
   }
   if (message.includes("Error(Contract, #15)") || message.includes("SigmaBelowFloor")) {
-    return "Conviction is too tight — widen σ above the market floor.";
+    return "Conviction is too tight — widen your range.";
   }
   return message;
 }

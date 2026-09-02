@@ -10,6 +10,7 @@ import { useMemo, useState, useEffect } from "react";
 import { AdvancedBlock } from "@/components/app/advanced-block";
 import { Panel, SectionLabel } from "@/components/app/kaido-ui";
 import { BeliefChart } from "@/components/forecast/belief-chart";
+import { CreateReviewModal, CreateSuccessModal } from "@/components/modals/first-visit-modal";
 import { SnappySlider } from "@/components/ui/snappy-slider";
 import { useWallet } from "@/components/wallet/provider";
 import { clampSigma, fromWad, sigmaFloor, toWad } from "@/lib/curve";
@@ -115,6 +116,8 @@ export function CreateMarketWizard({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [successOpen, setSuccessOpen] = useState(false);
 
   const kWad = useMemo(() => safeWad(k), [k]);
   const bWad = useMemo(() => safeWad(b), [b]);
@@ -189,7 +192,7 @@ export function CreateMarketWizard({
     try {
       const q = question.trim();
       if (!q) throw new Error("enter the market question traders will see");
-      if (q.length > 280) throw new Error("question must be 280 characters or fewer");
+      if (q.length > 120) throw new Error("question must be 120 characters or fewer");
       const kw = required(kWad, "liquidity (k)");
       const bw = required(bWad, "max payout (b)");
       if (bw <= 0n) throw new Error("max payout must be > 0");
@@ -242,6 +245,8 @@ export function CreateMarketWizard({
         console.warn("question saved on-chain but metadata write failed:", e);
       }
       setCreatedId(id);
+      setSuccessOpen(true);
+      setReviewOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed to launch market");
     } finally {
@@ -315,6 +320,27 @@ export function CreateMarketWizard({
           Trading opens, then locks before settlement. After lock, positions are frozen until the
           outcome is posted.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(
+            [
+              { label: "1 hour demo", openM: 2, lockM: 62, resolveM: 65 },
+              { label: "24 hours", openM: 2, lockM: 24 * 60 + 2, resolveM: 24 * 60 + 30 },
+              { label: "7 days", openM: 2, lockM: 7 * 24 * 60 + 2, resolveM: 7 * 24 * 60 + 30 },
+            ] as const
+          ).map((p) => (
+            <ChoiceButton
+              key={p.label}
+              active={false}
+              onClick={() => {
+                setWindowOpen(nowPlus(p.openM));
+                setWindowLock(nowPlus(p.lockM));
+                setWindowResolve(nowPlus(p.resolveM));
+              }}
+            >
+              {p.label}
+            </ChoiceButton>
+          ))}
+        </div>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Trading opens" hint="First moment beliefs can be placed">
             <Input type="datetime-local" value={windowOpen} onChange={setWindowOpen} />
@@ -576,14 +602,33 @@ export function CreateMarketWizard({
         {wallet && !createdId && (
           <button
             type="button"
-            onClick={() => void submit()}
+            onClick={() => setReviewOpen(true)}
             disabled={submitting}
             className="inline-flex items-center justify-center rounded-full bg-[#f3efe6] px-8 py-3.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#0b0b0c] transition-all hover:bg-white disabled:opacity-50"
           >
-            {submitting ? "Launching…" : "Launch market"}
+            Review & launch
           </button>
         )}
       </Panel>
+
+      <CreateReviewModal
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        question={question.trim() || "—"}
+        marketType={mode === "scalar" ? "Range market" : "Path market"}
+        schedule={`Opens ${windowOpen} · Closes ${windowLock}`}
+        resolverLabel={TIERS[tierIdx].label}
+        onDeploy={() => void submit()}
+        deploying={submitting}
+      />
+      {createdId && (
+        <CreateSuccessModal
+          open={successOpen}
+          onOpenChange={setSuccessOpen}
+          marketId={createdId}
+          question={question.trim()}
+        />
+      )}
 
       {error && (
         <Panel className="border-red-500/30 bg-red-500/5 px-6 py-4">

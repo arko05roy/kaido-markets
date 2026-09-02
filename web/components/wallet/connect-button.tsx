@@ -1,12 +1,15 @@
 "use client";
 
 import { Loader2, LogOut, Wallet } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
 import { useWallet } from "./provider";
+import { useUsdcBalance } from "./use-usdc-balance";
 import type { WalletKind } from "./types";
+import { USDC_FAUCET_URL } from "@/lib/stellar/usdc";
 
 /**
  * Wallet connect/disconnect control. Disconnected: a row of available
@@ -14,7 +17,13 @@ import type { WalletKind } from "./types";
  * button.
  */
 export function ConnectButton() {
-  const { wallet, connecting, restoring, error, connectors, connect, disconnect } = useWallet();
+  const { wallet, connecting, restoring, error, connectors, connect, disconnect, rpcUrl, networkPassphrase, usdcSacId } = useWallet();
+  const { formatted: usdcBal, loading: usdcLoading, balance7dp } = useUsdcBalance(
+    rpcUrl ?? undefined,
+    networkPassphrase,
+    usdcSacId ?? undefined,
+    wallet?.accountId,
+  );
   const [available, setAvailable] = useState<Record<WalletKind, boolean> | null>(null);
 
   useEffect(() => {
@@ -32,8 +41,21 @@ export function ConnectButton() {
   if (wallet) {
     return (
       <div className="flex items-center gap-2">
+        {usdcSacId && (
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.14em] text-white/45 sm:inline">
+            {usdcLoading ? "…" : usdcBal != null ? `${usdcBal} USDC` : "0 USDC"}
+            {balance7dp != null && balance7dp <= 0n && (
+              <>
+                {" · "}
+                <Link href={USDC_FAUCET_URL} target="_blank" rel="noopener noreferrer" className="text-[#d8c69a] underline">
+                  Faucet
+                </Link>
+              </>
+            )}
+          </span>
+        )}
         <span
-          className="rounded-full border bg-card px-3 py-1.5 font-mono text-xs"
+          className="rounded-full border border-white/10 bg-[#1c1c21] px-3 py-1.5 font-mono text-xs text-[#f3efe6]"
           title={wallet.accountId}
         >
           {wallet.label}

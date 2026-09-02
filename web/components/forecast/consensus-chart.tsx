@@ -9,17 +9,19 @@
 import { useMemo } from "react";
 
 import { BeliefChart } from "@/components/forecast/belief-chart";
-import { fromWad } from "@/lib/curve";
+import { fromWad, type GaussianBelief } from "@/lib/curve";
 
 import type { TradeMarketView } from "@/components/forecast/trade-panel";
 
 export function ConsensusChart({
   view,
   resolved,
+  you,
 }: {
   view: TradeMarketView;
   /** Resolved outcome(s) in WAD strings, once known: one for scalar, one per checkpoint. */
   resolved?: string[];
+  you?: GaussianBelief;
 }) {
   const kWad = useMemo(() => BigInt(view.kWad), [view.kWad]);
   const bWad = useMemo(() => BigInt(view.bWad), [view.bWad]);
@@ -35,6 +37,8 @@ export function ConsensusChart({
         market={{ kWad, bWad, capped: view.capped }}
         range={{ min: muReal - 5 * sigmaReal, max: muReal + 5 * sigmaReal }}
         consensus={{ muWad, sigmaWad }}
+        you={you}
+        anchorYToConsensus
         resolved={resolved?.[0] != null ? fromWad(BigInt(resolved[0])) : undefined}
       />
     );

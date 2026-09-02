@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * TradePanel — degen-friendly trade ticket: call, conviction, risk, payout preview.
+ * TradePanel — degen-friendly trade ticket with receipt modal + simulated quote.
  */
 import { Kaido, type KaidoConfig } from "@kaido/sdk";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { ScalarBeliefInput } from "@/components/forecast/scalar-belief-input";
@@ -12,10 +13,18 @@ import {
   TrajectoryBeliefInput,
   type TrajectoryBelief,
 } from "@/components/forecast/trajectory-belief-input";
+import { ShareCurveModal } from "@/components/modals/first-visit-modal";
+import {
+  TradeReceiptModal,
+  TradeSubmittingModal,
+} from "@/components/modals/trade-receipt-modal";
+import { TradeErrorModal, WalletGateModal } from "@/components/modals/wallet-gate-modal";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { useWallet } from "@/components/wallet/provider";
 import { useUsdcBalance } from "@/components/wallet/use-usdc-balance";
 import {
+  crowdTargetLabel,
   convictionFromSigma,
   convictionLabel,
   edgeVsCrowd,
@@ -28,7 +37,10 @@ import {
 } from "@/lib/market-display";
 import { effectiveSigmaFloor, fromWad, type GaussianBelief } from "@/lib/curve";
 import { savePosition } from "@/lib/positions";
+import { exportShareCurvePng } from "@/lib/share-curve-export";
+import { simulateTradeQuote, type TradeQuote } from "@/lib/trade-quote";
 import { USDC_FAUCET_URL } from "@/lib/stellar/usdc";
+import { cn } from "@/lib/utils";
 
 export interface TradeMarketView {
   address: string;
@@ -43,9 +55,12 @@ export interface TradeMarketView {
   windowOpen: number;
   windowLock: number;
   capped?: boolean;
+  feeBps?: number;
+  marketTitle?: string;
 }
 
 const USDC_DECIMALS = 7;
+const RISK_PRESETS = [10, 25, 50, 100];
 
 function PayoutPreview({
   riskUsdc,
@@ -66,9 +81,7 @@ function PayoutPreview({
       </div>
       <div className="flex justify-between text-sm">
         <span className="text-white/45">If you nail it</span>
-        <span className="font-mono tabular-nums text-emerald-300/90">
-          +{maxWin.toFixed(2)} USDC
-        </span>
+        <span className="font-mono tabular-nums text-emerald-300/90">+{maxWin.toFixed(2)} USDC</span>
       </div>
       <div className="flex justify-between text-sm">
         <span className="text-white/45">Max multiple</span>
@@ -91,17 +104,21 @@ function PositionLiveCard({
   riskUsdc,
   maxWin,
   edgeLabel,
+  positionId,
+  onShare,
 }: {
   call: string;
   conviction: string;
   riskUsdc: number;
   maxWin: number;
   edgeLabel: string;
+  positionId: bigint;
+  onShare: () => void;
 }) {
   return (
-    <div className="border border-emerald-500/25 bg-emerald-500/5 p-5 space-y-3">
+    <div className="space-y-3 border border-emerald-500/25 bg-emerald-500/5 p-5">
       <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-300/80">
-        Your belief is live
+        Your belief is live · #{positionId.toString()}
       </p>
       <div className="grid gap-2 text-sm">
         <div className="flex justify-between gap-4">
@@ -122,6 +139,26 @@ function PositionLiveCard({
         </div>
       </div>
       <p className="text-xs text-white/50">{edgeLabel}</p>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onShare}
+          className="border-white/15 text-[11px] uppercase tracking-[0.14em]"
+        >
+          Share curve
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          asChild
+          className="border-white/15 text-[11px] uppercase tracking-[0.14em]"
+        >
+          <Link href="/positions">View position</Link>
+        </Button>
+      </div>
     </div>
   );
 }
@@ -130,12 +167,19 @@ export function TradePanel({
   config,
   market,
   onPositionOpened,
+  onBeliefChange,
+  onPreviewChange,
+  compact,
 }: {
   config: KaidoConfig;
   market: TradeMarketView;
   onPositionOpened?: (positionId: bigint) => void;
+  onBeliefChange?: (belief: GaussianBelief) => void;
+  onPreviewChange?: (call: string, multiple: number) => void;
+  compact?: boolean;
 }) {
-  const { wallet, connecting } = useWallet();
+  const { wallet, connecting, connect } = useWallet();
+  const { toast } = useToast();
   const kaido = useMemo(() => new Kaido(config), [config]);
   const { balance7dp: usdcBal } = useUsdcBalance(
     config.rpcUrl,
@@ -160,9 +204,15 @@ export function TradePanel({
   });
   const [maxUsdc, setMaxUsdc] = useState("25");
 
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [walletGate, setWalletGate] = useState<"connect" | "no-usdc" | null>(null);
+  const [errorOpen, setErrorOpen] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [quoting, setQuoting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [quote, setQuote] = useState<TradeQuote | null>(null);
   const [positionId, setPositionId] = useState<bigint | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
 
   useEffect(() => {
@@ -199,15 +249,73 @@ export function TradePanel({
 
   const edge = edgeVsCrowd(yourMu, crowdMu);
   const conviction = convictionFromSigma(yourSigma, floorReal, sigmaMax);
+  const callLabel = market.kind === "scalar" ? formatOutcome(yourMu) : "Trajectory belief";
+  const convictionText = market.kind === "scalar" ? convictionLabel(conviction) : "—";
 
-  const submit = async () => {
+  useEffect(() => {
+    if (market.kind === "scalar") onBeliefChange?.(scalarBelief);
+  }, [market.kind, scalarBelief, onBeliefChange]);
+
+  useEffect(() => {
+    if (market.kind !== "scalar") return;
+    onPreviewChange?.(callLabel, quote?.multiple ?? payout.multiple);
+  }, [market.kind, callLabel, quote, payout.multiple, onPreviewChange]);
+
+  const openReceipt = async () => {
+    if (!wallet) {
+      setWalletGate("connect");
+      return;
+    }
+    if (usdcBal != null && usdcBal <= 0n) {
+      setWalletGate("no-usdc");
+      return;
+    }
+    const n = Number(maxUsdc);
+    if (!Number.isFinite(n) || n <= 0) {
+      setErrorMsg("Risk amount must be a positive number");
+      setErrorOpen(true);
+      return;
+    }
+
+    setReceiptOpen(true);
+    setQuoting(true);
+    setQuote(null);
+    try {
+      const maxCollateral7dp = BigInt(Math.round(n * 10 ** USDC_DECIMALS));
+      const q = await simulateTradeQuote(
+        config,
+        market.address,
+        {
+          kind: market.kind,
+          mu2: market.kind === "scalar" ? scalarBelief.muWad : undefined,
+          sigma2: market.kind === "scalar" ? scalarBelief.sigmaWad : undefined,
+          mus2: market.kind === "trajectory" ? trajBelief.musWad : undefined,
+          sigmas2: market.kind === "trajectory" ? trajBelief.sigmasWad : undefined,
+          maxCollateral7dp,
+          kWad,
+          bWad,
+          crowdMuWad: consensusScalar.muWad,
+          crowdSigmaWad: consensusScalar.sigmaWad,
+          feeBps: market.feeBps,
+          capped: market.capped,
+        },
+        wallet.signer,
+      );
+      setQuote(q);
+    } catch (e) {
+      setReceiptOpen(false);
+      setErrorMsg(e instanceof Error ? e.message : "Could not simulate trade");
+      setErrorOpen(true);
+    } finally {
+      setQuoting(false);
+    }
+  };
+
+  const confirmTrade = async () => {
     if (!wallet) return;
     setSubmitting(true);
-    setError(null);
-    setPositionId(null);
     try {
       const n = Number(maxUsdc);
-      if (!Number.isFinite(n) || n <= 0) throw new Error("Risk amount must be a positive number");
       const maxCollateral7dp = BigInt(Math.round(n * 10 ** USDC_DECIMALS));
       let id: bigint;
       if (market.kind === "scalar") {
@@ -224,17 +332,23 @@ export function TradePanel({
         );
       }
       setPositionId(id);
-      if (wallet) {
-        savePosition(config.network, wallet.signer.accountId, market.address, id, {
-          ...(market.kind === "scalar"
-            ? { muWad: scalarBelief.muWad, sigmaWad: scalarBelief.sigmaWad }
-            : {}),
-        });
-        onPositionOpened?.(id);
-      }
+      setReceiptOpen(false);
+      savePosition(config.network, wallet.signer.accountId, market.address, id, {
+        ...(market.kind === "scalar"
+          ? { muWad: scalarBelief.muWad, sigmaWad: scalarBelief.sigmaWad, collateral7dp: maxCollateral7dp }
+          : { collateral7dp: maxCollateral7dp }),
+      });
+      onPositionOpened?.(id);
+      toast({
+        title: "Belief is live",
+        description: `Position #${id.toString()} — view in Positions`,
+        variant: "success",
+      });
     } catch (e) {
+      setReceiptOpen(false);
       const raw = e instanceof Error ? e.message : "Trade failed";
-      setError(formatContractTradeError(raw));
+      setErrorMsg(formatContractTradeError(raw));
+      setErrorOpen(true);
     } finally {
       setSubmitting(false);
     }
@@ -248,110 +362,205 @@ export function TradePanel({
     );
   }
 
+  const displayPayout = quote ?? { maxWin: payout.maxWin, multiple: payout.multiple, worstCase: riskUsdc };
+
   return (
-    <div className="flex flex-col gap-5 rounded-2xl border border-white/[0.06] bg-[#1c1c21] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] sm:p-6">
-      <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-[#d8c69a]">
-          Call the number
-        </p>
-        <p className="mt-1 text-sm text-white/45">Set your call, press conviction, size your risk.</p>
-      </div>
-
-      {market.kind === "scalar" ? (
-        <ScalarBeliefInput
-          market={marketCurve}
-          consensus={consensusScalar}
-          disabled={submitting}
-          onChange={setScalarBelief}
-        />
-      ) : (
-        <TrajectoryBeliefInput
-          market={{ kWad, bWad }}
-          checkpoints={market.checkpoints}
-          consensusMus={consensusMus}
-          disabled={submitting}
-          onChange={setTrajBelief}
-        />
-      )}
-
-      <label className="flex flex-col gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
-          Risk amount (USDC)
-        </span>
-        <input
-          type="number"
-          min={0}
-          step="0.0000001"
-          value={maxUsdc}
-          onChange={(e) => setMaxUsdc(e.target.value)}
-          className="kaido-input"
-          disabled={submitting}
-          autoComplete="off"
-        />
-        <span className="text-[11px] text-white/35">
-          Market risk capped at {maxUsdc || "0"} USDC, excluding network fees.
-        </span>
-      </label>
-
-      {market.kind === "scalar" && Number.isFinite(riskUsdc) && riskUsdc > 0 && (
-        <PayoutPreview
-          riskUsdc={riskUsdc}
-          maxWin={payout.maxWin}
-          multiple={payout.multiple}
-          worstCase={riskUsdc}
-        />
-      )}
-
-      <div className="flex flex-col gap-3">
-        {!wallet ? (
-          <span className="text-sm text-white/50">
-            {connecting ? "Connecting…" : "Connect Freighter to place belief"}
-          </span>
-        ) : (
-          <Button
-            onClick={() => void submit()}
-            disabled={submitting || (usdcBal != null && usdcBal <= 0n)}
-            className="min-h-11 w-full rounded-xl bg-[#f3efe6] px-6 text-[12px] uppercase tracking-[0.16em] text-[#141416] hover:bg-white focus-visible:ring-2 focus-visible:ring-[#d8c69a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1c1c21]"
-          >
-            {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
-            {submitting ? "Placing…" : "Place belief"}
-          </Button>
+    <>
+      <div
+        className={cn(
+          "flex flex-col gap-5 rounded-2xl border border-white/[0.06] bg-[#1c1c21] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] sm:p-6",
+          compact && "border-0 bg-transparent p-0 shadow-none",
         )}
-        {error && <p className="text-sm text-red-300">{error}</p>}
-        {wallet && usdcBal != null && usdcBal <= 0n && (
-          <p className="text-xs text-white/40">
-            You need testnet USDC to trade.{" "}
-            <a
-              href={USDC_FAUCET_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#d8c69a] underline underline-offset-2"
-            >
-              Get USDC from the faucet
-            </a>
-            .
+      >
+        {!compact && (
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-[#d8c69a]">
+              Call the number
+            </p>
+            <p className="mt-1 text-sm text-white/45">Set your call, press conviction, size your risk.</p>
+          </div>
+        )}
+
+        {market.kind === "scalar" ? (
+          <ScalarBeliefInput
+            market={marketCurve}
+            consensus={consensusScalar}
+            disabled={submitting}
+            onChange={setScalarBelief}
+          />
+        ) : (
+          <TrajectoryBeliefInput
+            market={{ kWad, bWad }}
+            checkpoints={market.checkpoints}
+            consensusMus={consensusMus}
+            disabled={submitting}
+            onChange={setTrajBelief}
+          />
+        )}
+
+        <div className="flex flex-col gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+            Risk amount (USDC)
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {RISK_PRESETS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setMaxUsdc(String(p))}
+                disabled={submitting}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 font-mono text-[11px] tabular-nums transition-colors",
+                  maxUsdc === String(p)
+                    ? "border-[#d8c69a]/40 bg-[#d8c69a]/12 text-[#f3efe6]"
+                    : "border-white/[0.08] text-white/45 hover:border-white/15",
+                )}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <input
+            type="number"
+            min={0}
+            step="0.0000001"
+            value={maxUsdc}
+            onChange={(e) => setMaxUsdc(e.target.value)}
+            className="kaido-input"
+            disabled={submitting}
+            autoComplete="off"
+          />
+        </div>
+
+        {Number.isFinite(riskUsdc) && riskUsdc > 0 && (
+          <PayoutPreview
+            riskUsdc={riskUsdc}
+            maxWin={displayPayout.maxWin}
+            multiple={quote?.multiple ?? payout.multiple}
+            worstCase={riskUsdc}
+          />
+        )}
+
+        <Button
+          onClick={() => void openReceipt()}
+          disabled={submitting || quoting}
+          className="min-h-11 w-full rounded-xl bg-[#f3efe6] px-6 text-[12px] uppercase tracking-[0.16em] text-[#141416] hover:bg-white"
+        >
+          {quoting ? <Loader2 className="size-4 animate-spin" /> : null}
+          Place belief
+        </Button>
+
+        {!wallet && (
+          <p className="text-center text-xs text-white/40">
+            {connecting ? "Connecting…" : "Connect Freighter to trade"}
           </p>
         )}
+        {wallet && usdcBal != null && usdcBal <= 0n && (
+          <p className="text-xs text-white/40">
+            You need testnet USDC.{" "}
+            <a href={USDC_FAUCET_URL} target="_blank" rel="noopener noreferrer" className="text-[#d8c69a] underline">
+              Get USDC
+            </a>
+          </p>
+        )}
+
+        {positionId != null && (
+          <PositionLiveCard
+            call={callLabel}
+            conviction={convictionText}
+            riskUsdc={riskUsdc}
+            maxWin={displayPayout.maxWin}
+            edgeLabel={
+              market.kind === "scalar"
+                ? `Currently ${edge.deltaLabel}. ${edge.stance}.`
+                : "Your belief is live. Watch the crowd move."
+            }
+            positionId={positionId}
+            onShare={() => setShareOpen(true)}
+          />
+        )}
       </div>
 
-      {positionId != null && market.kind === "scalar" && (
-        <PositionLiveCard
-          call={formatOutcome(yourMu)}
-          conviction={convictionLabel(conviction)}
-          riskUsdc={riskUsdc}
-          maxWin={payout.maxWin}
-          edgeLabel={`Currently ${edge.deltaLabel}. ${edge.stance}.`}
-        />
-      )}
-      {positionId != null && market.kind === "trajectory" && (
-        <PositionLiveCard
-          call="Trajectory belief"
-          conviction="—"
-          riskUsdc={riskUsdc}
-          maxWin={payout.maxWin}
-          edgeLabel="Your belief is live. Watch the crowd move."
-        />
-      )}
+      <WalletGateModal
+        open={walletGate != null}
+        mode={walletGate ?? "connect"}
+        onOpenChange={(v) => !v && setWalletGate(null)}
+        onConnect={() => void connect("freighter").then(() => setWalletGate(null))}
+        connecting={connecting}
+        networkLabel={config.network}
+      />
+      <TradeReceiptModal
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+        call={callLabel}
+        conviction={convictionText}
+        riskUsdc={riskUsdc}
+        quote={quote}
+        quoting={quoting}
+        onConfirm={() => void confirmTrade()}
+        onBack={() => setReceiptOpen(false)}
+      />
+      <TradeSubmittingModal open={submitting} />
+      <TradeErrorModal
+        open={errorOpen}
+        message={errorMsg}
+        onOpenChange={setErrorOpen}
+        onRetry={() => {
+          setErrorOpen(false);
+          void openReceipt();
+        }}
+      />
+      <ShareCurveModal
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        marketTitle={market.marketTitle ?? "Market"}
+        call={callLabel}
+        conviction={convictionText}
+        maxWin={`+${displayPayout.maxWin.toFixed(2)} USDC`}
+        onDownloadPng={
+          market.kind === "scalar"
+            ? () =>
+                exportShareCurvePng({
+                  marketTitle: market.marketTitle ?? "Market",
+                  call: callLabel,
+                  conviction: convictionText,
+                  crowdTarget: crowdTargetLabel(consensusScalar.muWad),
+                  maxWin: `+${displayPayout.maxWin.toFixed(2)} USDC`,
+                  consensus: consensusScalar,
+                  yours: scalarBelief,
+                  market: marketCurve,
+                })
+            : undefined
+        }
+      />
+    </>
+  );
+}
+
+/** Sticky mobile CTA — tap opens full ticket in a sheet. */
+export function MobileTradeBar({
+  call,
+  multiple,
+  onOpen,
+}: {
+  call: string;
+  multiple: number;
+  onOpen: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#141416]/95 p-3 backdrop-blur-md lg:hidden">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex w-full items-center justify-between gap-3 rounded-xl bg-[#f3efe6] px-4 py-3.5 text-left"
+      >
+        <span className="min-w-0 truncate font-mono text-xs text-[#141416]">
+          Your call: {call} · {multiple.toFixed(1)}x
+        </span>
+        <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.16em] text-[#141416]">
+          Place belief
+        </span>
+      </button>
     </div>
   );
 }

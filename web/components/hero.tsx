@@ -12,6 +12,7 @@ export function Hero({ network }: { network: string }) {
   return (
     <div className="kaido-landing relative w-full bg-[#0b0b0c] text-[#ece9e2]">
       <HeroFold />
+      <HowItWorksStrip />
       <ThesisSection />
       <BeliefSection />
       <BuildersSection />
@@ -167,6 +168,43 @@ function HeroFold() {
               )),
             )}
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* HOW IT WORKS — 3-step strip (matches first-visit modal)           */
+/* ---------------------------------------------------------------- */
+
+function HowItWorksStrip() {
+  const steps = [
+    { n: "01", title: "Call the number", body: "Pick where you think the outcome lands." },
+    { n: "02", title: "Press conviction", body: "Tight or wide — your curve, your edge." },
+    { n: "03", title: "Place belief", body: "Size risk, sign once. You're live on-chain." },
+  ];
+
+  return (
+    <section id="how-it-works" className="border-t border-white/10 px-6 py-16 sm:px-10">
+      <div className="mx-auto max-w-[1400px]">
+        <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-[#d8c69a]">How it works</p>
+        <div className="mt-8 grid grid-cols-1 gap-px bg-white/10 md:grid-cols-3">
+          {steps.map((s) => (
+            <div key={s.n} className="bg-[#0a0a0b] p-8">
+              <span className="font-mono text-[10px] text-white/35">{s.n}</span>
+              <h3 className="mt-3 font-serif text-xl text-[#f3efe6]">{s.title}</h3>
+              <p className="mt-2 text-sm text-white/50">{s.body}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-8 text-center">
+          <Link
+            href="/markets"
+            className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#d8c69a] hover:text-[#f3efe6]"
+          >
+            Browse live markets →
+          </Link>
         </div>
       </div>
     </section>
@@ -1037,6 +1075,7 @@ function LandingFooter({ network }: { network: string }) {
         </div>
         <div className="flex items-center gap-6">
           <span>net · {network}</span>
+          <Link href="/positions" className="hover:text-white/85">Positions</Link>
           <Link href="/markets" className="hover:text-white/85">Markets</Link>
           <Link href="/create" className="hover:text-white/85">Create</Link>
           <Link href="/leaderboard" className="hover:text-white/85">Leaderboard</Link>

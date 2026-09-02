@@ -9,6 +9,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { AdvancedBlock } from "@/components/app/advanced-block";
+import {
+  ClaimReceiptModal,
+  ClaimSuccessModal,
+  DisputeInfoModal,
+} from "@/components/modals/claim-modals";
 import { ResultCard } from "@/components/market/result-card";
 import { useWallet } from "@/components/wallet/provider";
 import { fromWad, toWad } from "@/lib/curve";
@@ -129,6 +134,11 @@ export function SettlementPanel({
     belief?: { muWad: bigint; sigmaWad: bigint };
     collateral7dp?: bigint;
   } | null>(null);
+  const [claimReceiptOpen, setClaimReceiptOpen] = useState(false);
+  const [pendingClaimId, setPendingClaimId] = useState<string | null>(null);
+  const [claimSuccessOpen, setClaimSuccessOpen] = useState(false);
+  const [claimSuccessPayout, setClaimSuccessPayout] = useState<bigint | null>(null);
+  const [disputeOpen, setDisputeOpen] = useState(false);
 
   const localPositions: SavedPosition[] = wallet
     ? loadPositions(config.network, wallet.signer.accountId, market.address)
@@ -478,7 +488,7 @@ export function SettlementPanel({
 
   const claimPosition = useCallback(
     async (positionId: string) => {
-      if (!wallet) return;
+      if (!wallet) return null;
       setClaimingId(positionId);
       setError(null);
       try {
@@ -500,6 +510,8 @@ export function SettlementPanel({
               : undefined,
           collateral7dp: saved?.collateral7dp ? BigInt(saved.collateral7dp) : undefined,
         });
+        setClaimSuccessPayout(payout);
+        setClaimSuccessOpen(true);
         bumpClaim();
         return payout;
       } catch (e) {
@@ -507,10 +519,17 @@ export function SettlementPanel({
         return null;
       } finally {
         setClaimingId(null);
+        setClaimReceiptOpen(false);
+        setPendingClaimId(null);
       }
     },
     [wallet, kaido, market.address, market.kind, config.network],
   );
+
+  const startClaim = (positionId: string) => {
+    setPendingClaimId(positionId);
+    setClaimReceiptOpen(true);
+  };
 
   const nextEvent =
     phase === "open"
@@ -533,6 +552,24 @@ export function SettlementPanel({
           </p>
         )}
       </div>
+
+      {phase === "awaiting_resolve" && (
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm text-amber-200/85">
+          Awaiting oracle resolution — resolves in{" "}
+          <span className="font-mono text-[#d8c69a]">
+            {fmtCountdown(market.windowResolve, nowSec)}
+          </span>
+        </div>
+      )}
+
+      {phase === "disputable" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-orange-500/25 bg-orange-500/5 px-4 py-3 text-sm text-orange-200/85">
+          <span>Outcome is in dispute — settlement paused.</span>
+          <Button size="sm" variant="outline" onClick={() => setDisputeOpen(true)}>
+            Learn more
+          </Button>
+        </div>
+      )}
 
       {resolvedOutcomes?.length ? (
         <p className="text-sm text-white/65">
@@ -565,7 +602,7 @@ export function SettlementPanel({
                       <Button
                         size="sm"
                         disabled={claimingId === p.id}
-                        onClick={() => void claimPosition(p.id)}
+                        onClick={() => startClaim(p.id)}
                         className="rounded-full bg-[#f3efe6] text-[#0b0b0c] hover:bg-white"
                       >
                         {claimingId === p.id ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -782,7 +819,7 @@ export function SettlementPanel({
             size="sm"
             variant="outline"
             disabled={!manualId.trim() || claimingId != null}
-            onClick={() => void claimPosition(manualId.trim())}
+            onClick={() => startClaim(manualId.trim())}
             className="border-white/20 text-[#f3efe6] hover:bg-white/5"
           >
             Claim
@@ -791,6 +828,43 @@ export function SettlementPanel({
       )}
         </div>
       </AdvancedBlock>
+
+      <ClaimReceiptModal
+        open={claimReceiptOpen}
+        onOpenChange={setClaimReceiptOpen}
+        positionId={pendingClaimId ?? ""}
+        collateral7dp={
+          pendingClaimId && wallet
+            ? (() => {
+                const c = loadPositions(config.network, wallet.signer.accountId, market.address).find(
+                  (p) => p.id === pendingClaimId,
+                )?.collateral7dp;
+                return c ? BigInt(c) : undefined;
+              })()
+            : undefined
+        }
+        onConfirm={() => pendingClaimId && void claimPosition(pendingClaimId)}
+        confirming={claimingId != null}
+      />
+      <ClaimSuccessModal
+        open={claimSuccessOpen}
+        onOpenChange={setClaimSuccessOpen}
+        payout7dp={claimSuccessPayout ?? 0n}
+      >
+        {lastClaim && resolvedOutcomes?.length && market.kWad && market.bWad && market.kind === "scalar" && (
+          <ResultCard
+            marketLabel="Market"
+            kind="scalar"
+            market={{ kWad: BigInt(market.kWad), bWad: BigInt(market.bWad) }}
+            yourBelief={lastClaim.belief}
+            resolvedWad={resolvedOutcomes}
+            collateral7dp={lastClaim.collateral7dp}
+            payout7dp={lastClaim.payout7dp}
+            positionId={lastClaim.positionId}
+          />
+        )}
+      </ClaimSuccessModal>
+      <DisputeInfoModal open={disputeOpen} onOpenChange={setDisputeOpen} />
     </div>
   );
 }

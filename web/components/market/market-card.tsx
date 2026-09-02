@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { ClosesIn } from "@/components/market/closes-in";
+import { MarketCardMetadata } from "@/components/market/market-card-metadata";
+import { MarketCardStats } from "@/components/market/market-card-stats";
 import { fromWad, sigmaFloor } from "@/lib/curve";
 import {
   convictionFromSigma,
@@ -15,6 +17,7 @@ import {
 } from "@/lib/market-display";
 import { displayMarketQuestion } from "@/lib/market-metadata";
 import type { SavedMarketMetadata } from "@/lib/market-metadata";
+import type { MarketStats24h } from "@/lib/market-stats";
 import type { MarketCard } from "@/lib/market-types";
 import { cn } from "@/lib/utils";
 
@@ -180,9 +183,11 @@ function toneBorder(tone: CardTone): string {
 export function MarketCardItem({
   card,
   metadata,
+  stats,
 }: {
   card: MarketCard;
   metadata?: SavedMarketMetadata;
+  stats?: MarketStats24h;
 }) {
   const { address, info, status, crowdMuWad, blendBackedDepth7dp } = card;
   const statusText = statusLabel(status);
@@ -276,6 +281,8 @@ export function MarketCardItem({
             </p>
           ) : null}
 
+          <MarketCardStats stats={stats} />
+
           {tone === "settled" && outcome && (
             <p className="font-mono text-[11px] text-white/40">
               Oracle settled at <span className="text-[#f3efe6]/80">{outcome}</span>
@@ -299,23 +306,26 @@ export function MarketCardItem({
               )}
             </div>
 
-            <span
-              className={cn(
-                "inline-flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em]",
-                "transition-[color,gap] duration-200 group-hover:gap-2.5",
-                tradable
-                  ? "text-[#d8c69a] group-hover:text-[#f3efe6]"
-                  : "text-white/40 group-hover:text-white/60",
-              )}
-            >
-              {tradable ? "Trade range" : "View market"}
+            <div className="flex shrink-0 items-center gap-1">
+              <MarketCardMetadata address={address} info={info} />
               <span
-                aria-hidden
-                className="inline-block transition-transform duration-200 group-hover:translate-x-0.5"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em]",
+                  "transition-[color,gap] duration-200 group-hover:gap-2.5",
+                  tradable
+                    ? "text-[#d8c69a] group-hover:text-[#f3efe6]"
+                    : "text-white/40 group-hover:text-white/60",
+                )}
               >
-                →
+                {tradable ? "Trade range" : "View market"}
+                <span
+                  aria-hidden
+                  className="inline-block transition-transform duration-200 group-hover:translate-x-0.5"
+                >
+                  →
+                </span>
               </span>
-            </span>
+            </div>
           </div>
         </div>
       </article>
