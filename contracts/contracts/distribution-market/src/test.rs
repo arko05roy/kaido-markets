@@ -434,3 +434,112 @@ proptest! {
         prop_assert!(c.token.balance(&c.market.address) >= 0);
     }
 }
+
+// --------------------------------------------------------------------------- //
+// Trajectory markets (ADR-4) — N independent per-checkpoint Gaussians sharing
+// one collateral pool.
+// --------------------------------------------------------------------------- //
+mod trajectory {
+    use super::*;
+    use soroban_sdk::vec as svec;
+
+    fn setup_traj(n: u32) -> Ctx {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let sac = env.register_stellar_asset_contract_v2(admin.clone());
+        let usdc = sac.address();
+        let resolver_id = env.register(MockResolver, ());
+        let resolver = MockResolverClient::new(&env, &resolver_id);
+        let id = env.register(DistributionMarket, ());
+        let market = DistributionMarketClient::new(&env, &id);
+        let mut cps = svec![&env];
+        let mut mus = svec![&env];
+        let mut sigmas = svec![&env];
+        for i in 0..n {
+            cps.push_back(W_RESOLVE - 1000 * (n as u64 - i as u64)); // ascending
+            mus.push_back(MU0 + (i as i128) * WAD);
+            sigmas.push_back(SIGMA0);
+        }
+        market.init_trajectory(
+            &K,
+            &B,
+            &FEE_BPS,
+            &resolver_id,
+            &TIER,
+            &cps,
+            &W_OPEN,
+            &W_LOCK,
+            &W_RESOLVE,
+            &mus,
+            &sigmas,
+            &usdc,
+        );
+        Ctx {
+            usdc_admin: token::StellarAssetClient::new(&env, &usdc),
+            token: token::TokenClient::new(&env, &usdc),
+            env,
+            market,
+            resolver,
+            usdc,
+        }
+    }
+
+    #[test]
+    fn init_and_views() {
+        let c = setup_traj(3);
+        let params = c.market.get_params();
+        match params.outcome_space {
+            OutcomeSpace::Trajectory(cps) => assert_eq!(cps.len(), 3),
+            _ => panic!("expected trajectory"),
+        }
+        assert_eq!(c.market.get_beliefs().len(), 3);
+        assert_eq!(c.market.get_checkpoints().len(), 3);
+        assert_eq!(c.market.get_state().sigma_min, sigma_floor(K, B));
+    }
+
+    #[test]
+    fn trade_resolve_claim_conserves_usdc() {
+        let c = setup_traj(3);
+        let trader = Address::generate(&c.env);
+        let lp = Address::generate(&c.env);
+        c.usdc_admin.mint(&trader, &10_000_000_000i128);
+        c.usdc_admin.mint(&lp, &10_000_000_000i128);
+        let total_in = c.token.balance(&trader) + c.token.balance(&lp);
+        // fund the pool with b per checkpoint (b_7dp = 100*WAD/MONEY_SCALE = 1e9; 3 checkpoints).
+        c.market.add_liquidity(&lp, &3_000_000_000i128);
+
+        // shift the consensus on each checkpoint a little.
+        let mus = svec![&c.env, MU0 + WAD, MU0 + 2 * WAD, MU0 + 3 * WAD];
+        let sigmas = svec![&c.env, SIGMA0, SIGMA0, SIGMA0];
+        let id = c
+            .market
+            .trade_trajectory(&trader, &mus, &sigmas, &10_000_000_000i128);
+
+        c.env.ledger().set_timestamp(W_RESOLVE + 1);
+        let xs = svec![&c.env, MU0 + WAD, MU0 + 2 * WAD, MU0 + 4 * WAD];
+        c.resolver.set(&ResolverStatus::ResolvedVec(xs));
+        c.market.resolve();
+        assert_eq!(c.market.get_state().status, MarketStatus::ResolvedVec);
+        assert_eq!(c.market.resolved_outcomes().len(), 3);
+
+        let got = c.market.claim_trajectory(&id);
+        assert!(got >= 0);
+        c.market.remove_liquidity(&lp, &c.market.lp_shares(&lp));
+        let total_out =
+            c.token.balance(&trader) + c.token.balance(&lp) + c.token.balance(&c.market.address);
+        assert_eq!(total_in, total_out);
+        assert!(c.token.balance(&c.market.address) >= 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn rejects_wrong_arity_trade() {
+        let c = setup_traj(2);
+        let trader = Address::generate(&c.env);
+        let mus = svec![&c.env, MU0]; // only 1, market has 2 checkpoints
+        let sigmas = svec![&c.env, SIGMA0];
+        c.market
+            .trade_trajectory(&trader, &mus, &sigmas, &10_000_000_000i128);
+    }
+}

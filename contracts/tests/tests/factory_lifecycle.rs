@@ -15,6 +15,7 @@ use kaido_common::{MarketStatus, OutcomeSpace, Parameterization, ResolverTier};
 use kaido_math::{sigma_floor, WAD};
 use market_factory::{MarketFactory, MarketFactoryClient};
 use registry::{Registry, RegistryClient};
+use soroban_sdk::vec as svec;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 mod dm_wasm {
@@ -129,6 +130,42 @@ fn create_market_deploys_inits_and_registers() {
     assert_ne!(m2, market);
     assert_eq!(w.registry.count(), 2);
     assert_eq!(w.factory.count(), 2);
+}
+
+#[test]
+fn create_trajectory_market_deploys_and_registers() {
+    let w = boot();
+    let creator = Address::generate(&w.env);
+    let cps = svec![&w.env, W_RESOLVE - 2000u64, W_RESOLVE - 1000u64, W_RESOLVE];
+    let mus = svec![&w.env, MU0, MU0 + WAD, MU0 + 2 * WAD];
+    let sigmas = svec![&w.env, SIGMA0, SIGMA0, SIGMA0];
+    let market = w.factory.create_trajectory_market(
+        &creator,
+        &K,
+        &B,
+        &30u32,
+        &w.resolver,
+        &0u32,
+        &cps,
+        &W_OPEN,
+        &W_LOCK,
+        &W_RESOLVE,
+        &mus,
+        &sigmas,
+    );
+    let dm = DistributionMarketClient::new(&w.env, &market);
+    assert_eq!(dm.get_checkpoints().len(), 3);
+    assert_eq!(dm.get_beliefs().len(), 3);
+    match dm.get_params().outcome_space {
+        OutcomeSpace::Trajectory(c) => assert_eq!(c.len(), 3),
+        _ => panic!("expected trajectory"),
+    }
+    let info = w.registry.get(&market);
+    match info.outcome_space {
+        OutcomeSpace::Trajectory(c) => assert_eq!(c.len(), 3),
+        _ => panic!("expected trajectory in registry"),
+    }
+    assert_eq!(info.creator, creator);
 }
 
 #[test]

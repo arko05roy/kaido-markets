@@ -17,7 +17,7 @@
 
 #![no_std]
 
-use soroban_sdk::{contractclient, contracterror, contractevent, contracttype, Address, Env};
+use soroban_sdk::{contractclient, contracterror, contractevent, contracttype, Address, Env, Vec};
 
 // --------------------------------------------------------------------------- //
 // Errors
@@ -116,6 +116,9 @@ pub enum ResolverStatus {
     Pending,
     /// Available — carries the realised outcome `x₀` (WAD).
     Resolved(i128),
+    /// Available for a trajectory market — the realised value at each
+    /// checkpoint, in checkpoint order (all WAD).
+    ResolvedVec(Vec<i128>),
     /// The underlying source is stale/garbage; the market should pause
     /// (`Disputable`), not pay out.
     Stale,
@@ -169,7 +172,11 @@ pub enum OutcomeSpace {
     /// The outcome is a single real number (a price at `T`, an election margin,
     /// a rainfall in mm, …). The belief is one [`Belief`].
     Scalar,
-    // Trajectory { checkpoints: soroban_sdk::Vec<u64> },  // Sprint 2 (ADR-4)
+    /// The outcome is a path sampled at N checkpoint timestamps (Unix
+    /// seconds, ascending). The belief is one [`Belief`] per checkpoint; the
+    /// checkpoints share one collateral pool (whitepaper §16; ADR-4). v1
+    /// treats the per-checkpoint Gaussians as independent.
+    Trajectory(Vec<u64>),
 }
 
 /// How a belief is parameterised. Sprint 1 ships `Gaussian` only; richer
@@ -272,6 +279,9 @@ pub enum MarketStatus {
     Locked,
     /// Resolved; payouts settled. (Carries the realised outcome value, WAD.)
     Resolved(i128),
+    /// A trajectory market, resolved; the realised per-checkpoint values are
+    /// stored alongside (see `DistributionMarket::resolved_outcomes`).
+    ResolvedVec,
     /// The resolver returned a stale/garbage value — market is paused pending a
     /// dispute, never a bad payout (ADR-5; Sprint 2).
     Disputable,
@@ -354,6 +364,51 @@ pub struct LiquidityRemoved {
 pub struct Resolved {
     /// Realised outcome `x₀` (WAD).
     pub x0: i128,
+}
+
+// --------------------------------------------------------------------------- //
+// Trajectory markets (ADR-4) — N independent per-checkpoint Gaussians sharing
+// one collateral pool (whitepaper §16).
+// --------------------------------------------------------------------------- //
+
+/// A trajectory trader's position: the per-checkpoint curves before and after
+/// the trade, the aggregate collateral locked, and the owner. At resolution the
+/// payout is `Σ_i (g_i(x_i) − f_i(x_i))` over the N checkpoints, returned (with
+/// the collateral) clamped at `0`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrajectoryPositionData {
+    /// Per-checkpoint market beliefs just before this trade.
+    pub before: Vec<Belief>,
+    /// Per-checkpoint market beliefs just after this trade.
+    pub after: Vec<Belief>,
+    /// Aggregate collateral locked = `Σ_i −min_x(g_i − f_i)` (WAD).
+    pub collateral: i128,
+    /// Who owns the claim.
+    pub owner: Address,
+}
+
+/// Emitted by `DistributionMarket::trade_trajectory` (topic `"trade_trajectory"`).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TradeTrajectory {
+    /// Position id minted.
+    pub id: u64,
+    /// The trader.
+    pub trader: Address,
+    /// Aggregate collateral locked (WAD).
+    pub collateral: i128,
+    /// Fee paid (WAD).
+    pub fee: i128,
+}
+
+/// Emitted by `DistributionMarket::resolve` for a trajectory market
+/// (topic `"resolved_trajectory"`).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolvedTrajectory {
+    /// Realised value at each checkpoint, in checkpoint order (WAD).
+    pub x0s: Vec<i128>,
 }
 
 // --------------------------------------------------------------------------- //

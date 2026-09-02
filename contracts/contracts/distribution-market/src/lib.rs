@@ -19,12 +19,15 @@
 use kaido_common::{
     Belief, KaidoError, LiquidityAdded, LiquidityRemoved, MarketCreated, MarketParams, MarketState,
     MarketStatus, MarketWindow, OutcomeSpace, Parameterization, PositionData, Resolved,
-    ResolverClient, ResolverStatus, ResolverTier, Trade,
+    ResolvedTrajectory, ResolverClient, ResolverStatus, ResolverTier, Trade, TradeTrajectory,
+    TrajectoryPositionData,
 };
 use kaido_math::{
     gaussian_pdf_scaled, lambda as lambda_of, sigma_floor, worst_case_collateral, WAD as MATH_WAD,
 };
-use soroban_sdk::{contract, contractimpl, contracttype, panic_with_error, token, Address, Env};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, panic_with_error, token, Address, Env, Vec,
+};
 
 const LEDGERS_PER_DAY: u32 = 17_280;
 const INSTANCE_TTL_TARGET: u32 = 120 * LEDGERS_PER_DAY;
@@ -63,6 +66,15 @@ enum DataKey {
     FeePool,
     /// `i128` — realised outcome `x₀` (WAD), once resolved.
     ResolvedOutcome,
+    // --- trajectory markets (ADR-4) ---
+    /// `Vec<Belief>` — the live per-checkpoint curves (trajectory markets only).
+    Beliefs,
+    /// `Vec<u64>` — the checkpoint timestamps (trajectory markets only).
+    Checkpoints,
+    /// [`TrajectoryPositionData`] keyed by id (persistent).
+    TrajPosition(u64),
+    /// `Vec<i128>` — realised per-checkpoint values (WAD), once resolved.
+    ResolvedOutcomes,
 }
 
 #[contract]
@@ -274,7 +286,9 @@ impl DistributionMarket {
             .unwrap_or_else(|| panic_with_error!(&env, KaidoError::NotInitialized));
         match storage.get::<_, MarketStatus>(&DataKey::Status).unwrap() {
             MarketStatus::Open | MarketStatus::Locked => {}
-            MarketStatus::Resolved(_) => panic_with_error!(&env, KaidoError::AlreadyResolved),
+            MarketStatus::Resolved(_) | MarketStatus::ResolvedVec => {
+                panic_with_error!(&env, KaidoError::AlreadyResolved)
+            }
             MarketStatus::Disputable => panic_with_error!(&env, KaidoError::OracleStale),
         }
         if env.ledger().timestamp() < params.window.resolve {
@@ -290,6 +304,15 @@ impl DistributionMarket {
                 storage.set(&DataKey::Status, &MarketStatus::Resolved(x0));
                 storage.set(&DataKey::ResolvedOutcome, &x0);
                 Resolved { x0 }.publish(&env);
+            }
+            ResolverStatus::ResolvedVec(xs) => {
+                // a trajectory market: store the realised per-checkpoint values.
+                if xs.is_empty() {
+                    panic_with_error!(&env, KaidoError::ResolverNotReady);
+                }
+                storage.set(&DataKey::Status, &MarketStatus::ResolvedVec);
+                storage.set(&DataKey::ResolvedOutcomes, &xs);
+                ResolvedTrajectory { x0s: xs }.publish(&env);
             }
         }
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
@@ -399,7 +422,9 @@ impl DistributionMarket {
         lp.require_auth();
         let storage = env.storage().instance();
         match storage.get::<_, MarketStatus>(&DataKey::Status) {
-            Some(MarketStatus::Resolved(_)) | Some(MarketStatus::Disputable) => {}
+            Some(MarketStatus::Resolved(_))
+            | Some(MarketStatus::ResolvedVec)
+            | Some(MarketStatus::Disputable) => {}
             Some(_) => panic_with_error!(&env, KaidoError::MarketNotResolved),
             None => panic_with_error!(&env, KaidoError::NotInitialized),
         }
@@ -478,6 +503,291 @@ impl DistributionMarket {
             .unwrap_or_else(|| panic_with_error!(&env, KaidoError::PositionNotFound))
     }
 
+    // --------------------------------------------------------------------- //
+    // Trajectory markets (ADR-4, whitepaper §16) — N independent per-checkpoint
+    // Gaussians sharing one collateral pool. The LP pool (`add_liquidity` /
+    // `remove_liquidity` / fee accrual) is shared with the scalar path.
+    // --------------------------------------------------------------------- //
+
+    /// Initialise a freshly-deployed trajectory market. `checkpoints` are Unix
+    /// timestamps (ascending, ≤ `window.resolve`); `mus0`/`sigmas0` are the
+    /// initial per-checkpoint Gaussian params (WAD), one per checkpoint. The
+    /// σ-floor + `peak ≤ b` solvency checks apply to every checkpoint.
+    pub fn init_trajectory(
+        env: Env,
+        k: i128,
+        b: i128,
+        fee_bps: u32,
+        resolver: Address,
+        tier: u32,
+        checkpoints: Vec<u64>,
+        window_open: u64,
+        window_lock: u64,
+        window_resolve: u64,
+        mus0: Vec<i128>,
+        sigmas0: Vec<i128>,
+        usdc: Address,
+    ) {
+        let storage = env.storage().instance();
+        if storage.has(&DataKey::Params) {
+            panic_with_error!(&env, KaidoError::AlreadyInitialized);
+        }
+        if k <= 0 {
+            panic_with_error!(&env, KaidoError::InvalidK);
+        }
+        if b <= 0 {
+            panic_with_error!(&env, KaidoError::InvalidB);
+        }
+        if fee_bps > MAX_FEE_BPS {
+            panic_with_error!(&env, KaidoError::FeeTooHigh);
+        }
+        let tier = decode_tier(&env, tier);
+        let n = checkpoints.len();
+        if n == 0 || mus0.len() != n || sigmas0.len() != n {
+            panic_with_error!(&env, KaidoError::TrajectoryNotSupported);
+        }
+        if !(window_open <= window_lock && window_lock <= window_resolve)
+            || window_resolve <= env.ledger().timestamp()
+        {
+            panic_with_error!(&env, KaidoError::InvalidWindow);
+        }
+        // ascending checkpoints, each at or before resolve.
+        let mut prev: u64 = 0;
+        for i in 0..n {
+            let t = checkpoints.get(i).unwrap();
+            if (i > 0 && t <= prev) || t > window_resolve {
+                panic_with_error!(&env, KaidoError::InvalidWindow);
+            }
+            prev = t;
+        }
+        let sigma_min = sigma_floor(k, b);
+        let mut beliefs: Vec<Belief> = Vec::new(&env);
+        for i in 0..n {
+            beliefs.push_back(make_belief(
+                &env,
+                k,
+                b,
+                sigma_min,
+                mus0.get(i).unwrap(),
+                sigmas0.get(i).unwrap(),
+            ));
+        }
+
+        let params = MarketParams {
+            outcome_space: OutcomeSpace::Trajectory(checkpoints.clone()),
+            parameterization: Parameterization::Gaussian,
+            capped: false,
+            k,
+            b,
+            fee_bps,
+            resolver,
+            tier,
+            window: MarketWindow {
+                open: window_open,
+                lock: window_lock,
+                resolve: window_resolve,
+            },
+        };
+        storage.set(&DataKey::Params, &params);
+        storage.set(&DataKey::Checkpoints, &checkpoints);
+        storage.set(&DataKey::Beliefs, &beliefs);
+        // a single-Belief summary (first checkpoint) so `get_state` works for
+        // trajectory markets too; `get_beliefs` returns the full vector.
+        storage.set(&DataKey::Belief, &beliefs.get(0).unwrap());
+        storage.set(&DataKey::Status, &MarketStatus::Open);
+        storage.set(&DataKey::SigmaMin, &sigma_min);
+        storage.set(&DataKey::Usdc, &usdc);
+        storage.set(&DataKey::PosCounter, &0u64);
+        storage.set(&DataKey::CollateralPool, &0i128);
+        storage.set(&DataKey::LpTotalShares, &0i128);
+        storage.set(&DataKey::FeePool, &0i128);
+        storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
+
+        // reuse `MarketCreated` with the first checkpoint's belief as a summary.
+        MarketCreated {
+            params,
+            belief: beliefs.get(0).unwrap(),
+            sigma_min,
+        }
+        .publish(&env);
+    }
+
+    /// Submit per-checkpoint beliefs `(μ_i, σ_i)`: for each checkpoint compute
+    /// the position `g_i − f_i` and its worst-case collateral; the trade's
+    /// collateral is the sum (the checkpoints are independent ⇒ worst-case of
+    /// the sum is the sum of worst-cases). Adds the fee, pulls USDC, mints a
+    /// trajectory position, advances every checkpoint curve to `g_i`.
+    pub fn trade_trajectory(
+        env: Env,
+        trader: Address,
+        mus2: Vec<i128>,
+        sigmas2: Vec<i128>,
+        max_collateral_7dp: i128,
+    ) -> u64 {
+        trader.require_auth();
+        let storage = env.storage().instance();
+        let params: MarketParams = storage
+            .get(&DataKey::Params)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::NotInitialized));
+        Self::sync_status(&env);
+        if storage.get::<_, MarketStatus>(&DataKey::Status).unwrap() != MarketStatus::Open {
+            panic_with_error!(&env, KaidoError::MarketNotOpen);
+        }
+        let now = env.ledger().timestamp();
+        if now < params.window.open || now >= params.window.lock {
+            panic_with_error!(&env, KaidoError::MarketNotOpen);
+        }
+        let f_curves: Vec<Belief> = storage
+            .get(&DataKey::Beliefs)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::TrajectoryNotSupported));
+        let n = f_curves.len();
+        if mus2.len() != n || sigmas2.len() != n {
+            panic_with_error!(&env, KaidoError::TrajectoryNotSupported);
+        }
+        let sigma_min: i128 = storage.get(&DataKey::SigmaMin).unwrap();
+        let mut g_curves: Vec<Belief> = Vec::new(&env);
+        let mut collateral_wad: i128 = 0;
+        for i in 0..n {
+            let g = make_belief(
+                &env,
+                params.k,
+                params.b,
+                sigma_min,
+                mus2.get(i).unwrap(),
+                sigmas2.get(i).unwrap(),
+            );
+            let f = f_curves.get(i).unwrap();
+            collateral_wad +=
+                worst_case_collateral((g.mu, g.sigma, g.lambda), (f.mu, f.sigma, f.lambda));
+            g_curves.push_back(g);
+        }
+        let fee_wad = mul_div_floor(collateral_wad, params.fee_bps as i128, 10_000);
+        let total_7dp = ceil_div(collateral_wad + fee_wad, MONEY_SCALE);
+        let fee_7dp = ceil_div(fee_wad, MONEY_SCALE);
+        let collateral_7dp = total_7dp - fee_7dp;
+        if total_7dp > max_collateral_7dp {
+            panic_with_error!(&env, KaidoError::SlippageExceeded);
+        }
+        let collateral_wad = collateral_7dp * MONEY_SCALE;
+        let fee_wad = fee_7dp * MONEY_SCALE;
+
+        let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
+        token::TokenClient::new(&env, &usdc).transfer(
+            &trader,
+            env.current_contract_address(),
+            &total_7dp,
+        );
+
+        let id: u64 = storage.get(&DataKey::PosCounter).unwrap();
+        storage.set(&DataKey::PosCounter, &(id + 1));
+        let pos = TrajectoryPositionData {
+            before: f_curves,
+            after: g_curves.clone(),
+            collateral: collateral_wad,
+            owner: trader.clone(),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::TrajPosition(id), &pos);
+        env.storage().persistent().extend_ttl(
+            &DataKey::TrajPosition(id),
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_TARGET,
+        );
+
+        let fee_pool: i128 = storage.get(&DataKey::FeePool).unwrap();
+        storage.set(&DataKey::FeePool, &(fee_pool + fee_wad));
+        let summary = g_curves.get(0).unwrap();
+        storage.set(&DataKey::Beliefs, &g_curves);
+        storage.set(&DataKey::Belief, &summary);
+        storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
+
+        TradeTrajectory {
+            id,
+            trader,
+            collateral: collateral_wad,
+            fee: fee_wad,
+        }
+        .publish(&env);
+        id
+    }
+
+    /// Claim a resolved trajectory position: returns `collateral +
+    /// Σ_i (g_i(x_i) − f_i(x_i))` clamped at `0` in USDC (floor 7-dp), deletes
+    /// the position.
+    pub fn claim_trajectory(env: Env, position_id: u64) -> i128 {
+        let storage = env.storage().instance();
+        if storage.get::<_, MarketStatus>(&DataKey::Status) != Some(MarketStatus::ResolvedVec) {
+            panic_with_error!(&env, KaidoError::MarketNotResolved);
+        }
+        let xs: Vec<i128> = storage.get(&DataKey::ResolvedOutcomes).unwrap();
+        let pos: TrajectoryPositionData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TrajPosition(position_id))
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::PositionNotFound));
+        let n = pos.after.len();
+        let mut delta: i128 = 0;
+        for i in 0..n {
+            let x = xs.get(i).unwrap();
+            let g = pos.after.get(i).unwrap();
+            let f = pos.before.get(i).unwrap();
+            delta += gaussian_pdf_scaled(g.mu, g.sigma, g.lambda, x)
+                - gaussian_pdf_scaled(f.mu, f.sigma, f.lambda, x);
+        }
+        let returned_7dp = (pos.collateral + delta).max(0) / MONEY_SCALE; // floor
+        let returned_wad = returned_7dp * MONEY_SCALE;
+        let pool: i128 = storage.get(&DataKey::CollateralPool).unwrap();
+        storage.set(
+            &DataKey::CollateralPool,
+            &(pool + (pos.collateral - returned_wad)),
+        );
+        env.storage()
+            .persistent()
+            .remove(&DataKey::TrajPosition(position_id));
+        if returned_7dp > 0 {
+            let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
+            token::TokenClient::new(&env, &usdc).transfer(
+                &env.current_contract_address(),
+                &pos.owner,
+                &returned_7dp,
+            );
+        }
+        returned_7dp
+    }
+
+    /// Live per-checkpoint curves (trajectory markets only).
+    pub fn get_beliefs(env: Env) -> Vec<Belief> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Beliefs)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::TrajectoryNotSupported))
+    }
+
+    /// The checkpoint timestamps (trajectory markets only).
+    pub fn get_checkpoints(env: Env) -> Vec<u64> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Checkpoints)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::TrajectoryNotSupported))
+    }
+
+    /// The realised per-checkpoint outcomes once resolved (trajectory markets).
+    pub fn resolved_outcomes(env: Env) -> Vec<i128> {
+        env.storage()
+            .instance()
+            .get(&DataKey::ResolvedOutcomes)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::MarketNotResolved))
+    }
+
+    /// A stored trajectory position (panics `PositionNotFound` if unknown).
+    pub fn get_trajectory_position(env: Env, id: u64) -> TrajectoryPositionData {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TrajPosition(id))
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::PositionNotFound))
+    }
+
     /// LP shares held by `lp`.
     pub fn lp_shares(env: Env, lp: Address) -> i128 {
         env.storage()
@@ -514,6 +824,34 @@ impl DistributionMarket {
 
 /// `floor(a · b / c)` via the kaido-math 256-bit `mul_div` (no phantom
 /// overflow); `c > 0`, `a,b ≥ 0` here.
+/// Decode a `0..=3` tier code into [`ResolverTier`]; panics `InvalidTier` otherwise.
+fn decode_tier(env: &Env, tier: u32) -> ResolverTier {
+    match tier {
+        0 => ResolverTier::Reflector,
+        1 => ResolverTier::Attested,
+        2 => ResolverTier::Optimistic,
+        3 => ResolverTier::Designated,
+        _ => panic_with_error!(env, KaidoError::InvalidTier),
+    }
+}
+
+/// Validate `(μ, σ)` against a market's `(k, b, σ_min)` and build the [`Belief`]
+/// with `λ = k·√(2σ√π)`: σ must be `> 0` and `≥ σ_min`, and the resulting peak
+/// `λ·φ(0)` must not exceed `b`.
+fn make_belief(env: &Env, k: i128, b: i128, sigma_min: i128, mu: i128, sigma: i128) -> Belief {
+    if sigma <= 0 {
+        panic_with_error!(env, KaidoError::InvalidSigma);
+    }
+    if sigma < sigma_min {
+        panic_with_error!(env, KaidoError::SigmaBelowFloor);
+    }
+    let lambda = lambda_of(k, sigma);
+    if gaussian_pdf_scaled(mu, sigma, lambda, mu) > b {
+        panic_with_error!(env, KaidoError::PeakExceedsB);
+    }
+    Belief { mu, sigma, lambda }
+}
+
 fn mul_div_floor(a: i128, b: i128, c: i128) -> i128 {
     kaido_math::mul_div(a, b, c)
 }

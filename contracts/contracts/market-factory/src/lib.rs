@@ -23,6 +23,7 @@ use kaido_common::{
 };
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, panic_with_error, Address, BytesN, Env,
+    Vec,
 };
 
 // Cross-contract client interfaces. Declared here as bare `#[contractclient]`
@@ -47,6 +48,22 @@ trait DistributionMarketIface {
         window_resolve: u64,
         mu0: i128,
         sigma0: i128,
+        usdc: Address,
+    );
+    #[allow(clippy::too_many_arguments)]
+    fn init_trajectory(
+        env: Env,
+        k: i128,
+        b: i128,
+        fee_bps: u32,
+        resolver: Address,
+        tier: u32,
+        checkpoints: Vec<u64>,
+        window_open: u64,
+        window_lock: u64,
+        window_resolve: u64,
+        mus0: Vec<i128>,
+        sigmas0: Vec<i128>,
         usdc: Address,
     );
 }
@@ -184,6 +201,107 @@ impl MarketFactory {
         let info = MarketInfo {
             market: market.clone(),
             outcome_space: OutcomeSpace::Scalar,
+            parameterization: Parameterization::Gaussian,
+            capped: false,
+            resolver,
+            tier: tier_enum,
+            window: MarketWindow {
+                open: window_open,
+                lock: window_lock,
+                resolve: window_resolve,
+            },
+            creator,
+        };
+        RegistryClient::new(&env, &registry).register(&info);
+
+        s.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
+        market
+    }
+
+    /// Create a trajectory market: N independent per-checkpoint Gaussians
+    /// sharing one collateral pool (ADR-4, whitepaper §16). `checkpoints` are
+    /// Unix timestamps (ascending, ≤ `window_resolve`); `mus0`/`sigmas0` have
+    /// one entry per checkpoint, all WAD.
+    pub fn create_trajectory_market(
+        env: Env,
+        creator: Address,
+        k: i128,
+        b: i128,
+        fee_bps: u32,
+        resolver: Address,
+        tier: u32,
+        checkpoints: Vec<u64>,
+        window_open: u64,
+        window_lock: u64,
+        window_resolve: u64,
+        mus0: Vec<i128>,
+        sigmas0: Vec<i128>,
+    ) -> Address {
+        creator.require_auth();
+        let s = env.storage().instance();
+        let wasm: BytesN<32> = s
+            .get(&DataKey::MarketWasm)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::NotInitialized));
+        let registry: Address = s.get(&DataKey::Registry).unwrap();
+        let usdc: Address = s.get(&DataKey::Usdc).unwrap();
+
+        if k <= 0 {
+            panic_with_error!(&env, KaidoError::InvalidK);
+        }
+        if b <= 0 {
+            panic_with_error!(&env, KaidoError::InvalidB);
+        }
+        if fee_bps > MAX_FEE_BPS {
+            panic_with_error!(&env, KaidoError::FeeTooHigh);
+        }
+        let tier_enum = match tier {
+            0 => ResolverTier::Reflector,
+            1 => ResolverTier::Attested,
+            2 => ResolverTier::Optimistic,
+            3 => ResolverTier::Designated,
+            _ => panic_with_error!(&env, KaidoError::InvalidTier),
+        };
+        let n = checkpoints.len();
+        if n == 0 || mus0.len() != n || sigmas0.len() != n {
+            panic_with_error!(&env, KaidoError::TrajectoryNotSupported);
+        }
+        if !(window_open <= window_lock && window_lock <= window_resolve)
+            || window_resolve <= env.ledger().timestamp()
+        {
+            panic_with_error!(&env, KaidoError::InvalidWindow);
+        }
+        let sigma_min = kaido_math::sigma_floor(k, b);
+        for i in 0..n {
+            if sigmas0.get(i).unwrap() < sigma_min {
+                panic_with_error!(&env, KaidoError::SigmaBelowFloor);
+            }
+        }
+
+        let counter: u64 = s.get(&DataKey::Counter).unwrap();
+        s.set(&DataKey::Counter, &(counter + 1));
+        let salt = BytesN::from_array(&env, &salt_bytes(counter));
+        let market = env
+            .deployer()
+            .with_current_contract(salt)
+            .deploy_v2(wasm, ());
+        DistributionMarketClient::new(&env, &market).init_trajectory(
+            &k,
+            &b,
+            &fee_bps,
+            &resolver,
+            &tier,
+            &checkpoints,
+            &window_open,
+            &window_lock,
+            &window_resolve,
+            &mus0,
+            &sigmas0,
+            &usdc,
+        );
+
+        let info = MarketInfo {
+            market: market.clone(),
+            outcome_space: OutcomeSpace::Trajectory(checkpoints),
             parameterization: Parameterization::Gaussian,
             capped: false,
             resolver,
