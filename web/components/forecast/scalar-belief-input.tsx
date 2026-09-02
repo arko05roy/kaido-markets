@@ -21,7 +21,7 @@ import {
   type GaussianBelief,
 } from "@/lib/curve";
 import type { OutcomeConfig } from "@/lib/outcome-scale";
-import { defaultOpeningWidth, formatXTick } from "@/lib/outcome-scale";
+import { defaultOpeningWidth, formatXTick, tickLabelItems, chartHeightForTickCount } from "@/lib/outcome-scale";
 import { cn } from "@/lib/utils";
 
 export interface ScalarBeliefInputProps {
@@ -132,9 +132,12 @@ export function ScalarBeliefInput({
     <div className="flex flex-col gap-5">
       <BeliefChart
         mode="scalar"
+        flat
+        height={chartHeightForTickCount(outcomeConfig?.divisions?.length ?? 0)}
         market={market}
         range={chartRange}
         xTicks={outcomeConfig?.divisions}
+        xAxisItems={outcomeConfig ? tickLabelItems(outcomeConfig) : undefined}
         formatXTick={outcomeConfig ? (v) => formatXTick(outcomeConfig, v) : undefined}
         consensus={consensus}
         you={belief}

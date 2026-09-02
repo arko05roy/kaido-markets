@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { BinaryOddsBar } from "@/components/forecast/binary-odds-bar";
 import { BeliefChart } from "@/components/forecast/belief-chart";
 import { fromWad, type GaussianBelief } from "@/lib/curve";
-import { chartRangeForConfig, formatXTick, parseOutcomeConfig } from "@/lib/outcome-scale";
+import { chartRangeForConfig, formatXTick, parseOutcomeConfig, tickLabelItems, chartHeightForTickCount } from "@/lib/outcome-scale";
 
 import type { TradeMarketView } from "@/components/forecast/trade-panel";
 
@@ -60,12 +60,16 @@ export function ConsensusChart({
     }
 
     const range = chartRangeForConfig(outcomeConfig, muReal, sigmaReal);
+    const tickN = outcomeConfig?.divisions?.length ?? 0;
     return (
       <BeliefChart
         mode="scalar"
+        flat
+        height={chartHeightForTickCount(tickN)}
         market={{ kWad, bWad, capped: view.capped }}
         range={range}
         xTicks={outcomeConfig?.divisions}
+        xAxisItems={outcomeConfig ? tickLabelItems(outcomeConfig) : undefined}
         formatXTick={outcomeConfig ? (v) => formatXTick(outcomeConfig, v) : undefined}
         consensus={{ muWad, sigmaWad }}
         you={you}

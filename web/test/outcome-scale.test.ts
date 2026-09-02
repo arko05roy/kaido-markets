@@ -6,9 +6,11 @@ import {
   defaultTickLabels,
   evenDivisions,
   formatXTick,
+  formatXTickAt,
   interiorTicks,
   parseOutcomeConfig,
   parseTickLabels,
+  tickLabelItems,
 } from "@/lib/outcome-scale";
 
 describe("outcome-scale", () => {
@@ -71,6 +73,33 @@ describe("outcome-scale", () => {
     })!;
     expect(formatXTick(cfg, 3.33)).toBe("Dry");
     expect(formatXTick(cfg, 5)).toBe("5");
+  });
+
+  it("formats tick labels by index", () => {
+    const cfg = parseOutcomeConfig({
+      marketStyle: "kaido",
+      outcomeMin: 0,
+      outcomeMax: 100,
+      divisions: [25, 75],
+      divisionLabels: ["Low", "High"],
+    })!;
+    expect(formatXTickAt(cfg, 1)).toBe("High");
+    expect(tickLabelItems(cfg)).toEqual([
+      { value: 25, label: "Low" },
+      { value: 75, label: "High" },
+    ]);
+  });
+
+  it("aligns divisionLabels length to divisions when loading metadata", () => {
+    const cfg = parseOutcomeConfig({
+      marketStyle: "kaido",
+      outcomeMin: 0,
+      outcomeMax: 100,
+      divisions: [10, 20, 30, 40, 50, 60, 70, 80, 90, 92, 94, 96],
+      divisionLabels: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
+    })!;
+    expect(cfg?.divisionLabels).toHaveLength(12);
+    expect(cfg?.divisionLabels?.[11]).toBe("l");
   });
 
   it("defaults opening call to midpoint", () => {

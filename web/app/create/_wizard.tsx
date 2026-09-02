@@ -33,6 +33,8 @@ import {
   defaultTickLabels,
   formatXTick,
   parseTickLabels,
+  chartHeightForTickCount,
+  tickLabelItems,
   resizeTickLabels,
   tickLabelsFromConfig,
   type MarketStyle,
@@ -686,12 +688,16 @@ export function CreateMarketWizard({
                   const muR = fromWad(muW);
                   const sigR = Math.max(1e-12, fromWad(sigW));
                   const range = chartRangeForConfig(outcomeConfig, muR, sigR);
+                  const tickN = outcomeConfig?.divisions?.length ?? 0;
                   return (
                     <BeliefChart
                       mode="scalar"
+                      flat
+                      height={chartHeightForTickCount(tickN)}
                       market={{ kWad, bWad, capped }}
                       range={range}
                       xTicks={outcomeConfig?.divisions}
+                      xAxisItems={outcomeConfig ? tickLabelItems(outcomeConfig) : undefined}
                       formatXTick={(v) => formatXTick(outcomeConfig, v)}
                       consensus={{ muWad: muW, sigmaWad: capped ? sigW : clampSigma(sigW, { kWad, bWad }) }}
                     />

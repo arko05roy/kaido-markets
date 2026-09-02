@@ -8,10 +8,6 @@
  *     value markers.
  *   - `trajectory`: x = checkpoint time; live samples + the consensus path + the
  *     "you" path + a ±σ confidence band.
- *
- * The curves come from `web/lib/curve` (`renderGaussian`) — the byte-exact
- * `kaido-math` port — so what's drawn is exactly what would be submitted (ADR-8).
- * No bespoke SVG, no pointer code: this is display only.
  */
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -26,9 +22,9 @@ import {
   YAxis,
 } from "recharts";
 
+import { AxisLabelRail, type AxisTickItem } from "@/components/forecast/axis-label-rail";
 import { fromWad, gridForScalarBeliefs, renderGaussian, peakAtBeliefMu, type GaussianBelief } from "@/lib/curve";
-
-const GRID_POINTS = 96;
+import { cn } from "@/lib/utils";
 
 const COLORS = {
   you: "#d8c69a",
@@ -37,7 +33,6 @@ const COLORS = {
   band: "rgba(216,198,154,0.25)",
 } as const;
 
-const AXIS_TICK = { fontSize: 11, fill: "rgba(255,255,255,0.42)" };
 const GRID_STROKE = "rgba(255,255,255,0.06)";
 
 function fmtNum(v: number): string {
@@ -48,16 +43,28 @@ function fmtNum(v: number): string {
   return v.toPrecision(2);
 }
 
-function Frame({ height, children, empty }: { height: number; children: React.ReactNode; empty?: boolean }) {
+function ChartShell({
+  height,
+  children,
+  footer,
+  empty,
+  flat,
+}: {
+  height: number;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  empty?: boolean;
+  flat?: boolean;
+}) {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
 
-  // ResponsiveContainer needs a concrete pixel height — percentage height fails in grid/flex layouts.
-  const innerH = Math.max(height - 16, 120);
-
   return (
     <div
-      className="w-full min-w-0 border border-white/10 bg-[#0b0b0c] p-2"
+      className={cn(
+        "w-full min-w-0",
+        flat ? "bg-transparent" : "border border-white/10 bg-[#0b0b0c] p-2",
+      )}
       style={{ height, minHeight: height }}
     >
       {empty ? (
@@ -65,11 +72,16 @@ function Frame({ height, children, empty }: { height: number; children: React.Re
           no data yet
         </div>
       ) : !ready ? (
-        <div style={{ height: innerH }} aria-hidden />
+        <div className="h-full" aria-hidden />
       ) : (
-        <ResponsiveContainer width="100%" height={innerH} minWidth={0} debounce={50}>
-          {children as React.ReactElement}
-        </ResponsiveContainer>
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="relative min-h-0 flex-1">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+              {children as React.ReactElement}
+            </ResponsiveContainer>
+          </div>
+          {footer ? <div className="shrink-0">{footer}</div> : null}
+        </div>
       )}
     </div>
   );
@@ -78,43 +90,38 @@ function Frame({ height, children, empty }: { height: number; children: React.Re
 export interface ScalarBeliefChartProps {
   mode: "scalar";
   market: { kWad: bigint; bWad: bigint; capped?: boolean };
-  /** Outcome-value window to plot over (real units). */
   range: { min: number; max: number };
   consensus: GaussianBelief;
   you?: GaussianBelief;
-  /** Keep Y scale locked to the crowd curve when overlaying your belief. */
   anchorYToConsensus?: boolean;
-  /** Realised outcome (real units), once known. */
   resolved?: number;
-  /** X-axis tick values (division markers). */
   xTicks?: number[];
-  /** Label formatter for x-axis ticks. */
+  /** Index-aligned labels — preferred over `formatXTick` for the axis rail. */
+  xAxisItems?: AxisTickItem[];
   formatXTick?: (v: number) => string;
   height?: number;
+  /** Drop outer border when nested inside a panel. */
+  flat?: boolean;
 }
 
 export interface TrajectoryBeliefChartProps {
   mode: "trajectory";
   market: { kWad: bigint };
-  /** Checkpoint x-values (any consistent unit — e.g. unix seconds or s-from-now). */
   checkpoints: number[];
-  /** Consensus mean per checkpoint (real units), aligned to `checkpoints`. */
   consensusMus: number[];
-  /** Your mean per checkpoint (real units). */
   youMus?: number[];
-  /** Your σ per checkpoint (real units) — drawn as a ±σ band. */
   youSigmas?: number[];
-  /** Historical samples to show as a line (e.g. the live BTC feed). */
   samples?: { x: number; y: number }[];
-  /** Realised value per checkpoint (real units), once known. */
   resolved?: number[];
   height?: number;
+  flat?: boolean;
 }
 
 export type BeliefChartProps = ScalarBeliefChartProps | TrajectoryBeliefChartProps;
 
 export function BeliefChart(props: BeliefChartProps) {
   const height = props.height ?? 280;
+  const flat = props.flat ?? false;
 
   const scalarConsensusSeries = useMemo(() => {
     if (props.mode !== "scalar") return null;
@@ -176,16 +183,34 @@ export function BeliefChart(props: BeliefChartProps) {
     });
   }, [props]);
 
+  const axisItems = useMemo((): AxisTickItem[] => {
+    if (props.mode !== "scalar") return [];
+    if (props.xAxisItems?.length) return props.xAxisItems;
+    if (!props.xTicks?.length) return [];
+    const fmt = props.formatXTick ?? fmtNum;
+    return props.xTicks.map((value) => ({ value, label: fmt(value) }));
+  }, [
+    props.mode,
+    props.mode === "scalar" ? props.xAxisItems : undefined,
+    props.mode === "scalar" ? props.xTicks : undefined,
+    props.mode === "scalar" ? props.formatXTick : undefined,
+  ]);
+
   if (props.mode === "scalar") {
     const data = scalarData ?? [];
-    if (data.length === 0) return <Frame height={height} empty>{null}</Frame>;
+    if (data.length === 0) {
+      return (
+        <ChartShell height={height} flat={flat} empty>
+          {null}
+        </ChartShell>
+      );
+    }
+
     const bReal = fromWad(props.market.bWad);
     const consensusPeak = Math.max(...data.map((d) => d.consensus), 0);
     const youGridPeak = Math.max(...data.map((d) => d.you ?? 0), 0);
-    const youMuPeak =
-      props.you != null ? peakAtBeliefMu(props.you, props.market) : 0;
+    const youMuPeak = props.you != null ? peakAtBeliefMu(props.you, props.market) : 0;
     const youPeak = Math.max(youGridPeak, youMuPeak);
-    // Anchor to crowd, but grow headroom when sniper peak exceeds it (never shrink below crowd).
     const crowdAnchor = consensusPeak > 0 ? consensusPeak * 1.18 : 0;
     const yMax =
       props.anchorYToConsensus && props.you != null && crowdAnchor > 0
@@ -193,20 +218,34 @@ export function BeliefChart(props: BeliefChartProps) {
         : Math.max(consensusPeak, youPeak) > 0
           ? Math.max(consensusPeak, youPeak) * 1.12
           : Math.max(bReal, 1);
+
+    const hasLabelRail = axisItems.length > 0;
+    const formatLabel = props.formatXTick ?? fmtNum;
+
     return (
-      <Frame height={height}>
-        <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+      <ChartShell
+        height={height}
+        flat={flat}
+        footer={
+          hasLabelRail ? (
+            <AxisLabelRail min={props.range.min} max={props.range.max} items={axisItems} />
+          ) : undefined
+        }
+      >
+        <AreaChart data={data} margin={{ top: 12, right: 8, bottom: hasLabelRail ? 4 : 20, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
           <XAxis
             dataKey="x"
             type="number"
             domain={[props.range.min, props.range.max]}
-            ticks={props.xTicks}
-            padding={{ left: 16, right: 16 }}
-            tickFormatter={(v) => (props.formatXTick ? props.formatXTick(Number(v)) : fmtNum(Number(v)))}
-            tick={AXIS_TICK}
-            stroke="rgba(255,255,255,0.15)"
+            hide={hasLabelRail}
+            ticks={hasLabelRail ? undefined : props.xTicks}
+            tickFormatter={(v) => formatLabel(Number(v))}
+            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.38)" }}
+            stroke="rgba(255,255,255,0.12)"
             scale="linear"
+            tickLine={false}
+            axisLine={false}
           />
           <YAxis hide domain={[0, yMax]} />
           {bReal > 0 && bReal <= yMax * 0.98 && (
@@ -240,27 +279,43 @@ export function BeliefChart(props: BeliefChartProps) {
             />
           )}
         </AreaChart>
-      </Frame>
+      </ChartShell>
     );
   }
 
-  // trajectory
   const data = trajData ?? [];
   const samples = props.samples ?? [];
-  if (data.length === 0 && samples.length === 0) return <Frame height={height} empty>{null}</Frame>;
+  if (data.length === 0 && samples.length === 0) {
+    return (
+      <ChartShell height={height} flat={flat} empty>
+        {null}
+      </ChartShell>
+    );
+  }
+
   return (
-    <Frame height={height}>
-      <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+    <ChartShell height={height} flat={flat}>
+      <ComposedChart data={data} margin={{ top: 12, right: 8, bottom: 20, left: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
         <XAxis
           dataKey="x"
           type="number"
           domain={["dataMin", "dataMax"]}
-          tick={AXIS_TICK}
-          stroke="rgba(255,255,255,0.15)"
+          tick={{ fontSize: 10, fill: "rgba(255,255,255,0.38)" }}
+          stroke="rgba(255,255,255,0.12)"
           tickFormatter={fmtNum}
+          tickLine={false}
+          axisLine={false}
         />
-        <YAxis tickFormatter={fmtNum} tick={AXIS_TICK} stroke="rgba(255,255,255,0.15)" width={56} domain={["auto", "auto"]} />
+        <YAxis
+          tickFormatter={fmtNum}
+          tick={{ fontSize: 10, fill: "rgba(255,255,255,0.38)" }}
+          stroke="rgba(255,255,255,0.12)"
+          width={48}
+          domain={["auto", "auto"]}
+          tickLine={false}
+          axisLine={false}
+        />
         {samples.length > 1 && (
           <Line
             data={samples}
@@ -317,6 +372,6 @@ export function BeliefChart(props: BeliefChartProps) {
           />
         )}
       </ComposedChart>
-    </Frame>
+    </ChartShell>
   );
 }

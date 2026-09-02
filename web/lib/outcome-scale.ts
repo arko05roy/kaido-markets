@@ -166,10 +166,26 @@ export function chartRangeForScale(
 function divisionDisplayLabel(config: OutcomeConfig, v: number): string | null {
   const labels = config.divisionLabels;
   if (!labels?.length) return null;
-  const idx = config.divisions.findIndex((d) => Math.abs(d - v) <= 1e-6);
+  const idx = config.divisions.findIndex(
+    (d) => Math.abs(d - v) <= Math.max(1e-5, Math.abs(d) * 1e-4),
+  );
   if (idx < 0) return null;
   const label = labels[idx]?.trim();
   return label || null;
+}
+
+export function formatXTickAt(config: OutcomeConfig | null, index: number): string {
+  if (!config || index < 0 || index >= config.divisions.length) return "";
+  const custom = config.divisionLabels?.[index]?.trim();
+  if (custom) return custom;
+  return formatXTick({ ...config, divisionLabels: undefined }, config.divisions[index]);
+}
+
+export function tickLabelItems(config: OutcomeConfig): { value: number; label: string }[] {
+  return config.divisions.map((value, i) => ({
+    value,
+    label: formatXTickAt(config, i),
+  }));
 }
 
 export function formatXTick(config: OutcomeConfig | null, v: number): string {
@@ -186,6 +202,12 @@ export function formatXTick(config: OutcomeConfig | null, v: number): string {
   if (abs >= 1000) return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
   if (abs >= 1) return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return v.toPrecision(3);
+}
+
+export function chartHeightForTickCount(count: number): number {
+  if (count > 8) return 320;
+  if (count > 5) return 300;
+  return 280;
 }
 
 export function parseOutcomeConfig(meta: {
@@ -232,12 +254,16 @@ export function parseOutcomeConfig(meta: {
   const divisionLabels = Array.isArray(meta.divisionLabels)
     ? meta.divisionLabels.map((s) => (typeof s === "string" ? s.trim() : ""))
     : undefined;
-  const hasLabels = divisionLabels?.some((l) => l.length > 0);
+  const alignedLabels =
+    divisionLabels && divisionLabels.length !== divisions.length
+      ? Array.from({ length: divisions.length }, (_, i) => divisionLabels[i] ?? "")
+      : divisionLabels;
+  const hasLabels = alignedLabels?.some((l) => l.length > 0);
   return {
     style: "kaido",
     min,
     max,
     divisions,
-    ...(hasLabels ? { divisionLabels } : {}),
+    ...(hasLabels ? { divisionLabels: alignedLabels } : {}),
   };
 }
