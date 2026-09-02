@@ -151,6 +151,18 @@ export function sigmaFloor(kWad: bigint, bWad: bigint): bigint {
   return wdiv(wmul(ratio, ratio), SQRT_PI);
 }
 
+/**
+ * The σ a fit should snap to: `σ_min(k,b)` plus ~0.1% headroom. At exactly the
+ * floor the market's `peak ≤ b` re-check sits on a fixed-point rounding edge
+ * (`KaidoError::PeakExceedsB`); a sliver of slack avoids that, and a belief
+ * riding exactly on the solvency boundary is fragile anyway — the UI never
+ * produces one.
+ */
+export function effectiveSigmaFloor(kWad: bigint, bWad: bigint): bigint {
+  const f = sigmaFloor(kWad, bWad);
+  return f + (f >> 10n) + 1n;
+}
+
 // --- number ⇄ WAD helpers --------------------------------------------------
 
 /** Convert a JS number to WAD-scaled bigint (round half away from zero). */
@@ -211,7 +223,7 @@ export function fitGaussianFromHump(
   }
   const sigmaRaw = Math.sqrt(varSum / wSum);
   const muWad = toWad(mu);
-  const floor = sigmaFloor(market.kWad, market.bWad);
+  const floor = effectiveSigmaFloor(market.kWad, market.bWad);
   let sigmaWad = toWad(sigmaRaw);
   if (sigmaWad < floor) sigmaWad = floor;
   if (sigmaWad <= 0n) sigmaWad = floor > 0n ? floor : 1n;
@@ -255,7 +267,7 @@ export function fitTrajectory(
 ): { musWad: bigint[]; sigmasWad: bigint[] } {
   const values = pathToCheckpointValues(path, checkpointXs);
   const jitterScale = opts.jitterToSigma ?? 1;
-  const floor = sigmaFloor(market.kWad, market.bWad);
+  const floor = effectiveSigmaFloor(market.kWad, market.bWad);
   // Local jitter: residual of each drawn point from the straight chord through
   // its neighbours, RMS-aggregated near each checkpoint.
   const sorted = [...path].sort((a, b) => a.x - b.x);

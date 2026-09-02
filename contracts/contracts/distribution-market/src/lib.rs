@@ -846,7 +846,13 @@ fn make_belief(env: &Env, k: i128, b: i128, sigma_min: i128, mu: i128, sigma: i1
         panic_with_error!(env, KaidoError::SigmaBelowFloor);
     }
     let lambda = lambda_of(k, sigma);
-    if gaussian_pdf_scaled(mu, sigma, lambda, mu) > b {
+    // The σ-floor makes `peak == b` *mathematically*; in fixed point the
+    // truncations in `sigma_floor` / `lambda` / `sqrt_wad` / `gaussian_pdf_scaled`
+    // can leave the computed peak a few ULPs above `b` when σ is *at* the floor.
+    // Allow a negligible tolerance (≪ a stroop of `b`) so an honest σ == σ_min
+    // belief isn't rejected; anything genuinely over-peaked is far beyond this.
+    let peak_tol = (b / 1_048_576) + 1_024; // b·2^-20 + 1024
+    if gaussian_pdf_scaled(mu, sigma, lambda, mu) > b.saturating_add(peak_tol) {
         panic_with_error!(env, KaidoError::PeakExceedsB);
     }
     Belief { mu, sigma, lambda }
