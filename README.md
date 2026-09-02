@@ -1,351 +1,235 @@
 # Kaido
 
-**The first distribution-market primitive on Stellar.**
+**The first distribution-market primitive on Stellar.**  
 Bet on where a number lands — not whether it crosses a line.
 
+```text
+   Traditional prediction market:       Kaido:
+   "Will BTC close above $70k?"          "Where does BTC close on Friday?"
+
+   ┌────────┐  ┌────────┐                         ╱╲
+   │  YES   │  │   NO   │                        ╱  ╲
+   │  38¢   │  │  62¢   │                       ╱    ╲
+   └────────┘  └────────┘                    ╱        ╲___
+                                           ─────────────────
+   $1 if right, $0 if wrong               $60k   $68k   $80k
+
+   Outcome space: 1 bit                   Outcome space: any number
+   Position: a share                      Position: a curve
+   Payout: binary                         Payout: scales with accuracy
 ```
-   Polymarket asks:                    Kaido asks:
-   "Will BTC close above $70k?"        "Where does BTC close on Friday?"
 
-   ┌────────┐  ┌────────┐                       ╱╲
-   │  YES   │  │  NO    │                      ╱  ╲
-   │  38¢   │  │  62¢   │                     ╱    ╲
-   └────────┘  └────────┘                   ╱        ╲___
-                                          ─────────────────
-   $1 if right, $0 if wrong              $60k   $68k   $80k
+[Whitepaper](./kaido-whitepaper.md) · [Build plan](./build.md) · [Architecture decisions](./docs/adr/)
 
-   Outcome space: 1 bit                  Outcome space: any number
-   Position: a share                     Position: a curve
-   Payout: binary                        Payout: scales with accuracy
+---
+
+## Description
+
+Kaido is a prediction market where the outcome is a **number**, not a binary YES/NO result.
+
+Instead of buying a share that pays only when a threshold is crossed, users express two things:
+
+1. **Where they think the result will land** — a center value such as a price, score, margin, count, or percentage.
+2. **How confident they are** — a narrow or wide confidence band around that value.
+
+Kaido converts this belief into a payout curve. When the final result arrives, the protocol pays the user according to the height of their curve at the resolved value.
+
+```text
+   Prediction: BTC closes at $68,200
+   Confidence: tight range of ±$1,400
+
+              highest payout
+                    ↓
+                  ╱╲
+                 ╱  ╲
+                ╱    ╲
+               ╱      ╲            final result: $68,600
+             ╱          ╲                 │
+           ╱              ╲___            ▼
+   ─────────────────────────|────────────────────►
+   $60k              $68k   ▲   $70k           $80k
+                         payout = curve height
+                         at the final result
 ```
 
-[Whitepaper](./kaido-whitepaper.md) · [Build plan](./build.md) · [ADRs](./docs/adr/)
+A tight prediction can produce a larger payout when accurate. A wider prediction covers more possible outcomes but reduces the peak reward.
 
-User feedback and product observations are collected in
-[`docs/user-feedback.md`](./docs/user-feedback.md).
+---
 
-## Demo videos
+## Mainnet Contract Address — Mandatory
 
-- [Product walkthrough — no voice](https://youtu.be/ILiez9hhDGY)
+> ### Stellar Mainnet Deployment
+>
+> **Distribution Market Contract**  
+> [`CBRZBLU224KTJSANZIKAOHLXMQUV6GHQBEK5QAK46456WKY2BE6QZXA6`](https://stellar.expert/explorer/public/contract/CBRZBLU224KTJSANZIKAOHLXMQUV6GHQBEK5QAK46456WKY2BE6QZXA6)
+>
+> **Deployment Transaction**  
+> [`d3650b7c1d7d3a10a54c6e859ff4e318d1091b74ea5eb2fcee7438bed67493f4`](https://stellar.expert/explorer/public/tx/d3650b7c1d7d3a10a54c6e859ff4e318d1091b74ea5eb2fcee7438bed67493f4)
+>
+> **Network:** Stellar Public Mainnet
+
+This is Kaido's mainnet pilot deployment of the core distribution-market contract.
+
+---
+
+## Features
+
+- **Numerical prediction markets** for prices, scores, margins, counts, percentages, and other measurable outcomes.
+- **Belief-based positions** defined by a center value and confidence range.
+- **Accuracy-weighted payouts** instead of all-or-nothing binary settlement.
+- **Single-market liquidity** across an outcome range instead of fragmented threshold markets.
+- **Pre-trade quotes** for cost, maximum payout, and worst-case outcome.
+- **Permissionless market creation** with configurable ranges, resolution times, fees, and resolvers.
+- **Soroban smart contracts** for collateral custody, trade pricing, and deterministic settlement.
+- **Multiple resolver tiers** for trustless, attested, optimistic, and designated outcomes.
+- **Stellar wallet integration** for transaction signing and position management.
+
+---
+
+## Problem We Are Solving
+
+Most prediction markets force continuous outcomes into binary questions.
+
+To express a view on BTC's closing price, a user may need several separate markets:
+
+- Will BTC close above $65,000?
+- Will BTC close above $70,000?
+- Will BTC close above $75,000?
+
+This creates three major problems:
+
+1. **Beliefs are compressed.** A detailed forecast becomes only YES or NO.
+2. **Liquidity is fragmented.** Capital is split across many threshold markets covering the same event.
+3. **Accuracy is poorly represented.** A prediction that misses by $100 can receive the same result as one that misses by $20,000.
+
+Binary markets are useful when the real-world outcome is binary. They are much less expressive when the outcome naturally exists on a numerical range.
+
+---
+
+## How We Are Solving It
+
+Kaido represents every position as a **curve across the full outcome range**.
+
+The user's center determines where the curve peaks. Their confidence determines how narrow or wide the curve becomes. Their stake determines how much capital backs the position.
+
+When the market resolves:
+
+1. A resolver submits the final numerical outcome.
+2. The Soroban contract evaluates the user's curve at that value.
+3. The payout is calculated from the curve height and market state.
+4. Settlement is executed on Stellar.
+
+This allows one market to represent many possible outcomes while rewarding precision proportionally.
+
+### How a Bet Works
+
+```text
+       Create                 Trade                  Resolve
+         │                      │                       │
+         ▼                      ▼                       ▼
+   ┌──────────┐          ┌──────────┐           ┌──────────┐
+   │  Market  │ ───────► │ Position │ ────────► │ Payout   │
+   └──────────┘          └──────────┘           └──────────┘
+
+   Creator sets:         User selects:           Resolver reports:
+   • question            • center value          • final number
+   • outcome range       • confidence range
+   • resolver            • stake                 Contract:
+   • resolution time                              • evaluates curve
+   • fee                 UI displays:             • settles payout
+                         • cost
+                         • maximum payout
+                         • worst case
+```
+
+Anyone can create a market and anyone can take a position. The protocol earns a fee on trades, while liquidity providers earn from facilitating market activity.
+
+---
+
+## Architecture Diagram
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                         Web App                              │
+│              Next.js 16 · App Router · TypeScript           │
+│                                                              │
+│ Browse markets · Create market · Build belief curve          │
+│ View quotes · Connect wallet · Track positions                │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│                       @kaido/sdk                             │
+│                                                              │
+│ createMarket · trade · resolve · positions · quotes           │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│               Generated Contract Bindings                    │
+└──────────────────────────────┬───────────────────────────────┘
+                               │ Stellar RPC
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│                  Soroban Smart Contracts                     │
+│                                                              │
+│  ┌─────────────────┐       ┌──────────────────────────────┐  │
+│  │ Market Factory  │──────►│ Distribution Market          │  │
+│  │ creates markets │       │ • holds collateral           │  │
+│  └────────┬────────┘       │ • prices positions           │  │
+│           │                │ • calculates payouts         │  │
+│           ▼                │ • settles markets            │  │
+│  ┌─────────────────┐       └──────────────┬───────────────┘  │
+│  │ Registry        │                      │                  │
+│  │ indexes markets │              ┌───────▼────────┐         │
+│  └─────────────────┘              │ Resolver Layer │         │
+│                                   └───────┬────────┘         │
+│  ┌─────────────────────────────────────┐  │                  │
+│  │ kaido-math                          │  │                  │
+│  │ fixed-point distribution math      │  │                  │
+│  └─────────────────────────────────────┘  │                  │
+└───────────────────────────────────────────┼──────────────────┘
+                                            │
+                         ┌──────────────────▼─────────────────┐
+                         │ External Data and Stellar Assets   │
+                         │ Reflector oracle · USDC SAC        │
+                         └────────────────────────────────────┘
+```
+
+### System Layers
+
+**On-chain layer:** Rust contracts on Soroban hold collateral, price trades, evaluate payout curves, and settle markets after resolution.
+
+**Off-chain layer:** The Next.js application and TypeScript SDK convert user-friendly slider inputs into contract calls and display quotes before a user signs a transaction.
+
+### Resolver Tiers
+
+| Tier | Resolution mechanism | Example use cases |
+| --- | --- | --- |
+| **T0 — Trustless** | On-chain oracle feed such as Reflector | Crypto prices and FX rates |
+| **T1 — Attested** | Signed report from an approved provider with a challenge period | Elections, sports, and official statistics |
+| **T2 — Optimistic** | Anyone proposes an outcome with a bond; others may dispute it | Niche and long-tail data |
+| **T3 — Designated** | A named reporter submits the outcome | Community and experimental markets |
+
+---
+
+## How to Use Kaido
+
+1. Open the Kaido application.
+2. Connect a supported Stellar wallet.
+3. Browse the available numerical prediction markets.
+4. Select the market you want to trade.
+5. Choose the value where you think the outcome will land.
+6. Adjust the confidence range around your prediction.
+7. Enter your stake.
+8. Review the cost, maximum payout, and worst-case quote.
+9. Confirm the transaction in your wallet.
+10. Wait for the market to resolve.
+11. After the resolver submits the final number, the contract calculates and settles your payout.
+
+---
+
+## Demo Video
+
 - [Product walkthrough — voiceover](https://youtu.be/OgPWWf3nyto)
-
----
-
-## What is Kaido
-
-A prediction market where the outcome is a **number**, not a side.
-
-Instead of buying YES or NO shares, you pick:
-
-1. **Where you think the number will land.** A center value — the price, margin,
-   count, or score you expect.
-2. **How sure you are.** A confidence band around that center — tight if
-   you're confident, wide if you're not.
-
-The market combines that into a curve. When the answer arrives, the contract
-pays you in proportion to **how close your curve peaked to reality**. Nail it
-tight ⇒ big win. Spread wide ⇒ smaller win, smaller loss.
-
-```
-   Your bet on "BTC close on Friday"
-   center: $68,200    confidence: tight (±$1,400)
-
-         payout if you win here
-                ↓
-              ╱╲
-             ╱  ╲
-            ╱    ╲
-           ╱      ╲          truth lands: $68,600
-         ╱          ╲           │
-       ╱              ╲___     ▼
-   ────────────────────|────────────────►
-   $60k         $68k   ▲  $70k         $80k
-                     payout = curve height at the truth
-                     (here: 14.7 XLM on a 12 XLM stake)
-```
-
-Why this matters: a binary market asks you to compress your whole belief into
-one of two buckets. A distribution market lets you express *the whole shape*
-in a single position. That's the capital efficiency claim — one trade
-replaces dozens of "above X / below X" markets.
-
----
-
-## How a bet works
-
-```
-       Mon                    Wed                    Fri
-        │                      │                      │
-        ▼                      ▼                      ▼
-   ┌─────────┐           ┌──────────┐           ┌──────────┐
-   │  open   │  ───────► │  trade   │  ───────► │ resolve  │
-   └─────────┘           └──────────┘           └──────────┘
-   creator sets:         you set:                oracle reads
-    • question            • center slider         the truth
-    • outcome range       • confidence slider
-    • oracle              UI quotes:              contract pays
-    • resolve time         • cost                 you in
-    • fee                  • max payout           proportion to
-                           • worst case           how close you
-                          you confirm.            got.
-```
-
-Anyone can create a market. Anyone can take a position. The protocol earns a
-small fee on each trade; LPs (including a protocol-owned house vault) earn the
-spread.
-
----
-
-## Architecture
-
-```
-   ┌──────────────────────────────────────────────────────────┐
-   │  web/  Next.js 16 · App Router                           │
-   │  Belief Surface · /markets · /create · /whitepaper       │
-   └────────────────────────┬─────────────────────────────────┘
-                            │
-   ┌────────────────────────▼─────────────────────────────────┐
-   │  packages/sdk  @kaido/sdk                                │
-   │  createMarket · trade · resolve · positions · quotes     │
-   └────────────────────────┬─────────────────────────────────┘
-                            │
-   ┌────────────────────────▼─────────────────────────────────┐
-   │  packages/contract-bindings  generated TypeScript        │
-   │  (committed; refreshed by CI)                            │
-   └────────────────────────┬─────────────────────────────────┘
-                            │  Stellar RPC
-                            ▼
-   ┌──────────────────────────────────────────────────────────┐
-   │  contracts/  Rust · Soroban                              │
-   │                                                            │
-   │    ┌─────────────────┐       ┌──────────────────────┐   │
-   │    │ market-factory  │──────►│ distribution-market  │   │
-   │    │   create_market │       │   per-market AMM     │   │
-   │    └─────────────────┘       │   holds collateral   │   │
-   │             │                │   prices trades      │   │
-   │             ▼                │   pays at resolve    │   │
-   │    ┌─────────────────┐       └──┬───────────┬───────┘   │
-   │    │    registry     │          │           │           │
-   │    │  indexes markets│          ▼           ▼           │
-   │    └─────────────────┘   ┌──────────┐  ┌──────────────┐ │
-   │                          │ house-   │  │ resolver-*   │ │
-   │                          │ vault    │  │ T0 reflector │ │
-   │                          │ protocol │  │ T1 attested  │ │
-   │                          │ LP       │  │ T2 optimistic│ │
-   │                          └──────────┘  │ T3 designated│ │
-   │                                        └──────┬───────┘ │
-   │    ┌────────────────────────────────────┐    │         │
-   │    │ crates/kaido-math                  │    │         │
-   │    │ fixed-point belief math (no f64)   │    │         │
-   │    └────────────────────────────────────┘    │         │
-   └───────────────────────────────────────────────┼─────────┘
-                                                   │
-                       ┌───────────────────────────┼─────────┐
-                       │                           ▼         │
-                       │           ┌──────────────────────┐  │
-                       │           │  Reflector oracle    │  │
-                       │           │  (BTC/USD, etc.)     │  │
-                       │           └──────────────────────┘  │
-                       │           ┌──────────────────────┐  │
-                       │           │  USDC · Stellar SAC  │  │
-                       │           └──────────────────────┘  │
-                       │           External                  │
-                       └─────────────────────────────────────┘
-```
-
-**Layer 1** (chain side): Rust contracts on Soroban — they hold collateral,
-match trades against the current aggregate curve, and settle deterministically
-when an oracle reports the realized number.
-
-**Layer 2** (off-chain side): a Next.js app and a TypeScript SDK that compile
-slider inputs into the correct calldata, show pre-trade quotes (cost, max
-payout, worst case), and display results.
-
-The four resolver tiers let any market choose how much trust it needs:
-
-| Tier | How truth arrives | Use case |
-| --- | --- | --- |
-| **T0** trustless | On-chain oracle feed (Reflector) | Crypto prices, FX |
-| **T1** attested | Signed report from a vetted provider + challenge window | Elections, sports, official stats |
-| **T2** optimistic | Anyone proposes with a bond; anyone can dispute | Long-tail metrics, niche data |
-| **T3** designated | A specific named party reports | Community/fun markets — labeled `pure trust` |
-
----
-
-## Repo layout
-
-```
-kaido/
-├─ contracts/                     Rust / Soroban — Cargo workspace
-│  ├─ crates/kaido-math/          fixed-point belief math (no f64, ADR-1)
-│  ├─ packages-common/            shared types: Resolver trait, errors, events
-│  ├─ contracts/
-│  │   ├─ market-factory/         create_market entry point
-│  │   ├─ distribution-market/    per-market AMM
-│  │   ├─ blend-adapter/          BlendTap JIT borrow spine
-│  │   ├─ registry/               indexes markets + resolvers
-│  │   └─ resolver-{reflector,attested,optimistic,designated}/
-│  ├─ tests/                      multi-contract integration tests
-│  ├─ fuzz/                       cargo-fuzz targets (nightly)
-│  └─ Makefile.toml               cargo-make tasks
-│
-├─ web/                           Next.js 16 (App Router)
-│  ├─ app/                        landing · /markets · /create · /leaderboard · /whitepaper
-│  ├─ components/                 hero, forecast, market, wallet, ui
-│  └─ lib/                        stellar (networks, wallet, contracts), curve, utils
-│
-├─ packages/
-│  ├─ sdk/                        @kaido/sdk — TypeScript SDK
-│  ├─ contract-bindings/          generated TS bindings (committed)
-│  └─ config/                     shared eslint / tsconfig / tailwind preset
-│
-├─ config/networks.json           static, public network params
-├─ docs/
-│  ├─ adr/                        architecture decisions
-│  └─ test-vectors/               cross-language reference (50-digit)
-├─ kaido-whitepaper.md            full mechanism + system architecture
-└─ build.md                       sprint plan + SCF tranche mapping
-```
-
----
-
-## Prerequisites
-
-- **Node ≥ 22** + **pnpm** (`corepack enable` or `npm i -g pnpm`)
-- **Rust (stable)** via rustup — the `wasm32v1-none` target installs
-  automatically from `contracts/rust-toolchain.toml`
-- **Stellar CLI** ≥ 23 — <https://developers.stellar.org/docs/tools/cli>
-- **cargo-make** — `cargo install --locked cargo-make`
-- **Docker** — *optional*, only for `make localnet`. Kaido develops and deploys
-  against **Stellar Testnet**, which needs no Docker.
-
----
-
-## Quick start
-
-```bash
-# 1. install JS deps + build contract WASM
-pnpm install
-cargo make --cwd contracts build-wasm        # or: make bootstrap
-
-# 2. env — defaults target Stellar Testnet
-cp .env.example .env
-
-# 3. a funded testnet deployer
-stellar keys generate kaido-testnet-deployer --network testnet --fund
-
-# 4. run the web app
-pnpm dev                                      # http://localhost:3000
-
-# 5. CI-equivalent checks
-pnpm build && pnpm lint && pnpm typecheck && pnpm test     # web
-cargo make --cwd contracts ci                              # rust
-pnpm --filter web e2e                                      # Playwright smoke
-
-# optional offline local network
-make localnet                                 # Docker; RPC at localhost:8000/rpc
-make localnet-stop
-```
-
-Native Rust unit tests use `soroban-sdk` testutils and hit **no network**. Only
-integration / E2E lifecycle suites talk to Testnet RPC.
-
----
-
-## Networks
-
-| Network | Passphrase | RPC |
-| --- | --- | --- |
-| **Testnet** *(default)* | `Test SDF Network ; September 2015` | `https://soroban-testnet.stellar.org` |
-| Local *(optional, Docker)* | `Standalone Network ; February 2017` | `http://localhost:8000/rpc` |
-| Mainnet | `Public Global Stellar Network ; September 2015` | third-party provider |
-
-Per-network contract ids (USDC SAC, Reflector feed, Kaido contracts, admin
-multisig, Launchtube) are never hardcoded. They're resolved at deploy time and
-written by `contracts/scripts/deploy.sh` into `config/networks.<network>.json`.
-
-### Testnet contract addresses
-
-The following addresses are from the current deployment recorded in
-[`config/networks.testnet.json`](./config/networks.testnet.json). Testnet state
-can be reset, so treat these as deployment references rather than permanent
-production addresses.
-
-| Component | Address |
-| --- | --- |
-| Distribution Market WASM instance | `CDG5RANX2PTBBL2QLCEB3UBISPSRLRBDJZU2ENU2TMOEYSXUBTA5MWHT` |
-| Market Factory | `CC36IZ5JOYDPX5NVMSRFQ6VEWAUJI45HUKCKLPA2YP37OQNG6OSJE5LJ` |
-| Registry | `CC4X5KUWXUVBMCKVKCL7ZCBCNA5U5FMSN23TUHBAZICGHVZ4TE543OKX` |
-| Reflector Resolver (T0) | `CCP7QJ2RHZYVMLU2V3OSCM5FYZAAXVLMEX6ZFMWFCBXSCUU3QSCZY77Q` |
-| Attested Resolver (T1) | `CDC3GJFJLHQZCU5QF22AD42YFNFDOTVL7GMEF32HT7FRP6ILZLPWK6ZO` |
-| Optimistic Resolver (T2) | `CDT2HGDU7WG5L4OHNHIG65G2MTU32M5JBRZBSFR6ALDPX4DH3IICCXYM` |
-| Designated Resolver (T3) | `CBBDJQGJDWPYCUTUSPTZXJLPKOUGKJ6DN3XW5TFIMJ3IQCY47S2AE6DR` |
-| USDC Stellar Asset Contract | `CDDOIWSIV7BQ4D22LQ5O2XVDJRXTN23NODNVG7JXZUJO3ZNOLOQXLQ5I` |
-| Reflector feed | `CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63` |
-| Kaido issuer / admin | `GBKVUNMQ534SFSPQXYDNK2F4LFLL2534NYOBXVPDC3JFYLFA7YRBLWBI` |
-| Demo market fixture | `CDL6GFSLNZZX3KR7EELFHGSEFZEFIYTOAQIWIAYV5GEIFK3CGLBCXCVG` |
-| Lifecycle market fixture | `CAVFSDBWDPSA5GPJ36TJ37SMOPR5MLKHULI7D23T5PCYB2656QQBLAFQ` |
-| Lifecycle resolver fixture | `CB7ERA2ZJ4TOHTQCWFJ7S5WOG5FYRJPSXLUJGRW7YIWMNXK243FTCW42` |
-
-For the current wallet set and activity links, see
-[`docs/wallets.testnet.md`](./docs/wallets.testnet.md) and
-[`docs/wallet-activity.testnet.md`](./docs/wallet-activity.testnet.md).
-
-> ⚠️ Testnet resets ~2–4×/year at 17:00 UTC (next: **2026-06-17**,
-> **2026-12-16**) and wipes all state. Every deploy is scripted and idempotent;
-> fixtures are re-seedable; nothing off-chain treats a testnet contract id as
-> permanent.
-
----
-
-## Deploying
-
-```bash
-make deploy:testnet      # scripted, idempotent — writes config/networks.testnet.json + fixtures.demoMarket
-make seed:testnet        # BlendTap authorize + optional lifecycle fixture (KAIDO_RESEED_LIFECYCLE=1)
-./contracts/scripts/generate-demo-wallets.sh 15  # writes wallet + activity reports with testnet tx links
-```
-
-After seeding, optional env hints are printed (`NEXT_PUBLIC_KAIDO_DEMO_MARKET`, `NEXT_PUBLIC_KAIDO_LIFECYCLE_MARKET`).
-
-Gated SDK lifecycle test against the live testnet:
-
-```bash
-KAIDO_INTEGRATION=1 KAIDO_INTEGRATION_LIFECYCLE=1 KAIDO_INTEGRATION_SECRET=S... pnpm --filter @kaido/sdk test
-```
-
-Mainnet deploys are gated on an external audit + a legal opinion (see
-`build.md` Sprint 8). `deploy.sh` refuses to run against mainnet until then.
-
-Mainnet pilot deployment:
-
-- `distribution-market`: [CBRZBLU224KTJSANZIKAOHLXMQUV6GHQBEK5QAK46456WKY2BE6QZXA6](https://stellar.expert/explorer/public/contract/CBRZBLU224KTJSANZIKAOHLXMQUV6GHQBEK5QAK46456WKY2BE6QZXA6)
-- Deploy transaction: [`d3650b7c1d7d3a10a54c6e859ff4e318d1091b74ea5eb2fcee7438bed67493f4`](https://stellar.expert/explorer/public/tx/d3650b7c1d7d3a10a54c6e859ff4e318d1091b74ea5eb2fcee7438bed67493f4)
-- `market-factory` WASM hash: `b44491a0a959030ae7ac7c5b34322d02c430d4ffc68177a870d71b947cd712ca`
-
-This mainnet address was deployed as a minimal pilot contract only. Testnet
-remains unchanged, and the larger helper-suite / oracle wiring stays gated
-until you explicitly want it enabled.
-
-### wallet activity
-
-For wallet activity, see:
-
-- `docs/wallets.testnet.md` for wallet addresses
-- `docs/wallet-activity.testnet.md` for testnet transaction links
-
----
-
-## CI
-
-| Workflow | What it runs |
-| --- | --- |
-| `ci-contracts.yml` | fmt, clippy `-D warnings`, `cargo test`, `stellar contract build`, `cargo audit` |
-| `ci-web.yml` | lint, typecheck, build, Vitest, Playwright smoke |
-| `deploy-testnet.yml` | manual, scripted testnet deploy |
-
----
-
-## License
-
-Dual-licensed under [MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-APACHE).
+- [Product walkthrough — no voice](https://youtu.be/ILiez9hhDGY)
