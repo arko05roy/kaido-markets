@@ -1,15 +1,16 @@
 "use client";
 
-/**
- * ScalarBeliefInput — set a scalar Gaussian belief `(μ, σ)` with two sliders and
- * a live preview (no freehand drawing). σ is always clamped to the market's
- * effective σ-floor so the contract's `peak ≤ b` re-check can't reject it. The
- * preview renders the *exact* curve that will be submitted (ADR-8).
- */
 import { useEffect, useMemo, useState } from "react";
 
 import { BeliefChart } from "@/components/forecast/belief-chart";
 import { RangeSlider } from "@/components/forecast/range-slider";
+import {
+  convictionFromSigma,
+  convictionHint,
+  convictionLabel,
+  edgeVsCrowd,
+  formatOutcome,
+} from "@/lib/market-display";
 import {
   clampSigma,
   effectiveSigmaFloor,
@@ -20,12 +21,9 @@ import {
 
 export interface ScalarBeliefInputProps {
   market: { kWad: bigint; bWad: bigint; capped?: boolean };
-  /** Current consensus belief — the preview shows it faintly, and it's the default. */
   consensus: GaussianBelief;
-  /** Optional explicit outcome-value window (real units); else derived from the consensus. */
   range?: { min: number; max: number };
   disabled?: boolean;
-  /** Called whenever the belief changes; always emits a σ ≥ the effective floor. */
   onChange: (belief: GaussianBelief) => void;
 }
 
@@ -37,11 +35,16 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
   const cMu = fromWad(consensus.muWad);
   const cSigma = Math.max(floorReal, fromWad(consensus.sigmaWad));
 
-  // x-axis window: explicit, else consensus μ ± ~5σ (with a floor on the half-width).
-  const win = range ?? {
-    min: cMu - 5 * cSigma,
-    max: cMu + 5 * cSigma,
-  };
+  // X/Y frame is pinned to the crowd — only your curve moves when sliders change.
+  const chartRange = useMemo(
+    () =>
+      range ?? {
+        min: cMu - 5 * cSigma,
+        max: cMu + 5 * cSigma,
+      },
+    [range, cMu, cSigma],
+  );
+  const win = chartRange;
   const span = Math.max(win.max - win.min, floorReal * 8);
   const muStep = span / 200;
   const sigmaMin = floorReal;
@@ -51,8 +54,6 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
   const [muReal, setMuReal] = useState(cMu);
   const [sigmaReal, setSigmaReal] = useState(cSigma);
 
-  // Re-seed when the consensus belief identity changes (e.g. a new market loads)
-  // — the React-blessed "adjust state during render" pattern (no setState-in-effect).
   const [seededFrom, setSeededFrom] = useState(`${consensus.muWad}:${consensus.sigmaWad}`);
   const key = `${consensus.muWad}:${consensus.sigmaWad}`;
   if (seededFrom !== key) {
@@ -72,29 +73,59 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [belief.muWad, belief.sigmaWad]);
 
+  const edge = edgeVsCrowd(muReal, cMu);
+  const conviction = convictionFromSigma(sigmaReal, sigmaMin, sigmaMax);
+  // UI maps wide (left) ↔ tight/sniper (right); σ increases toward wide.
+  const convictionUi = sigmaMax - sigmaReal + sigmaMin;
+
   return (
-    <div className="flex flex-col gap-3">
-      <BeliefChart mode="scalar" market={market} range={win} consensus={consensus} you={belief} />
-      <RangeSlider
-        label="Where you think it lands"
-        value={muReal}
-        onChange={setMuReal}
-        min={win.min}
-        max={win.max}
-        step={muStep || 1}
-        disabled={disabled}
+    <div className="flex flex-col gap-5">
+      <BeliefChart
+        mode="scalar"
+        market={market}
+        range={chartRange}
+        consensus={consensus}
+        you={belief}
+        anchorYToConsensus
       />
-      <RangeSlider
-        label="How spread your belief is"
-        hint="left = confident · right = unsure"
-        value={sigmaReal}
-        onChange={setSigmaReal}
-        min={sigmaMin}
-        max={sigmaMax}
-        step={sigmaStep || 1}
-        format={(v) => `σ ≈ ${v >= 1 ? v.toFixed(2) : v.toPrecision(3)}`}
-        disabled={disabled}
-      />
+
+      <div className="space-y-1">
+        <RangeSlider
+          label="Your call"
+          value={muReal}
+          onChange={setMuReal}
+          min={win.min}
+          max={win.max}
+          step={muStep || 1}
+          disabled={disabled}
+          format={formatOutcome}
+          prominent
+        />
+        <p className="text-center font-mono text-xs text-white/45">
+          {edge.deltaLabel}
+          <span className="mx-2 text-white/20">·</span>
+          {edge.pctLabel}
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <RangeSlider
+          label="Conviction"
+          hint={convictionHint(conviction)}
+          value={convictionUi}
+          onChange={(v) => setSigmaReal(sigmaMax - v + sigmaMin)}
+          min={sigmaMin}
+          max={sigmaMax}
+          step={sigmaStep || 1}
+          disabled={disabled}
+          format={() => convictionLabel(conviction)}
+          endpoints={["Wide", "Tight"]}
+          ariaLabel="Conviction — wide to tight"
+        />
+        <p className="text-[11px] text-white/35">
+          Tighter = more upside, less room to miss. Wider = safer range, lower upside.
+        </p>
+      </div>
     </div>
   );
 }

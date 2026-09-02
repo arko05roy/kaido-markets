@@ -10,7 +10,9 @@ import {
   clampSigma,
   effectiveSigmaFloor,
   fromWad,
+  gridForScalarBeliefs,
   gridOverRange,
+  peakAtBeliefMu,
   renderGaussian,
   toWad,
   WAD,
@@ -87,5 +89,20 @@ describe("renderGaussian", () => {
     const xs = gridOverRange(40, 60, 32);
     const pts = renderGaussian(belief, MARKET, xs);
     expect(pts.every((p) => Number.isFinite(p.y) && p.y >= 0)).toBe(true);
+  });
+});
+
+describe("gridForScalarBeliefs", () => {
+  it("resolves sniper peaks that a uniform grid misses", () => {
+    const floor = effectiveSigmaFloor(MARKET.kWad, MARKET.bWad);
+    const belief = { muWad: toWad(50), sigmaWad: floor };
+    const range = { min: 40, max: 60 };
+    const uniform = renderGaussian(belief, MARKET, gridOverRange(range.min, range.max, 96));
+    const adaptive = renderGaussian(belief, MARKET, gridForScalarBeliefs(range, [belief]));
+    const truePeak = peakAtBeliefMu(belief, MARKET);
+    const uniformMax = Math.max(...uniform.map((p) => p.y));
+    const adaptiveMax = Math.max(...adaptive.map((p) => p.y));
+    expect(uniformMax).toBeLessThan(truePeak * 0.01);
+    expect(adaptiveMax).toBeGreaterThan(truePeak * 0.95);
   });
 });

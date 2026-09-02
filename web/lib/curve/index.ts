@@ -215,6 +215,41 @@ export function gridOverRange(min: number, max: number, n: number): number[] {
 }
 
 /**
+ * Chart grid that always samples each belief's peak — uniform grids miss razor-thin
+ * sniper curves when σ ≪ (range span / n).
+ */
+export function gridForScalarBeliefs(
+  range: { min: number; max: number },
+  beliefs: readonly GaussianBelief[],
+  n = 96,
+): number[] {
+  const xs = new Set<number>();
+  for (const b of beliefs) {
+    const mu = fromWad(b.muWad);
+    const sigma = Math.max(fromWad(b.sigmaWad), 1e-18);
+    xs.add(mu);
+    for (let k = -10; k <= 10; k++) {
+      const x = mu + k * sigma;
+      if (x >= range.min && x <= range.max) xs.add(x);
+    }
+  }
+  for (const x of gridOverRange(range.min, range.max, n)) {
+    xs.add(x);
+  }
+  return [...xs].sort((a, b) => a - b);
+}
+
+/** Payout density at the belief center — the true peak for chart Y scaling. */
+export function peakAtBeliefMu(
+  belief: GaussianBelief,
+  market: { kWad: bigint; bWad?: bigint; capped?: boolean },
+): number {
+  const mu = fromWad(belief.muWad);
+  const pt = renderGaussian(belief, market, [mu]);
+  return pt[0]?.y ?? 0;
+}
+
+/**
  * Render a Gaussian belief as `(x, y)` samples in outcome coordinates so the UI
  * can show the *exact* payout curve the contract will store (ADR-8). `λ` is the
  * `‖λφ‖₂ = k` scaling the AMM uses, so the rendered height is the real payout

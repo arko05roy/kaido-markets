@@ -2,24 +2,21 @@
 
 import { Slider } from "@/components/ui/slider";
 
-/**
- * A labelled single-value slider with a formatted readout. Thin wrapper over the
- * Radix-backed {@link Slider} so every belief control is accessible (keyboard,
- * ARIA, touch) without bespoke pointer code.
- */
 export interface RangeSliderProps {
   label: string;
-  /** Optional caption shown small under the label (e.g. "loose ↔ tight"). */
   hint?: string;
   value: number;
   onChange: (v: number) => void;
   min: number;
   max: number;
   step: number;
-  /** Format the numeric value for display (default: rounded to ≤4 sig digits). */
   format?: (v: number) => string;
   disabled?: boolean;
   ariaLabel?: string;
+  /** Show large centered readout (for "Your call"). */
+  prominent?: boolean;
+  /** Endpoint labels under the track, e.g. Wide / Tight. */
+  endpoints?: [string, string];
 }
 
 function defaultFormat(v: number): string {
@@ -41,16 +38,25 @@ export function RangeSlider({
   format = defaultFormat,
   disabled,
   ariaLabel,
+  prominent,
+  endpoints,
 }: RangeSliderProps) {
-  // Guard against degenerate ranges (min == max) — Radix needs min < max.
   const hi = max > min ? max : min + (step || 1);
   const clamped = Math.min(hi, Math.max(min, value));
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-2 text-sm">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-2">
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/55">{label}</span>
-        <span className="font-mono text-xs tabular-nums text-[#d8c69a]">{format(clamped)}</span>
+        {!prominent && (
+          <span className="font-mono text-xs tabular-nums text-[#d8c69a]">{format(clamped)}</span>
+        )}
       </div>
+      {prominent && (
+        <p className="text-center font-serif text-3xl tabular-nums tracking-tight text-[#f3efe6] sm:text-4xl">
+          {format(clamped)}
+        </p>
+      )}
       <Slider
         aria-label={ariaLabel ?? label}
         min={min}
@@ -63,7 +69,13 @@ export function RangeSlider({
           if (typeof next === "number" && Number.isFinite(next)) onChange(next);
         }}
       />
-      {hint && <span className="text-[11px] text-white/35">{hint}</span>}
+      {endpoints && (
+        <div className="flex justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
+          <span>{endpoints[0]}</span>
+          <span>{endpoints[1]}</span>
+        </div>
+      )}
+      {hint && <span className="text-[11px] text-white/40">{hint}</span>}
     </div>
   );
 }

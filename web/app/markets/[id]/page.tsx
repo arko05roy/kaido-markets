@@ -1,5 +1,5 @@
 /**
- * /markets/[id] — trade, claim, and optional advanced on-chain details.
+ * /markets/[id] — trading venue: crowd curve + sticky belief ticket.
  */
 import { type KaidoConfig } from "@kaido/sdk";
 
@@ -13,11 +13,13 @@ import {
 } from "@/components/app/kaido-ui";
 import { ConsensusChart } from "@/components/forecast/consensus-chart";
 import { type TradeMarketView } from "@/components/forecast/trade-panel";
+import { MarketTradingLayout } from "@/components/market/market-trading-layout";
+import { MarketVitals } from "@/components/market/market-vitals";
 import { RecentActivity } from "@/components/market/recent-activity";
 import { type SettlementMarketView } from "@/components/market/settlement-panel";
+import { crowdTargetLabel, marketQuestion, marketSubtitle } from "@/lib/market-display";
 
 import { MarketActions } from "./market-actions";
-import { WindowCountdown } from "@/components/market/window-countdown";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 import {
@@ -79,6 +81,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
         settlement: SettlementMarketView;
         lpMarket: { id: string; bWad: string; canAdd: boolean; canRemove: boolean };
         resolved: string[];
+        crowdMuWad: bigint;
       }
     | null = null;
   let error: string | null = null;
@@ -96,6 +99,9 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
     const consensusSigmasWad = isTraj
       ? beliefs.map((b) => b.sigma.toString())
       : [state.belief.sigma.toString()];
+    const crowdMuWad = isTraj
+      ? (beliefs[0]?.mu ?? state.belief.mu)
+      : state.belief.mu;
     const resolved =
       state.status.tag === "Resolved"
         ? [state.status.values[0].toString()]
@@ -133,7 +139,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       canAdd: state.status.tag === "Open",
       canRemove: state.status.tag === "Open" || state.status.tag === "Resolved" || state.status.tag === "ResolvedVec",
     };
-    data = { params: mp, state, view, settlement, resolved, lpMarket };
+    data = { params: mp, state, view, settlement, resolved, lpMarket, crowdMuWad };
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -142,84 +148,92 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-3xl space-y-8">
+      <div className="mx-auto w-full max-w-6xl space-y-8">
         <GhostLink href="/markets">← All markets</GhostLink>
 
         {error || !data ? (
           <div className="space-y-4">
-            <h1 className="font-serif text-3xl text-[#f3efe6]">Market</h1>
+            <h1 className="font-serif text-3xl text-[#f3efe6]">Market unavailable</h1>
             <ErrorState title="Couldn't read this market" body={error ?? "Unknown error."} />
           </div>
         ) : (
-          <>
-            <header className="space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="font-serif text-[clamp(1.75rem,4vw,2.5rem)] leading-tight tracking-tight text-[#f3efe6]">
-                  Market
-                </h1>
-                <StatusPill label={statusLabel(data.state.status)} />
-              </div>
-              <WindowCountdown
-                windowOpen={Number(data.params.window.open)}
-                windowLock={Number(data.params.window.lock)}
-                windowResolve={Number(data.params.window.resolve)}
+          <MarketTradingLayout
+            header={
+              <header className="space-y-3">
+                <div className="flex flex-wrap items-start gap-3">
+                  <h1 className="min-w-0 flex-1 font-serif text-[clamp(1.5rem,4vw,2.25rem)] leading-tight tracking-tight text-[#f3efe6]">
+                    {marketQuestion(data.params, data.crowdMuWad)}
+                  </h1>
+                  <StatusPill label={statusLabel(data.state.status)} />
+                </div>
+                <p className="text-sm text-white/50">
+                  {marketSubtitle(data.params, data.crowdMuWad)}
+                </p>
+              </header>
+            }
+            vitals={
+              <MarketVitals
+                crowdTarget={crowdTargetLabel(data.crowdMuWad)}
+                closesAt={Number(data.params.window.lock)}
                 statusTag={data.state.status.tag}
               />
-            </header>
-
-            <section className="space-y-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]">
-                Crowd belief
-              </p>
-              <ConsensusChart view={data.view} resolved={data.resolved.length ? data.resolved : undefined} />
-            </section>
-
-            {config ? (
-              <MarketActions
-                config={config}
-                tradeMarket={data.view}
-                settlementMarket={data.settlement}
-                lpMarket={data.lpMarket}
+            }
+            chartLabel="Payoff zone · crowd target"
+            chart={
+              <ConsensusChart
+                view={data.view}
+                resolved={data.resolved.length ? data.resolved : undefined}
               />
-            ) : (
-              <ErrorState
-                title="Trading unavailable"
-                body="This network isn't configured for trading yet."
-              />
-            )}
-
-            <AdvancedBlock title="Market details">
-              <div className="space-y-6">
-                <Panel className="px-4">
-                  <dl>
-                    <DetailRow
-                      label="Type"
-                      value={data.view.kind === "trajectory" ? "Trajectory" : "Scalar"}
-                    />
-                    <DetailRow label="Fee" value={`${data.params.fee_bps / 100}%`} />
-                    <DetailRow label="Oracle" value={tierLabel(data.params.tier)} />
-                    <DetailRow label="Trading opens" value={fmtTime(data.params.window.open)} />
-                    <DetailRow label="Trading locks" value={fmtTime(data.params.window.lock)} />
-                    <DetailRow label="Resolves" value={fmtTime(data.params.window.resolve)} />
-                    <DetailRow
-                      label="Contract"
-                      value={
-                        <span className="font-mono text-xs">
-                          {id.slice(0, 8)}…{id.slice(-8)}
-                        </span>
-                      }
-                    />
-                  </dl>
-                </Panel>
-                <div>
-                  <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">
-                    Recent activity
-                  </p>
-                  <RecentActivity marketId={id} />
+            }
+            ticket={
+              config ? (
+                <MarketActions
+                  config={config}
+                  tradeMarket={data.view}
+                  settlementMarket={data.settlement}
+                  lpMarket={data.lpMarket}
+                />
+              ) : (
+                <ErrorState
+                  title="Trading unavailable"
+                  body="This network isn't configured for trading yet."
+                />
+              )
+            }
+            below={
+              <AdvancedBlock title="Market details">
+                <div className="space-y-6">
+                  <Panel className="px-4">
+                    <dl>
+                      <DetailRow
+                        label="Market type"
+                        value={data.view.kind === "trajectory" ? "Trajectory" : "Scalar"}
+                      />
+                      <DetailRow label="Fee" value={`${data.params.fee_bps / 100}%`} />
+                      <DetailRow label="Oracle" value={tierLabel(data.params.tier)} />
+                      <DetailRow label="Trading opens" value={fmtTime(data.params.window.open)} />
+                      <DetailRow label="Trading locks" value={fmtTime(data.params.window.lock)} />
+                      <DetailRow label="Resolves" value={fmtTime(data.params.window.resolve)} />
+                      <DetailRow
+                        label="Contract"
+                        value={
+                          <span className="font-mono text-xs">
+                            {id.slice(0, 8)}…{id.slice(-8)}
+                          </span>
+                        }
+                      />
+                    </dl>
+                  </Panel>
+                  <div>
+                    <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">
+                      Recent activity
+                    </p>
+                    <RecentActivity marketId={id} />
+                  </div>
                 </div>
-              </div>
-            </AdvancedBlock>
-          </>
+              </AdvancedBlock>
+            }
+          />
         )}
       </div>
     </AppShell>

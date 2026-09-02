@@ -20,13 +20,13 @@ function loadDemoMarket(): string | null {
 
 test("markets index loads", async ({ page }) => {
   await page.goto("/markets");
-  await expect(page.getByRole("heading", { name: "Markets" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Call the number" })).toBeVisible();
   const body = await page.locator("main").textContent();
   const hasList =
-    body?.includes("Scalar") ||
-    body?.includes("Trajectory") ||
+    body?.includes("Crowd target") ||
+    body?.includes("Trade range") ||
     body?.includes("No markets yet") ||
-    body?.includes("Couldn't read");
+    body?.includes("Couldn't load");
   expect(hasList).toBeTruthy();
 });
 
@@ -35,9 +35,8 @@ test("market detail reads chain state when fixture exists", async ({ page }) => 
   test.skip(!demo, "no demo market in config/networks.testnet.json");
 
   await page.goto(`/markets/${demo}`);
-  await expect(page.getByRole("heading", { name: /market/i })).toBeVisible();
-  await expect(page.getByText("Settlement")).toBeVisible();
-  await expect(page.getByText("Consensus distribution")).toBeVisible();
-  const settlement = page.locator("text=Trading open").or(page.locator("text=Trading closed"));
+  await expect(page.getByText("Payoff zone")).toBeVisible();
+  await expect(page.getByText("Call the number")).toBeVisible();
+  const settlement = page.locator("text=Trading is open").or(page.locator("text=Place belief"));
   await expect(settlement.first()).toBeVisible({ timeout: 30_000 });
 });

@@ -111,12 +111,9 @@ export async function getResolvedOutcomes(market: string): Promise<bigint[]> {
   }
 }
 
-/** A market summary for list rendering: registry info + (best-effort) status. */
-export interface MarketCard {
-  address: string;
-  info: MarketInfo;
-  status: MarketStatus | null;
-}
+import type { MarketCard } from "@/lib/market-types";
+
+export type { MarketCard };
 
 export async function listMarkets(): Promise<MarketCard[]> {
   const addresses = await listMarketAddresses();
@@ -124,12 +121,29 @@ export async function listMarkets(): Promise<MarketCard[]> {
     addresses.map(async (address) => {
       const info = await getMarketInfo(address);
       let status: MarketStatus | null = null;
+      let crowdMuWad: bigint | undefined;
+      let crowdSigmaWad: bigint | undefined;
+      let kWad: bigint | undefined;
+      let bWad: bigint | undefined;
       try {
-        status = (await marketClient(address).get_state()).result.status;
+        const { params, state } = await getMarketState(address);
+        status = state.status;
+        kWad = params.k;
+        bWad = params.b;
+        if (info.outcome_space.tag === "Trajectory") {
+          const beliefs = await getBeliefs(address);
+          if (beliefs[0]) {
+            crowdMuWad = beliefs[0].mu;
+            crowdSigmaWad = beliefs[0].sigma;
+          }
+        } else {
+          crowdMuWad = state.belief.mu;
+          crowdSigmaWad = state.belief.sigma;
+        }
       } catch {
         status = null;
       }
-      return { address, info, status };
+      return { address, info, status, crowdMuWad, crowdSigmaWad, kWad, bWad };
     }),
   );
 }

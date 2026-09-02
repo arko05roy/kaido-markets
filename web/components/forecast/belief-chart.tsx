@@ -13,7 +13,7 @@
  * `kaido-math` port — so what's drawn is exactly what would be submitted (ADR-8).
  * No bespoke SVG, no pointer code: this is display only.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -26,7 +26,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { fromWad, gridOverRange, renderGaussian, type GaussianBelief } from "@/lib/curve";
+import { fromWad, gridForScalarBeliefs, renderGaussian, peakAtBeliefMu, type GaussianBelief } from "@/lib/curve";
 
 const GRID_POINTS = 96;
 
@@ -49,14 +49,25 @@ function fmtNum(v: number): string {
 }
 
 function Frame({ height, children, empty }: { height: number; children: React.ReactNode; empty?: boolean }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+
+  // ResponsiveContainer needs a concrete pixel height — percentage height fails in grid/flex layouts.
+  const innerH = Math.max(height - 16, 120);
+
   return (
-    <div className="w-full border border-white/10 bg-[#0b0b0c] p-2" style={{ height }}>
+    <div
+      className="w-full min-w-0 border border-white/10 bg-[#0b0b0c] p-2"
+      style={{ height, minHeight: height }}
+    >
       {empty ? (
         <div className="flex h-full items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
           no data yet
         </div>
+      ) : !ready ? (
+        <div style={{ height: innerH }} aria-hidden />
       ) : (
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={innerH} minWidth={0} debounce={50}>
           {children as React.ReactElement}
         </ResponsiveContainer>
       )}
@@ -71,6 +82,8 @@ export interface ScalarBeliefChartProps {
   range: { min: number; max: number };
   consensus: GaussianBelief;
   you?: GaussianBelief;
+  /** Keep Y scale locked to the crowd curve when overlaying your belief. */
+  anchorYToConsensus?: boolean;
   /** Realised outcome (real units), once known. */
   resolved?: number;
   height?: number;
@@ -99,19 +112,49 @@ export type BeliefChartProps = ScalarBeliefChartProps | TrajectoryBeliefChartPro
 export function BeliefChart(props: BeliefChartProps) {
   const height = props.height ?? 280;
 
-  const scalarData = useMemo(() => {
+  const scalarConsensusSeries = useMemo(() => {
     if (props.mode !== "scalar") return null;
-    const { range, market, consensus, you } = props;
+    const { range, market, consensus } = props;
     if (!(range.max > range.min) || !Number.isFinite(range.min)) return [];
-    const xs = gridOverRange(range.min, range.max, GRID_POINTS);
+    const xs = gridForScalarBeliefs(range, [consensus]);
     const c = renderGaussian(consensus, market, xs);
-    const y = you ? renderGaussian(you, market, xs) : null;
+    return xs.map((x, i) => ({ x, consensus: c[i]?.y ?? 0 }));
+  }, [
+    props.mode,
+    props.mode === "scalar" ? props.range.min : null,
+    props.mode === "scalar" ? props.range.max : null,
+    props.mode === "scalar" ? props.market.kWad : null,
+    props.mode === "scalar" ? props.market.bWad : null,
+    props.mode === "scalar" ? props.market.capped : null,
+    props.mode === "scalar" ? props.consensus.muWad : null,
+    props.mode === "scalar" ? props.consensus.sigmaWad : null,
+  ]);
+
+  const scalarData = useMemo((): { x: number; consensus: number; you?: number }[] | null => {
+    if (props.mode !== "scalar" || !scalarConsensusSeries) return null;
+    const { market, consensus, you, range } = props;
+    if (!you) return scalarConsensusSeries;
+    const xs = gridForScalarBeliefs(range, [consensus, you]);
+    const c = renderGaussian(consensus, market, xs);
+    const y = renderGaussian(you, market, xs);
     return xs.map((x, i) => ({
       x,
       consensus: c[i]?.y ?? 0,
-      you: y ? (y[i]?.y ?? 0) : undefined,
+      you: y[i]?.y ?? 0,
     }));
-  }, [props]);
+  }, [
+    scalarConsensusSeries,
+    props.mode,
+    props.mode === "scalar" ? props.you?.muWad : null,
+    props.mode === "scalar" ? props.you?.sigmaWad : null,
+    props.mode === "scalar" ? props.consensus.muWad : null,
+    props.mode === "scalar" ? props.consensus.sigmaWad : null,
+    props.mode === "scalar" ? props.range.min : null,
+    props.mode === "scalar" ? props.range.max : null,
+    props.mode === "scalar" ? props.market.kWad : null,
+    props.mode === "scalar" ? props.market.bWad : null,
+    props.mode === "scalar" ? props.market.capped : null,
+  ]);
 
   const trajData = useMemo(() => {
     if (props.mode !== "trajectory") return null;
@@ -133,7 +176,19 @@ export function BeliefChart(props: BeliefChartProps) {
     const data = scalarData ?? [];
     if (data.length === 0) return <Frame height={height} empty>{null}</Frame>;
     const bReal = fromWad(props.market.bWad);
-    const peak = Math.max(...data.map((d) => Math.max(d.consensus, d.you ?? 0)));
+    const consensusPeak = Math.max(...data.map((d) => d.consensus), 0);
+    const youGridPeak = Math.max(...data.map((d) => d.you ?? 0), 0);
+    const youMuPeak =
+      props.you != null ? peakAtBeliefMu(props.you, props.market) : 0;
+    const youPeak = Math.max(youGridPeak, youMuPeak);
+    // Anchor to crowd, but grow headroom when sniper peak exceeds it (never shrink below crowd).
+    const crowdAnchor = consensusPeak > 0 ? consensusPeak * 1.18 : 0;
+    const yMax =
+      props.anchorYToConsensus && props.you != null && crowdAnchor > 0
+        ? Math.max(crowdAnchor, youPeak * 1.08)
+        : Math.max(consensusPeak, youPeak) > 0
+          ? Math.max(consensusPeak, youPeak) * 1.12
+          : Math.max(bReal, 1);
     return (
       <Frame height={height}>
         <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
@@ -145,9 +200,10 @@ export function BeliefChart(props: BeliefChartProps) {
             tickFormatter={fmtNum}
             tick={AXIS_TICK}
             stroke="rgba(255,255,255,0.15)"
+            scale="linear"
           />
-          <YAxis hide domain={[0, Math.max(peak, bReal) * 1.05]} />
-          {bReal <= peak * 1.2 && (
+          <YAxis hide domain={[0, yMax]} />
+          {bReal > 0 && bReal <= yMax * 0.98 && (
             <ReferenceLine y={bReal} stroke={COLORS.consensus} strokeDasharray="2 4" />
           )}
           {props.resolved != null && Number.isFinite(props.resolved) && (
@@ -161,6 +217,8 @@ export function BeliefChart(props: BeliefChartProps) {
             fill={COLORS.consensus}
             fillOpacity={0.08}
             isAnimationActive={false}
+            dot={false}
+            connectNulls
           />
           {data.some((d) => d.you != null) && (
             <Area
@@ -171,6 +229,8 @@ export function BeliefChart(props: BeliefChartProps) {
               fill={COLORS.you}
               fillOpacity={0.18}
               isAnimationActive={false}
+              dot={false}
+              connectNulls
             />
           )}
         </AreaChart>

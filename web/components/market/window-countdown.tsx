@@ -45,9 +45,9 @@ export function WindowCountdown({
     nowSec < windowOpen
       ? { label: "Trading opens", at: windowOpen }
       : nowSec < windowLock
-        ? { label: "Trading locks", at: windowLock }
+        ? { label: "Trading closes", at: windowLock }
         : nowSec < windowResolve
-          ? { label: "Resolution window ends", at: windowResolve }
+          ? { label: "Resolves", at: windowResolve }
           : { label: "Ready to resolve", at: windowResolve };
 
   return (
@@ -59,9 +59,8 @@ export function WindowCountdown({
           in <span className="font-mono tabular-nums text-[#d8c69a]">{fmtCountdown(next.at, nowSec)}</span>
         </>
       ) : (
-        " — call resolve when the oracle has reported"
+        " — awaiting oracle"
       )}
-      <span className="ml-2 text-xs text-white/30">({new Date(next.at * 1000).toLocaleString()})</span>
     </p>
   );
 }
