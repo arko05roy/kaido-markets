@@ -255,19 +255,8 @@ export function CreateMarketWizard({
   };
 
   return (
-    <div className="space-y-4">
-      <Panel className="px-5 py-4 sm:px-6">
-        <ol className="flex flex-wrap gap-x-5 gap-y-2">
-          {STEPS.map((step, i) => (
-            <li key={step} className="flex items-center gap-2 text-sm">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#d8c69a]/35 bg-[#d8c69a]/10 font-mono text-[10px] text-[#d8c69a]">
-                {i + 1}
-              </span>
-              <span className="text-white/50">{step}</span>
-            </li>
-          ))}
-        </ol>
-      </Panel>
+    <div className="space-y-5">
+      <LaunchRoadmap steps={STEPS} />
 
       {/* 1 — Question */}
       <WizardSection step={1} label="What's the question?">
@@ -285,9 +274,14 @@ export function CreateMarketWizard({
             />
           </Field>
           {question.trim() && (
-            <p className="rounded-xl border border-white/[0.06] bg-[#141416] px-4 py-3 font-serif text-lg leading-snug text-[#f3efe6]">
-              {question.trim()}
-            </p>
+            <div className="rounded-xl border border-[#d8c69a]/20 bg-[#d8c69a]/[0.06] px-4 py-4">
+              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#d8c69a]/75">
+                Board preview
+              </p>
+              <p className="mt-2 font-serif text-xl leading-snug tracking-[-0.02em] text-[#f3efe6] sm:text-2xl">
+                {question.trim()}
+              </p>
+            </div>
           )}
         </div>
       </WizardSection>
@@ -461,8 +455,17 @@ export function CreateMarketWizard({
         )}
 
         {kWad != null && bWad != null && bWad > 0n && (
-          <div className="mt-6 space-y-2">
-            <SectionLabel>Starting payoff zone</SectionLabel>
+          <div className="mt-6 space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="h-px w-8 bg-[#d8c69a]/45" aria-hidden />
+              <SectionLabel>Starting payoff zone</SectionLabel>
+            </div>
+            <Panel className="relative overflow-hidden border-[#d8c69a]/12 p-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+              <div
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-[3px] bg-[#d8c69a]/45"
+              />
+              <div className="p-4 sm:p-5">
             {mode === "scalar"
               ? (() => {
                   const muW = safeWad(mu0);
@@ -506,6 +509,8 @@ export function CreateMarketWizard({
                     />
                   );
                 })()}
+              </div>
+            </Panel>
           </div>
         )}
       </WizardSection>
@@ -573,8 +578,12 @@ export function CreateMarketWizard({
       </AdvancedBlock>
 
       {/* Submit */}
-      <Panel className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <Panel className="relative overflow-hidden border-[#d8c69a]/15 p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] sm:flex sm:items-center sm:justify-between sm:gap-6">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.08),transparent_65%)]"
+        />
+        <div className="relative">
           {!wallet ? (
             <p className="text-sm text-white/50">
               {connecting ? "Connecting wallet…" : "Connect Freighter to launch the market."}
@@ -604,7 +613,7 @@ export function CreateMarketWizard({
             type="button"
             onClick={() => setReviewOpen(true)}
             disabled={submitting}
-            className="inline-flex items-center justify-center rounded-full bg-[#f3efe6] px-8 py-3.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#0b0b0c] transition-all hover:bg-white disabled:opacity-50"
+            className="relative inline-flex shrink-0 items-center justify-center rounded-xl border border-[#d8c69a]/25 bg-[#f3efe6] px-8 py-3.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[#141416] shadow-[0_1px_0_0_rgba(255,255,255,0.15)_inset] transition-all hover:bg-white disabled:opacity-50"
           >
             Review & launch
           </button>
@@ -641,6 +650,30 @@ export function CreateMarketWizard({
 
 // --- helpers ----------------------------------------------------------------
 
+function LaunchRoadmap({ steps }: { steps: readonly string[] }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#1c1c21] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] sm:p-6">
+      <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.06),transparent_65%)]" />
+      <div className="relative mb-4 flex items-center gap-3">
+        <span className="h-px w-8 bg-[#d8c69a]/45" aria-hidden />
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]/85">
+          Launch sequence
+        </p>
+      </div>
+      <ol className="relative grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-5">
+        {steps.map((step, i) => (
+          <li key={step} className="min-w-0">
+            <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/30">
+              {String(i + 1).padStart(2, "0")}
+            </p>
+            <p className="mt-1 text-sm leading-snug text-white/55">{step}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function WizardSection({
   step,
   label,
@@ -651,17 +684,23 @@ function WizardSection({
   children: React.ReactNode;
 }) {
   return (
-    <Panel className="p-6 sm:p-8">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-[#d8c69a]/35 font-mono text-[11px] text-[#d8c69a]">
-          {step}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold tracking-tight text-[#f3efe6] sm:text-xl">{label}</h2>
-          <div className="mt-4">{children}</div>
-        </div>
-      </div>
-    </Panel>
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#1c1c21]",
+        "border-l-[3px] border-l-[#d8c69a]/40",
+        "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]",
+        "market-card-enter p-6 sm:p-8",
+      )}
+      style={{ animationDelay: `${(step - 1) * 70}ms` }}
+    >
+      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#d8c69a]/70">
+        Step {step}
+      </p>
+      <h2 className="mt-2 font-serif text-xl leading-snug tracking-[-0.02em] text-[#f3efe6] sm:text-2xl">
+        {label}
+      </h2>
+      <div className="mt-5">{children}</div>
+    </section>
   );
 }
 

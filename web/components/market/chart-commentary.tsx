@@ -20,10 +20,16 @@ export function ChartCommentary({
   const { stance } = edgeVsCrowd(yours, crowd);
 
   return (
-    <p className="px-1 text-sm text-white/50">
-      Crowd thinks <span className="font-mono text-[#d8c69a]">{crowdLabel}</span>. You&apos;re
-      calling <span className="font-mono text-[#f3efe6]">{yourLabel}</span>.{" "}
-      <span className="text-white/65">{stance}.</span>
-    </p>
+    <div className="rounded-xl border border-[#d8c69a]/20 bg-[#d8c69a]/[0.06] px-4 py-3">
+      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#d8c69a]/75">
+        Your edge vs crowd
+      </p>
+      <p className="mt-1.5 text-sm leading-relaxed text-white/55">
+        Crowd thinks{" "}
+        <span className="font-mono text-[#d8c69a]">{crowdLabel}</span>. You&apos;re calling{" "}
+        <span className="font-mono text-[#f3efe6]">{yourLabel}</span>.{" "}
+        <span className="text-white/70">{stance}.</span>
+      </p>
+    </div>
   );
 }

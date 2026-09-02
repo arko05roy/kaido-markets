@@ -10,7 +10,7 @@ export function PayoffZoneLabels() {
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-1 px-1 pt-2">
+    <div className="grid grid-cols-4 gap-1 border-t border-white/[0.05] px-1 pt-3">
       {zones.map((z) => (
         <span
           key={z.label}

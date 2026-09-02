@@ -1,4 +1,5 @@
 import { PositionsBoard } from "@/components/positions/positions-board";
+import { ErrorState, Panel } from "@/components/app/kaido-ui";
 import { displayMarketQuestion } from "@/lib/market-metadata";
 import { buildKaidoConfig } from "@/lib/kaido-config";
 import { loadMarketMetadataStore } from "@/lib/market-metadata-store";
@@ -28,17 +29,26 @@ export default async function PositionsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1400px]">
-      {error ? (
-        <p className="text-sm text-red-300">{error}</p>
-      ) : (
-        <PositionsBoard
-          network={network}
-          markets={markets ?? []}
-          titlesByMarket={titlesByMarket}
-          config={buildKaidoConfig()}
-        />
-      )}
+    <div className="relative mx-auto w-full max-w-[1400px] space-y-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.04),transparent_65%)]"
+      />
+
+      <div className="relative">
+        {error ? (
+          <Panel className="px-6 py-8">
+            <ErrorState title="Couldn't load positions" body={error} />
+          </Panel>
+        ) : (
+          <PositionsBoard
+            network={network}
+            markets={markets ?? []}
+            titlesByMarket={titlesByMarket}
+            config={buildKaidoConfig()}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -42,12 +42,17 @@ export function ConnectButton() {
     return (
       <div className="flex items-center gap-2">
         {usdcSacId && (
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.14em] text-white/45 sm:inline">
+          <span className="hidden rounded-lg border border-white/[0.06] bg-[#1c1c21] px-2.5 py-1.5 font-mono text-[10px] tabular-nums tracking-tight text-white/55 sm:inline">
             {usdcLoading ? "…" : usdcBal != null ? `${usdcBal} USDC` : "0 USDC"}
             {balance7dp != null && balance7dp <= 0n && (
               <>
                 {" · "}
-                <Link href={USDC_FAUCET_URL} target="_blank" rel="noopener noreferrer" className="text-[#d8c69a] underline">
+                <Link
+                  href={USDC_FAUCET_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#d8c69a] underline underline-offset-2"
+                >
                   Faucet
                 </Link>
               </>
@@ -55,12 +60,18 @@ export function ConnectButton() {
           </span>
         )}
         <span
-          className="rounded-full border border-white/10 bg-[#1c1c21] px-3 py-1.5 font-mono text-xs text-[#f3efe6]"
+          className="max-w-[8.5rem] truncate rounded-xl border border-[#d8c69a]/20 bg-[#1c1c21] px-3 py-1.5 font-mono text-xs text-[#f3efe6] sm:max-w-[10rem]"
           title={wallet.accountId}
         >
           {wallet.label}
         </span>
-        <Button variant="ghost" size="sm" onClick={() => void disconnect()} aria-label="Disconnect wallet">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => void disconnect()}
+          aria-label="Disconnect wallet"
+          className="size-9 rounded-xl border border-white/[0.06] text-white/45 hover:bg-white/[0.04] hover:text-[#f3efe6]"
+        >
           <LogOut className="size-4" />
         </Button>
       </div>
@@ -69,7 +80,12 @@ export function ConnectButton() {
 
   if (restoring) {
     return (
-      <Button size="sm" variant="outline" disabled>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled
+        className="h-9 rounded-xl border-white/[0.1] bg-transparent font-mono text-[10px] uppercase tracking-[0.14em] text-white/45"
+      >
         <Loader2 className="size-4 animate-spin" />
         Wallet
       </Button>
@@ -85,10 +101,11 @@ export function ConnectButton() {
             <Button
               key={c.kind}
               size="sm"
-              variant="default"
+              variant="outline"
               disabled={connecting || !ok}
               onClick={() => void connect(c.kind).catch(() => {})}
               title={ok ? `Connect with ${c.name}` : `${c.name} unavailable`}
+              className="h-9 rounded-xl border-white/[0.1] bg-[#1c1c21] font-mono text-[10px] uppercase tracking-[0.14em] text-[#f3efe6] hover:border-[#d8c69a]/30 hover:bg-[#d8c69a]/10"
             >
               {connecting ? (
                 <Loader2 className="size-4 animate-spin" />

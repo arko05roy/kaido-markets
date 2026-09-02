@@ -3,15 +3,10 @@
  */
 import type { Metadata } from "next";
 
-import { DashboardPageHeader } from "@/components/app/dashboard-page-header";
-import {
-  ErrorState,
-  Panel,
-  StatusPill,
-} from "@/components/app/kaido-ui";
+import { ErrorState, Panel } from "@/components/app/kaido-ui";
 import { type TradeMarketView } from "@/components/forecast/trade-panel";
+import { MarketDetailHeader } from "@/components/market/market-detail-header";
 import { MarketDetailClient } from "@/components/market/market-detail-client";
-import { MarketVitals } from "@/components/market/market-vitals";
 import { type SettlementMarketView } from "@/components/market/settlement-panel";
 import {
   crowdTargetLabel,
@@ -168,49 +163,52 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5">
-      {error || !data ? (
-        <>
-          <DashboardPageHeader
-            back={{ href: "/markets", label: "← All markets" }}
-            title="Market unavailable"
-            description="This market could not be loaded from chain."
-          />
-          <Panel className="px-6 py-8">
-            <ErrorState title="Couldn't read this market" body={error ?? "Unknown error."} />
-          </Panel>
-        </>
-      ) : (
-        <>
-          <DashboardPageHeader
-            back={{ href: "/markets", label: "← All markets" }}
-            title={displayMarketQuestion(data.params, data.crowdMuWad, savedQuestion)}
-            titleClassName="font-serif text-xl font-normal leading-snug sm:text-2xl"
-            badge={<StatusPill label={statusLabel(data.state.status)} />}
-            description={marketSubtitle(data.params, data.crowdMuWad)}
-            footer={
-              <MarketVitals
-                crowdTarget={crowdTargetLabel(data.crowdMuWad)}
-                closesAt={Number(data.params.window.lock)}
-                statusTag={data.state.status.tag}
-                blendBackedDepth7dp={data.blendBackedDepth7dp}
-                volumeUsdc={stats24h?.volumeUsdc ?? undefined}
-                crowdMovedPct={stats24h?.crowdMovedPct ?? undefined}
-              />
-            }
-          />
-          {config ? (
-            <MarketDetailClient
-              config={config}
-              view={data.view}
-              settlement={data.settlement}
-              lpMarket={data.lpMarket}
-              marketTitle={marketTitle}
-              resolved={data.resolved.length ? data.resolved : undefined}
-              stats24h={stats24h ?? undefined}
-              marketId={id}
-              crowdMuWad={data.crowdMuWad}
-              detailRows={[
+    <div className="relative mx-auto w-full max-w-[1400px] space-y-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 top-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.04),transparent_65%)]"
+      />
+
+      <div className="relative space-y-6">
+        {error || !data ? (
+          <>
+            <MarketDetailHeader
+              backLabel="All markets"
+              title="Market unavailable"
+              subtitle="This market could not be loaded from chain."
+              status="Unknown"
+              closesAt={0}
+              statusTag="Open"
+            />
+            <Panel className="px-6 py-8">
+              <ErrorState title="Couldn't read this market" body={error ?? "Unknown error."} />
+            </Panel>
+          </>
+        ) : (
+          <>
+            <MarketDetailHeader
+              title={displayMarketQuestion(data.params, data.crowdMuWad, savedQuestion)}
+              subtitle={marketSubtitle(data.params, data.crowdMuWad)}
+              status={statusLabel(data.state.status)}
+              crowdTarget={crowdTargetLabel(data.crowdMuWad)}
+              closesAt={Number(data.params.window.lock)}
+              statusTag={data.state.status.tag}
+              blendBackedDepth7dp={data.blendBackedDepth7dp}
+              volumeUsdc={stats24h?.volumeUsdc ?? undefined}
+              crowdMovedPct={stats24h?.crowdMovedPct ?? undefined}
+            />
+            {config ? (
+              <MarketDetailClient
+                config={config}
+                view={data.view}
+                settlement={data.settlement}
+                lpMarket={data.lpMarket}
+                marketTitle={marketTitle}
+                resolved={data.resolved.length ? data.resolved : undefined}
+                stats24h={stats24h ?? undefined}
+                marketId={id}
+                crowdMuWad={data.crowdMuWad}
+                detailRows={[
                 {
                   label: "Market type",
                   value: data.view.kind === "trajectory" ? "Trajectory" : "Scalar",
@@ -236,9 +234,9 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
                     </span>
                   ),
                 },
-              ]}
-            />
-          ) : (
+                ]}
+              />
+            ) : (
             <Panel className="px-6 py-8">
               <ErrorState
                 title="Trading unavailable"
@@ -246,8 +244,9 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
               />
             </Panel>
           )}
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

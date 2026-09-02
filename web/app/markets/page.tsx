@@ -41,22 +41,29 @@ export default async function MarketsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-6">
-      {error ? (
-        <MarketsFetchError message={error} rpcHost={activeNetwork().rpcUrl} />
-      ) : (
-        <MarketsBoard
-          markets={markets ?? []}
-          openCount={openCount}
-          network={network}
-          metadataByMarket={metadataByMarket}
-          statsByMarket={statsByMarket}
-        />
-      )}
+    <div className="relative mx-auto w-full max-w-[1400px] space-y-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-32 top-0 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(216,198,154,0.04),transparent_65%)]"
+      />
 
-      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.06] pt-8">
-        <GhostLink href="/leaderboard">Calibration leaderboard</GhostLink>
-        <GhostLink href="/whitepaper">How it works</GhostLink>
+      <div className="relative space-y-6">
+        {error ? (
+          <MarketsFetchError message={error} rpcHost={activeNetwork().rpcUrl} />
+        ) : (
+          <MarketsBoard
+            markets={markets ?? []}
+            openCount={openCount}
+            network={network}
+            metadataByMarket={metadataByMarket}
+            statsByMarket={statsByMarket}
+          />
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.06] pt-8">
+          <GhostLink href="/leaderboard">Calibration leaderboard</GhostLink>
+          <GhostLink href="/whitepaper">How it works</GhostLink>
+        </div>
       </div>
     </div>
   );
