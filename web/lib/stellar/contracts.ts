@@ -50,11 +50,14 @@ const ENV_KEYS: Record<keyof DeployedContracts, string> = {
   resolverDesignated: "NEXT_PUBLIC_KAIDO_RESOLVER_DESIGNATED",
 };
 
-let cached: DeployedConfig | null = null;
-
-/** The deployed-contract config for the active network. Cached per process. */
+/**
+ * The deployed-contract config for the active network. Re-reads
+ * `config/networks.<network>.json` on every call (it's tiny, and all consumers
+ * are `force-dynamic`) — so a `make deploy:<network>` that rewrites the file is
+ * picked up without restarting the dev server. Crucially: testnet resets and
+ * re-deploys change every id, so a stale process cache was a footgun.
+ */
 export function deployedConfig(): DeployedConfig {
-  if (cached) return cached;
   const network = activeNetworkId();
 
   // 1. the live-ids file written by the deploy script.
@@ -111,6 +114,5 @@ export function deployedConfig(): DeployedConfig {
     );
   }
 
-  cached = { network, contracts: contracts as DeployedContracts, external, demo };
-  return cached;
+  return { network, contracts: contracts as DeployedContracts, external, demo };
 }
