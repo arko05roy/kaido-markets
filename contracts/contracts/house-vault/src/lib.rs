@@ -29,6 +29,16 @@ enum DataKey {
     Usdc,
     /// `i128` — cumulative USDC (7-dp) the vault has put into this market.
     Exposure(Address),
+    /// `i128` — admin-set per-market cap on cumulative exposure (7-dp USDC).
+    /// `0` means "unset" → seeding is refused (see `CapNotSet`).
+    Cap(Address),
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapSet {
+    pub market: Address,
+    pub cap: i128,
 }
 
 #[contractevent]
@@ -92,20 +102,58 @@ impl HouseVault {
         .publish(&env);
     }
 
+    /// Admin-gated. Set the on-chain per-market exposure cap for `market`.
+    /// `cap_7dp` must be `> 0`. Seeding is refused while the cap is unset.
+    pub fn set_cap(env: Env, market: Address, cap_7dp: i128) {
+        let admin = Self::admin(&env);
+        admin.require_auth();
+        if cap_7dp <= 0 {
+            panic_with_error!(&env, KaidoError::InvalidAmount);
+        }
+        let key = DataKey::Cap(market.clone());
+        env.storage().persistent().set(&key, &cap_7dp);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_THRESHOLD, TTL_TARGET);
+        CapSet {
+            market,
+            cap: cap_7dp,
+        }
+        .publish(&env);
+    }
+
+    /// The configured per-market cap on cumulative exposure (7-dp USDC),
+    /// `0` if unset.
+    pub fn cap(env: Env, market: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Cap(market))
+            .unwrap_or(0)
+    }
+
     /// Admin-gated. Seed `market` with `amount_7dp` USDC as an LP, provided the
-    /// vault's cumulative exposure to that market stays `≤ cap_7dp`. Returns
-    /// the LP shares minted (held by the vault).
-    pub fn seed_market(env: Env, market: Address, amount_7dp: i128, cap_7dp: i128) -> i128 {
+    /// vault's cumulative exposure stays within the on-chain cap set via
+    /// [`Self::set_cap`]. Returns the LP shares minted (held by the vault).
+    pub fn seed_market(env: Env, market: Address, amount_7dp: i128) -> i128 {
         let admin = Self::admin(&env);
         admin.require_auth();
         if amount_7dp <= 0 {
             panic_with_error!(&env, KaidoError::InvalidAmount);
         }
+        let cap_key = DataKey::Cap(market.clone());
+        let cap_7dp: i128 = env
+            .storage()
+            .persistent()
+            .get(&cap_key)
+            .unwrap_or(0);
+        if cap_7dp <= 0 {
+            panic_with_error!(&env, KaidoError::CapNotSet);
+        }
         let key = DataKey::Exposure(market.clone());
         let cur: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         let next = cur + amount_7dp;
         if next > cap_7dp {
-            panic_with_error!(&env, KaidoError::InsufficientLiquidity);
+            panic_with_error!(&env, KaidoError::CapExceeded);
         }
         let usdc: Address = env.storage().instance().get(&DataKey::Usdc).unwrap();
         let me = env.current_contract_address();

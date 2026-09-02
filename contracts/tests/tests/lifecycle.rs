@@ -98,7 +98,8 @@ fn full_lifecycle_conserves_usdc() {
     let house_funder = Address::generate(&w.env);
     w.sa.mint(&house_funder, &2_000_000_000i128);
     vault.deposit(&house_funder, &2_000_000_000i128);
-    let house_shares = vault.seed_market(&w.market.address, &1_000_000_000i128, &5_000_000_000i128);
+    vault.set_cap(&w.market.address, &5_000_000_000i128);
+    let house_shares = vault.seed_market(&w.market.address, &1_000_000_000i128);
 
     // a trader trades.
     let trader = Address::generate(&w.env);

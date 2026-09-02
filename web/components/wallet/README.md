@@ -1,5 +1,6 @@
 # Wallet
 
-Passkey onboarding via `passkey-kit` + Launchtube (the signing key never touches
-the browser), with Freighter as a power-user fallback. "Play in ~10s" flow
-lands in Sprint 4 (build.md E13).
+Connector indirection over Freighter — `WalletProvider` holds the active
+session and `useWallet()` exposes a `KaidoSigner` plus connect/disconnect.
+Additional wallets plug in by implementing `WalletConnector` in `./types.ts`
+and registering them in `provider.tsx`.

@@ -95,8 +95,12 @@ function clientOptions(config: KaidoConfig, contractId: string, signer?: KaidoSi
  * dry-run), which is what `getMarket` and friends use.
  */
 async function settle<T>(
-  tx: { result: T; signAndSend: (o: { force?: boolean }) => Promise<{ result: T }> },
+  tx: {
+    result: T;
+    signAndSend: (o: { force?: boolean }) => Promise<{ result: T }>;
+  },
   signer: KaidoSigner | undefined,
+  _config: KaidoConfig,
   { force = false }: { force?: boolean } = {},
 ): Promise<T> {
   if (!signer) return tx.result;
@@ -170,7 +174,7 @@ export class Kaido {
       mu0: args.mu0,
       sigma0: args.sigma0,
     });
-    return settle(tx, signer, { force: true });
+    return settle(tx, signer, this.config, { force: true });
   }
 
   /** Deploy + register an N-checkpoint trajectory market. Returns the new market id. */
@@ -198,7 +202,7 @@ export class Kaido {
       mus0: args.mus0,
       sigmas0: args.sigmas0,
     });
-    return settle(tx, signer, { force: true });
+    return settle(tx, signer, this.config, { force: true });
   }
 
   // --- trading ------------------------------------------------------------
@@ -215,7 +219,7 @@ export class Kaido {
       sigma2: args.sigma2,
       max_collateral_7dp: args.maxCollateral7dp,
     });
-    return settle(tx, signer, { force: true });
+    return settle(tx, signer, this.config, { force: true });
   }
 
   /** Move every checkpoint belief. Returns the new trajectory position id. */
@@ -230,7 +234,7 @@ export class Kaido {
       sigmas2: args.sigmas2,
       max_collateral_7dp: args.maxCollateral7dp,
     });
-    return settle(tx, signer, { force: true });
+    return settle(tx, signer, this.config, { force: true });
   }
 
   // --- liquidity ----------------------------------------------------------
@@ -241,7 +245,7 @@ export class Kaido {
       lp: signer.accountId,
       amount_7dp: amount7dp,
     });
-    return settle(tx, signer, { force: true });
+    return settle(tx, signer, this.config, { force: true });
   }
 
   /** Burn `shares` LP shares. Returns USDC (7dp) returned. */
@@ -250,7 +254,7 @@ export class Kaido {
       lp: signer.accountId,
       shares,
     });
-    return settle(tx, signer, { force: true });
+    return settle(tx, signer, this.config, { force: true });
   }
 
   // --- resolution / claims ------------------------------------------------
@@ -258,19 +262,19 @@ export class Kaido {
   /** Pull the outcome from the market's resolver and finalize it. */
   async resolve(marketId: string, signer: KaidoSigner): Promise<void> {
     const tx = await this.market(marketId, signer).resolve();
-    await settle(tx, signer, { force: true });
+    await settle(tx, signer, this.config, { force: true });
   }
 
   /** Claim a settled scalar position. Returns the payout (7dp). */
   async claim(marketId: string, positionId: bigint, signer: KaidoSigner): Promise<bigint> {
     const tx = await this.market(marketId, signer).claim({ position_id: positionId });
-    return settle(tx, signer, { force: true });
+    return settle(tx, signer, this.config, { force: true });
   }
 
   /** Claim a settled trajectory position. Returns the aggregate payout (7dp). */
   async claimTrajectory(marketId: string, positionId: bigint, signer: KaidoSigner): Promise<bigint> {
     const tx = await this.market(marketId, signer).claim_trajectory({ position_id: positionId });
-    return settle(tx, signer, { force: true });
+    return settle(tx, signer, this.config, { force: true });
   }
 
   // --- reads --------------------------------------------------------------

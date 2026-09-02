@@ -5,8 +5,8 @@
  * kept in sync with `config/networks.json` and `contracts/network.toml`
  * (build.md §0a). It deliberately holds **only** static params: passphrases and
  * default RPC/Horizon/Friendbot URLs. Per-network contract ids (the USDC SAC,
- * the Reflector feed, the deployed Kaido contracts, the admin multisig,
- * Launchtube) are NOT here — they are resolved at deploy time and surfaced via
+ * the Reflector feed, the deployed Kaido contracts, the admin multisig) are
+ * NOT here — they are resolved at deploy time and surfaced via
  * the indexer / runtime env. Nothing off-chain may treat a testnet contract id
  * as permanent (testnet resets ~2-4×/year; next: 2026-06-17, 2026-12-16).
  */

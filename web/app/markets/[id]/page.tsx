@@ -9,6 +9,7 @@ import Link from "next/link";
 
 import { ConsensusChart } from "@/components/forecast/consensus-chart";
 import { TradePanel, type TradeMarketView } from "@/components/forecast/trade-panel";
+import { RecentActivity } from "@/components/market/recent-activity";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 import {
@@ -179,6 +180,11 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
                 }
               />
             </dl>
+          </section>
+
+          <section>
+            <h2 className="mb-2 text-sm font-semibold">Recent activity</h2>
+            <RecentActivity marketId={id} />
           </section>
 
           <section>

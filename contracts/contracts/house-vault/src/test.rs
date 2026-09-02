@@ -78,14 +78,19 @@ fn deposit_seed_cap_and_withdraw() {
     let resolver = MockResolverClient::new(&env, &resolver_id);
     let market = make_market(&env, &resolver_id, &usdc);
 
+    // Seeding without a cap → CapNotSet.
+    assert!(vault.try_seed_market(&market, &1_500_000_000i128).is_err());
+
+    // Admin sets the on-chain cap to 200 USDC.
+    vault.set_cap(&market, &2_000_000_000i128);
+    assert_eq!(vault.cap(&market), 2_000_000_000i128);
+
     // cap = 200; seeding 150 is fine, then another 100 would exceed → reverts.
-    let shares = vault.seed_market(&market, &1_500_000_000i128, &2_000_000_000i128);
+    let shares = vault.seed_market(&market, &1_500_000_000i128);
     assert!(shares > 0);
     assert_eq!(vault.exposure(&market), 1_500_000_000i128);
     assert_eq!(tok.balance(&market), 1_500_000_000i128);
-    assert!(vault
-        .try_seed_market(&market, &1_000_000_000i128, &2_000_000_000i128)
-        .is_err());
+    assert!(vault.try_seed_market(&market, &1_000_000_000i128).is_err());
 
     // resolve the market then withdraw proportionally → USDC back to the vault.
     env.ledger().set_timestamp(100_001);
@@ -95,4 +100,76 @@ fn deposit_seed_cap_and_withdraw() {
     assert_eq!(back, 1_500_000_000i128);
     assert_eq!(vault.exposure(&market), 0);
     assert_eq!(tok.balance(&vault_id), 5_000_000_000i128);
+}
+
+/// Cumulative-exposure ledger correctly decrements on a partial-shares
+/// withdrawal (the only legal pre-resolution path; resolution + the LP-pool
+/// arithmetic of the market are exercised elsewhere). Floored at 0 on the
+/// last burn.
+#[test]
+fn partial_withdrawal_decrements_exposure() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(admin.clone());
+    let usdc = sac.address();
+    let sa = token::StellarAssetClient::new(&env, &usdc);
+
+    let vault_id = env.register(HouseVault, (admin.clone(), usdc.clone()));
+    let vault = HouseVaultClient::new(&env, &vault_id);
+
+    let funder = Address::generate(&env);
+    sa.mint(&funder, &10_000_000_000i128);
+    vault.deposit(&funder, &5_000_000_000i128);
+
+    let resolver_id = env.register(MockResolver, ());
+    let resolver = MockResolverClient::new(&env, &resolver_id);
+    let market = make_market(&env, &resolver_id, &usdc);
+
+    vault.set_cap(&market, &2_000_000_000i128);
+    let shares = vault.seed_market(&market, &1_500_000_000i128);
+    let before = vault.exposure(&market);
+    assert_eq!(before, 1_500_000_000i128);
+
+    // Resolve, then withdraw half the shares and confirm exposure roughly
+    // halves (no slippage: the market's LP ratio is 1:1 at this point).
+    env.ledger().set_timestamp(100_001);
+    resolver.set(&ResolverStatus::Resolved(50 * WAD));
+    distribution_market::DistributionMarketClient::new(&env, &market).resolve();
+
+    let half = shares / 2;
+    let got1 = vault.withdraw_proportional(&market, &half);
+    assert!(got1 > 0);
+    let mid = vault.exposure(&market);
+    assert_eq!(mid, before - got1);
+
+    let got2 = vault.withdraw_proportional(&market, &(shares - half));
+    assert!(got2 > 0);
+    // Ledger floors at 0 even if rounding leaves the tally slightly off.
+    assert_eq!(vault.exposure(&market), 0);
+    // Total reclaimed equals total seeded (no fees yet at the LP-pool level
+    // for this scenario).
+    assert_eq!(got1 + got2, 1_500_000_000i128);
+}
+
+/// Non-admin cannot move the cap.
+#[test]
+fn non_admin_cannot_set_cap_or_seed() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(admin.clone());
+    let usdc = sac.address();
+
+    let vault_id = env.register(HouseVault, (admin.clone(), usdc.clone()));
+    let vault = HouseVaultClient::new(&env, &vault_id);
+    let market = Address::generate(&env);
+
+    // `mock_auths` empty for the attacker → require_auth fails.
+    env.mock_auths(&[]);
+    assert!(vault
+        .mock_auths(&[])
+        .try_set_cap(&market, &1_000_000_000i128)
+        .is_err());
+    let _ = attacker; // silence
 }

@@ -10,8 +10,8 @@ import type { WalletKind } from "./types";
 
 /**
  * Wallet connect/disconnect control. Disconnected: a row of available
- * connectors (passkey first — the ~10s onboarding path; Freighter as the
- * power-user fallback). Connected: the account pill + a disconnect button.
+ * connectors (today: Freighter). Connected: the account pill + a disconnect
+ * button.
  */
 export function ConnectButton() {
   const { wallet, connecting, error, connectors, connect, disconnect } = useWallet();
@@ -54,7 +54,7 @@ export function ConnectButton() {
             <Button
               key={c.kind}
               size="sm"
-              variant={c.kind === "passkey" ? "default" : "outline"}
+              variant="default"
               disabled={connecting || !ok}
               onClick={() => void connect(c.kind).catch(() => {})}
               title={ok ? `Connect with ${c.name}` : `${c.name} unavailable`}

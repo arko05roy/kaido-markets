@@ -96,6 +96,13 @@ pub enum KaidoError {
     PeakExceedsB = 42,
     /// A non-positive amount was passed where a strictly-positive one is needed.
     InvalidAmount = 43,
+    /// HouseVault: the proposed seed would push cumulative exposure to this
+    /// market above the on-chain per-market cap. Set the cap explicitly via
+    /// `set_cap` before seeding.
+    CapExceeded = 44,
+    /// HouseVault: cap for this market is not configured (defaults to 0). The
+    /// admin must call `set_cap` before seeding the market.
+    CapNotSet = 45,
 
     // --- arithmetic (50+) ---
     /// A fixed-point computation overflowed `i128` (a bug / out-of-envelope

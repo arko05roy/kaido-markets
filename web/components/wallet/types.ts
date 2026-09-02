@@ -3,24 +3,23 @@
  *
  * A {@link WalletConnector} knows how to establish a session and hand back a
  * {@link ConnectedWallet} — an account id plus a signer that satisfies
- * `@kaido/sdk`'s `KaidoSigner`. Two connectors ship:
- *   - `freighter` (power-user fallback) — `@stellar/freighter-api`.
- *   - `passkey` (default onboarding, Sprint 4 polish) — `passkey-kit` + Launchtube;
- *     the signing key never reaches the browser.
+ * `@kaido/sdk`'s `KaidoSigner`. Today only Freighter is wired up; the
+ * connector indirection is kept so additional wallets can plug in without
+ * touching the provider or the call sites.
  *
  * The provider (`provider.tsx`) holds the active session and exposes `useWallet()`.
  */
 import type { KaidoSigner } from "@kaido/sdk";
 
-export type WalletKind = "freighter" | "passkey";
+export type WalletKind = "freighter";
 
 export interface ConnectedWallet {
   readonly kind: WalletKind;
-  /** Stellar account id (G… for Freighter, C… smart-wallet for passkeys). */
+  /** Stellar account id (G…). */
   readonly accountId: string;
   /** A signer usable with `@kaido/sdk` (`new Kaido(cfg).trade(market, …, signer)`). */
   readonly signer: KaidoSigner;
-  /** Human label for the connected identity (truncated address, passkey name…). */
+  /** Human label for the connected identity (truncated address, etc.). */
   readonly label: string;
 }
 

@@ -15,43 +15,7 @@ import type { ConnectedWallet, WalletConnector, WalletKind } from "./types";
 
 const LAST_KIND_KEY = "kaido.wallet.lastKind";
 
-// The passkey connector (`./passkey`, which pulls in `passkey-kit`) is loaded
-// lazily — only when the user actually picks "passkey" — so passkey-kit's raw-TS
-// entry + its `passkey-kit-sdk` / `@stellar/stellar-sdk/minimal` chain don't
-// have to be resolvable at build time. The "play in ~10s" passkey flow + the
-// SDK Launchtube send-path it depends on are finished in Sprint 4 (build.md
-// E13); until then only the Freighter connector is offered.
-const PASSKEY_ENABLED = process.env.NEXT_PUBLIC_ENABLE_PASSKEY === "1";
-
-/**
- * Passkey *façade*. The real connector lives in `./passkey` (it pulls in
- * `passkey-kit`, whose raw-TS entry + `passkey-kit-sdk` chain Turbopack can't
- * resolve in a build today), so it is intentionally NOT imported here yet —
- * `connect()` directs users to Freighter. Sprint 4 (build.md E13) wires the
- * passkey "~10s onboarding" path together with the SDK's Launchtube
- * send-path; flip `NEXT_PUBLIC_ENABLE_PASSKEY=1` and re-add the dynamic
- * `import("./passkey")` then.
- */
-const passkeyFacade: WalletConnector = {
-  kind: "passkey",
-  name: "Passkey (no seed phrase)",
-  async isAvailable() {
-    return false; // not wired yet — see comment above
-  },
-  async connect() {
-    throw new Error(
-      PASSKEY_ENABLED
-        ? "Passkey login isn't wired up yet (Sprint 4) — use Freighter."
-        : "Passkey login isn't enabled — use Freighter.",
-    );
-  },
-  async disconnect() {
-    /* nothing to tear down */
-  },
-};
-
 const CONNECTORS: Record<WalletKind, WalletConnector> = {
-  passkey: passkeyFacade,
   freighter: freighterConnector,
 };
 
@@ -86,7 +50,7 @@ export function WalletProvider({ network, networkPassphrase, children }: WalletP
   const lastKind = useMemo<WalletKind | null>(() => {
     if (typeof window === "undefined") return null;
     const v = window.localStorage.getItem(LAST_KIND_KEY);
-    return v === "passkey" || v === "freighter" ? v : null;
+    return v === "freighter" ? v : null;
   }, []);
 
   const connect = useCallback(
