@@ -188,7 +188,7 @@ function MarketGrid({
   startIndex?: number;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
       {cards.map((card, i) => (
         <MarketCardItem
           key={card.address}

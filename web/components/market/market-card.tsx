@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   Activity,
   AlertCircle,
+  ArrowUpRight,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -13,7 +14,6 @@ import * as React from "react";
 
 import { ClosesIn } from "@/components/market/closes-in";
 import { useLedgerNow } from "@/components/providers/ledger-time-provider";
-import { Button } from "@/components/ui/button";
 import { fromWad, sigmaFloor } from "@/lib/curve";
 import {
   convictionFromSigma,
@@ -56,6 +56,63 @@ function useClosingUrgency(lockSec: number, enabled: boolean): "hot" | "warm" | 
   const { nowSec } = useLedgerNow();
   if (!enabled) return null;
   return closingUrgency(lockSec, nowSec);
+}
+
+function toneStyles(tone: CardTone, urgency: "hot" | "warm" | null) {
+  if (tone === "open" && urgency === "hot") {
+    return {
+      paper: "bg-[#1b1c1d]",
+      wash: "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.035),transparent_34%)]",
+      line: "bg-[#f6b85d]",
+      ink: "text-[#f6b85d]",
+      icon: "text-[#f6b85d]",
+      badge: "border-[#f6b85d]/30 bg-[#26211b] text-[#ffdca4]",
+      accentText: "text-[#ffdca4]",
+    };
+  }
+
+  switch (tone) {
+    case "open":
+      return {
+        paper: "bg-[#1b1c1d]",
+        wash: "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.03),transparent_36%)]",
+        line: "bg-[#d8c69a]",
+        ink: "text-[#d8c69a]",
+        icon: "text-[#d8c69a]",
+        badge: "border-[#d8c69a]/24 bg-[#23221d] text-[#ead9ad]",
+        accentText: "text-[#ead9ad]",
+      };
+    case "locked":
+      return {
+        paper: "bg-[#1a1c1d]",
+        wash: "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.028),transparent_36%)]",
+        line: "bg-[#8fdfc6]",
+        ink: "text-[#8fdfc6]",
+        icon: "text-[#8fdfc6]",
+        badge: "border-[#8fdfc6]/24 bg-[#1d2323] text-[#bff4e5]",
+        accentText: "text-[#bff4e5]",
+      };
+    case "disputable":
+      return {
+        paper: "bg-[#1c1a1a]",
+        wash: "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.028),transparent_36%)]",
+        line: "bg-[#e78c6f]",
+        ink: "text-[#e78c6f]",
+        icon: "text-[#e78c6f]",
+        badge: "border-[#e78c6f]/24 bg-[#271f1d] text-[#ffc2b0]",
+        accentText: "text-[#ffc2b0]",
+      };
+    default:
+      return {
+        paper: "bg-[#1b1b1e]",
+        wash: "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.03),transparent_36%)]",
+        line: "bg-white/28",
+        ink: "text-white/40",
+        icon: "text-white/42",
+        badge: "border-white/[0.08] bg-[#222226] text-white/55",
+        accentText: "text-white/62",
+      };
+  }
 }
 
 function crowdConviction(card: MarketCard): string | null {
@@ -130,61 +187,42 @@ function RangeRail({
   const live = tone === "open";
   const settled = tone === "settled";
   const large = size === "large";
+  const lineColor = live ? "#d8c69a" : settled ? "rgba(255,255,255,0.25)" : "rgba(216,198,154,0.35)";
 
   return (
     <div className={cn("space-y-2", large && "space-y-3")}>
-      <div className={cn("relative w-full", large ? "h-14" : "h-9")} aria-hidden>
-        <div className="kaido-grain-track bg-border/40 absolute inset-x-0 top-1/2 h-px -translate-y-1/2" />
-        {live && (
-          <div
-            className={cn(
-              "absolute top-1/2 -translate-y-1/2 rounded-full blur-md",
-              large ? "h-5" : "h-3",
-            )}
-            style={{
-              left: `${rail.zoneLeft}%`,
-              width: `${Math.max(rail.zoneRight - rail.zoneLeft, 1)}%`,
-              background: "rgba(216,198,154,0.12)",
-            }}
-          />
-        )}
+      <div className={cn("relative", large ? "h-12" : "h-10")} aria-hidden>
+        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/[0.12]" />
         <div
           className={cn(
-            "kaido-grain-fill absolute top-1/2 -translate-y-1/2 rounded-full",
-            large ? "h-3" : "h-2",
-            live ? "bg-primary/35" : settled ? "bg-muted" : "bg-primary/18",
+            "absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full",
+            live && "shadow-[0_0_24px_rgba(216,198,154,0.18)]",
           )}
           style={{
             left: `${rail.zoneLeft}%`,
             width: `${Math.max(rail.zoneRight - rail.zoneLeft, 1)}%`,
+            background: lineColor,
           }}
         />
         <div
-          className={cn(
-            "bg-primary absolute w-px",
-            large ? "top-0 bottom-3" : "top-0 bottom-2",
-            live ? "opacity-100" : "opacity-55",
-          )}
+          className={cn("absolute top-1/2 h-8 w-px -translate-x-1/2 -translate-y-1/2 bg-[#f3efe6]")}
           style={{ left: `${rail.muPct}%` }}
         />
-        {rail.outcomePct != null && (
+        {rail.outcomePct != null ? (
           <div
-            className={cn(
-              "bg-foreground border-foreground/80 absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-sm",
-              large ? "h-3 w-3" : "h-2 w-2",
-            )}
+            className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#f3efe6]/60 bg-[#121214]"
             style={{ left: `${rail.outcomePct}%` }}
           />
-        )}
+        ) : null}
       </div>
       <div
         className={cn(
-          "text-muted-foreground flex items-end justify-between gap-2 font-mono tabular-nums tracking-tight",
+          "flex items-end justify-between gap-2 font-mono tabular-nums tracking-tight text-white/42",
           large ? "text-[11px]" : "text-[10px]",
         )}
       >
         <span>{rail.minLabel}</span>
-        <span className={cn(large ? "text-xs" : "text-[11px]", live && "text-primary")}>
+        <span className={cn("text-center", large ? "text-xs" : "text-[11px]", live && "text-[#d8c69a]")}>
           {settled && rail.outcomePct != null ? "Settled" : "Crowd"} · {crowd}
         </span>
         <span>{rail.maxLabel}</span>
@@ -193,16 +231,22 @@ function RangeRail({
   );
 }
 
-function toneIcon(tone: CardTone) {
+function ToneIcon({
+  tone,
+  className,
+}: {
+  tone: CardTone;
+  className?: string;
+}) {
   switch (tone) {
     case "open":
-      return Activity;
+      return <Activity className={className} aria-hidden="true" />;
     case "locked":
-      return Lock;
+      return <Lock className={className} aria-hidden="true" />;
     case "disputable":
-      return AlertCircle;
+      return <AlertCircle className={className} aria-hidden="true" />;
     default:
-      return CheckCircle2;
+      return <CheckCircle2 className={className} aria-hidden="true" />;
   }
 }
 
@@ -212,7 +256,7 @@ function fmtVol(usdc: number): string {
   return `$${usdc.toFixed(0)}`;
 }
 
-function MarketCardStatsGrid({ stats }: { stats?: MarketStats24h }) {
+function MarketCardStatsGrid({ stats, featured = false }: { stats?: MarketStats24h; featured?: boolean }) {
   if (!stats) return null;
 
   const left =
@@ -237,25 +281,29 @@ function MarketCardStatsGrid({ stats }: { stats?: MarketStats24h }) {
 
   if (!left && !right) return null;
 
+  const cells = [left, right].filter(
+    (cell): cell is { label: string; value: string } => cell != null,
+  );
+
   return (
     <div
-      className="mt-4 grid grid-cols-2 gap-4 border-t border-dashed pt-4"
+      className={cn(
+        "grid gap-2.5",
+        cells.length > 1 ? "grid-cols-2" : "grid-cols-1",
+        featured && "lg:grid-cols-2",
+      )}
       aria-label="Market stats"
     >
-      {left ? (
-        <div>
-          <p className="text-muted-foreground text-sm">{left.label}</p>
-          <p className="text-3xl leading-tight font-semibold tabular-nums">{left.value}</p>
+      {cells.map((cell) => (
+        <div key={cell.label} className="min-w-0">
+          <p className="font-mono text-[9px] tracking-[0.16em] text-white/34 uppercase">
+            {cell.label}
+          </p>
+          <p className="mt-1 truncate text-base leading-tight font-semibold tabular-nums text-[#f3efe6] sm:text-[1.05rem]">
+            {cell.value}
+          </p>
         </div>
-      ) : (
-        <div />
-      )}
-      {right ? (
-        <div className="text-right">
-          <p className="text-muted-foreground text-sm">{right.label}</p>
-          <p className="text-3xl leading-tight font-semibold tabular-nums">{right.value}</p>
-        </div>
-      ) : null}
+      ))}
     </div>
   );
 }
@@ -313,10 +361,10 @@ function MarketCardDetails({
   rows.push({ label: "Oracle", value: tierLabel(info.tier) });
 
   return (
-    <div className="mt-4 border-t pt-4">
+    <div className="mt-3.5">
       <button
         type="button"
-        className="bg-muted flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition-transform active:scale-[0.98]"
+        className="flex w-full items-center justify-between rounded-xl border border-white/[0.08] bg-black/12 px-3.5 py-2.5 text-left transition-[background-color,border-color,transform] hover:border-white/[0.16] hover:bg-black/18 active:scale-[0.98]"
         onClick={(e) => {
           e.preventDefault();
           setOpen((prev) => !prev);
@@ -324,7 +372,9 @@ function MarketCardDetails({
         aria-expanded={open}
         aria-controls={contentId}
       >
-        <span className="text-lg font-semibold">Market details</span>
+        <span className="font-mono text-[11px] tracking-[0.16em] text-white/46 uppercase">
+          Market details
+        </span>
         <ChevronDown
           className={cn(
             "text-muted-foreground h-5 w-5 transition-transform",
@@ -355,7 +405,7 @@ function MarketCardDetails({
               e.preventDefault();
               void navigator.clipboard.writeText(address);
             }}
-            className="text-primary hover:text-foreground flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-2 text-sm font-medium transition-[color,border-color,transform] duration-150 active:scale-[0.98]"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.14] py-2 text-sm font-medium text-white/72 transition-[color,border-color,transform] duration-150 hover:border-white/[0.24] hover:text-[#f3efe6] active:scale-[0.98]"
           >
             <Copy className="h-4 w-4" aria-hidden="true" />
             Copy contract
@@ -394,17 +444,14 @@ export function MarketCardItem({
   const rail = buildRangeRail(card, outcomeConfig);
   const tradable = tone === "open";
   const featured = variant === "featured";
-  const Icon = toneIcon(tone);
   const actionLabel = tradable ? "Trade range" : "View market";
-  const heroValue = outcome ?? crowd ?? statusText;
-  const heroSuffix =
-    outcome != null ? "settled" : crowd != null ? "crowd" : tone === "open" ? "live" : "";
+  const toneClass = toneStyles(tone, urgency);
 
   return (
     <Link
       href={`/markets/${address}`}
       className={cn(
-        "group block h-full transition-transform duration-150 active:scale-[0.99]",
+        "group block h-full outline-none transition-transform duration-200 active:scale-[0.99]",
         className,
       )}
       style={style}
@@ -412,79 +459,129 @@ export function MarketCardItem({
       <section
         aria-label={`${title} market card`}
         className={cn(
-          "bg-card relative flex h-full flex-col overflow-hidden rounded-2xl border p-6 shadow-sm transition-[box-shadow,border-color] duration-200",
-          "group-hover:border-primary/20 group-hover:shadow-md",
-          featured && "border-primary/20 shadow-[0_0_80px_-20px_rgba(216,198,154,0.25)]",
+          "relative flex h-full flex-col overflow-hidden rounded-[1.1rem] border border-white/[0.09] p-0 shadow-[0_24px_72px_-48px_rgba(0,0,0,0.95)] transition-[box-shadow,border-color,transform] duration-200",
+          toneClass.paper,
+          "group-hover:-translate-y-0.5 group-hover:border-white/[0.16] group-hover:shadow-[0_32px_84px_-52px_rgba(0,0,0,1)]",
+          "group-focus-visible:ring-2 group-focus-visible:ring-[#d8c69a]/70 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-[#141416]",
+          featured && "border-white/[0.14]",
         )}
       >
-        <div aria-hidden className="kaido-grain pointer-events-none absolute inset-0 rounded-2xl" />
+        <div aria-hidden className="kaido-grain pointer-events-none absolute inset-0 rounded-[1.1rem]" />
+        <div aria-hidden className={cn("pointer-events-none absolute inset-0", toneClass.wash)} />
+        <div aria-hidden className={cn("absolute inset-x-0 top-0 h-px", toneClass.line)} />
 
-        <div className="relative flex h-full flex-col">
-          {featured && (
-            <p className="text-primary mb-3 font-mono text-[10px] uppercase tracking-[0.22em]">
-              Spotlight · highest activity
-            </p>
-          )}
-
-          <header className="mb-3 flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-start gap-2">
-              <Icon className="text-primary mt-0.5 h-6 w-6 shrink-0" aria-hidden="true" />
-              <h3
-                className={cn(
-                  "line-clamp-2 text-pretty leading-snug font-semibold",
-                  featured ? "text-2xl" : "text-xl",
-                )}
-              >
-                {title}
-              </h3>
+        <div className="relative flex h-full flex-col p-3.5 sm:p-4.5">
+          <header className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <div className="min-w-0">
+                <h3
+                  className={cn(
+                    "line-clamp-3 font-serif text-pretty leading-[1.03] tracking-[-0.03em] text-[#f3efe6]",
+                    featured ? "text-[1.8rem] sm:text-[2.2rem]" : "text-[1.4rem] sm:text-[1.6rem]",
+                  )}
+                >
+                  {title}
+                </h3>
+              </div>
             </div>
-            <Button
-              variant="link"
-              size="sm"
-              tabIndex={-1}
-              aria-hidden
-              className="text-muted-foreground group-hover:text-foreground pointer-events-none shrink-0 text-sm font-medium"
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium",
+                toneClass.badge,
+              )}
             >
-              {actionLabel}
-            </Button>
+              {statusText}
+            </span>
           </header>
 
-          <p
-            className={cn(
-              "mb-4 leading-none font-semibold tracking-tight tabular-nums",
-              featured ? "text-4xl sm:text-5xl" : "text-4xl",
-              urgency === "hot" && tone === "open" && "text-amber-400",
-            )}
-          >
-            {heroValue}
-            {heroSuffix && (
-              <span className="text-muted-foreground ml-2 text-2xl font-medium">
-                {heroSuffix}
-              </span>
-            )}
-          </p>
-
-          <div className={cn(featured && "lg:grid lg:grid-cols-2 lg:items-center lg:gap-6")}>
-            <div className={cn(featured && "space-y-4")}>
-              {rail && crowd ? (
-                <RangeRail rail={rail} tone={tone} crowd={crowd} size={featured ? "large" : "default"} />
-              ) : crowd ? (
-                <p className="text-muted-foreground text-sm">
-                  Crowd call <span className="text-primary">{crowd}</span>
+          <div className="mt-4 grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_165px]">
+            <div className="min-w-0">
+              <div
+                className={cn(
+                  "rounded-[0.95rem] border border-white/[0.08] bg-black/14",
+                  featured ? "p-3.5 sm:p-4.5" : "p-3.5",
+                )}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <p className="font-mono text-[9px] tracking-[0.18em] text-white/34 uppercase">
+                    Crowd belief
+                  </p>
+                  {conviction && tone !== "settled" && (
+                    <span className={cn("text-[11px] font-medium", toneClass.accentText)}>
+                      {conviction}
+                    </span>
+                  )}
+                </div>
+                <p
+                  className={cn(
+                    "mt-2.5 max-w-full truncate leading-none font-semibold tabular-nums text-[#f3efe6] text-[1.8rem] sm:text-[2.2rem]",
+                    urgency === "hot" && tone === "open" && "text-amber-300",
+                  )}
+                >
+                  {crowd}
                 </p>
-              ) : null}
+              </div>
 
-              {!featured && <MarketCardStatsGrid stats={stats} />}
+              <div className="mt-4">
+                {rail && crowd ? (
+                  <RangeRail
+                    rail={rail}
+                    tone={tone}
+                    crowd={crowd}
+                    size={featured ? "large" : "default"}
+                  />
+                ) : crowd ? (
+                  <p className="text-sm text-white/52">
+                    Crowd call <span className={toneClass.accentText}>{crowd}</span>
+                  </p>
+                ) : null}
+              </div>
             </div>
 
-            {featured && (
-              <div className="mt-4 space-y-4 lg:mt-0">
-                <MarketCardStatsGrid stats={stats} />
+            <div className="flex flex-col justify-between gap-5">
+              <div className="space-y-4">
+                <div>
+                  <p className="font-mono text-[9px] tracking-[0.18em] text-white/34 uppercase">
+                    Market type
+                  </p>
+                  <p className="mt-1 text-[13px] text-[#f3efe6] sm:text-sm">
+                    {info.outcome_space.tag === "Trajectory" ? "Path market" : "Range market"}
+                  </p>
+                </div>
+                <div>
+                  <p className="font-mono text-[9px] tracking-[0.18em] text-white/34 uppercase">
+                    Window
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 text-[1.35rem] font-semibold tabular-nums text-[#f3efe6] sm:text-[1.5rem]",
+                      urgency === "hot" && "text-amber-300",
+                    )}
+                  >
+                    {tone === "open" ? <ClosesIn at={lockSec} /> : statusText}
+                  </p>
+                </div>
+                <MarketCardStatsGrid stats={stats} featured={featured} />
               </div>
-            )}
+
+              <div className="border-t border-white/[0.08] pt-3.5">
+                <p className="text-[11px] text-white/36">
+                  {tradable ? "Open for conviction" : "Read only"}
+                </p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <p className="font-mono text-[9px] tracking-[0.18em] text-white/32 uppercase">
+                    Action
+                  </p>
+                  <span className={cn("inline-flex items-center gap-1 text-[13px] font-medium sm:text-sm", toneClass.accentText)}>
+                    {actionLabel}
+                    <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="mt-auto">
+          <div className="mt-4">
             <MarketCardDetails
               card={card}
               tone={tone}

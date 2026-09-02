@@ -55,34 +55,6 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   },
 ];
 
-/** Kaido's bell-curve mark — same motif as market cards, not a generic chart icon. */
-function KaidoMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 32 32"
-      className={cn("size-8 shrink-0", className)}
-      aria-hidden
-    >
-      <rect width="32" height="32" rx="8" className="fill-[#d8c69a]/12" />
-      <path
-        d="M 5 24 C 10 24 14 10 16 10 C 18 10 22 24 27 24"
-        fill="none"
-        stroke="#d8c69a"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-      <line
-        x1="16"
-        y1="10"
-        x2="16"
-        y2="24"
-        stroke="rgba(216,198,154,0.35)"
-        strokeWidth="1"
-        strokeDasharray="2 2"
-      />
-    </svg>
-  );
-}
 
 function isNavActive(pathname: string | null, href: string) {
   return pathname === href || (pathname?.startsWith(`${href}/`) ?? false);
@@ -149,13 +121,9 @@ export function AppSidebar() {
           href="/"
           className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/[0.04]"
         >
-          <KaidoMark />
           <span className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-serif text-lg leading-none tracking-[-0.02em] text-[#f3efe6]">
-              Kaido
-            </span>
-            <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.22em] text-[#d8c69a]/70">
-              Belief markets
+            <span className="font-serif text-4xl leading-none tracking-[-0.02em] text-[#f3efe6]">
+              kaido.fun
             </span>
           </span>
         </Link>
@@ -185,18 +153,6 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-
-      <SidebarFooter className="relative z-10 gap-3 px-3 pb-4">
-        <div className="group-data-[collapsible=icon]:hidden">
-          <NetworkBadge network={network} />
-        </div>
-        <p className="px-1 font-mono text-[9px] uppercase tracking-[0.16em] text-white/25 group-data-[collapsible=icon]:hidden">
-          <kbd className="rounded border border-white/10 bg-white/[0.03] px-1 py-px font-mono text-[8px] text-white/35">
-            ⌘B
-          </kbd>{" "}
-          Toggle sidebar
-        </p>
-      </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>
