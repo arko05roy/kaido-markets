@@ -16,9 +16,10 @@ import { Kaido, type KaidoConfig, distributionMarket } from "@kaido/sdk";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { BeliefChart } from "@/components/forecast/belief-chart";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/provider";
-import { fromWad, sigmaFloor, toWad } from "@/lib/curve";
+import { clampSigma, fromWad, sigmaFloor, toWad } from "@/lib/curve";
 
 const { ResolverTier } = distributionMarket;
 
@@ -240,6 +241,51 @@ export function CreateMarketWizard({
             </Button>
           </div>
         </Field>
+      )}
+
+      {kWad != null && bWad != null && bWad > 0n && (
+        <div className="space-y-1">
+          <span className="text-sm font-medium">Initial belief preview</span>
+          {mode === "scalar"
+            ? (() => {
+                const muW = safeWad(mu0);
+                const sigW = safeWad(sigma0);
+                if (muW == null || sigW == null) {
+                  return <p className="text-xs text-muted-foreground">enter μ and σ to preview the curve.</p>;
+                }
+                const muReal = fromWad(muW);
+                const sigReal = Math.max(1e-12, fromWad(sigW));
+                return (
+                  <BeliefChart
+                    mode="scalar"
+                    market={{ kWad, bWad }}
+                    range={{ min: muReal - 5 * sigReal, max: muReal + 5 * sigReal }}
+                    consensus={{ muWad: muW, sigmaWad: clampSigma(sigW, { kWad, bWad }) }}
+                  />
+                );
+              })()
+            : (() => {
+                const cps = checkpoints.map((c) => {
+                  const ms = new Date(c.at).getTime();
+                  return Number.isFinite(ms) ? Math.floor(ms / 1000) : NaN;
+                });
+                const musW = checkpoints.map((c) => safeWad(c.mu0));
+                const sigsW = checkpoints.map((c) => safeWad(c.sigma0));
+                if (cps.some((x) => !Number.isFinite(x)) || musW.some((v) => v == null) || sigsW.some((v) => v == null)) {
+                  return <p className="text-xs text-muted-foreground">fill every checkpoint to preview the path.</p>;
+                }
+                return (
+                  <BeliefChart
+                    mode="trajectory"
+                    market={{ kWad }}
+                    checkpoints={cps}
+                    consensusMus={[]}
+                    youMus={musW.map((v) => fromWad(v as bigint))}
+                    youSigmas={sigsW.map((v) => fromWad(clampSigma(v as bigint, { kWad, bWad })))}
+                  />
+                );
+              })()}
+        </div>
       )}
 
       <div className="flex items-center gap-3">

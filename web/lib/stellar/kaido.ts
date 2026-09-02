@@ -68,6 +68,31 @@ export async function getMarketState(
   return { params, state };
 }
 
+export type Belief = distributionMarket.Belief;
+
+/** Per-checkpoint consensus beliefs for a trajectory market (one for a scalar market). */
+export async function getBeliefs(market: string): Promise<Belief[]> {
+  return (await marketClient(market).get_beliefs()).result as Belief[];
+}
+
+/** Checkpoint timestamps (unix seconds) for a trajectory market; empty for a scalar market. */
+export async function getCheckpoints(market: string): Promise<bigint[]> {
+  try {
+    return (await marketClient(market).get_checkpoints()).result as bigint[];
+  } catch {
+    return [];
+  }
+}
+
+/** Realised per-checkpoint outcomes for a resolved trajectory market; empty otherwise. */
+export async function getResolvedOutcomes(market: string): Promise<bigint[]> {
+  try {
+    return (await marketClient(market).resolved_outcomes()).result as bigint[];
+  } catch {
+    return [];
+  }
+}
+
 /** A market summary for list rendering: registry info + (best-effort) status. */
 export interface MarketCard {
   address: string;

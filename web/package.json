@@ -16,6 +16,7 @@
   "dependencies": {
     "@kaido/contract-bindings": "workspace:*",
     "@kaido/sdk": "workspace:*",
+    "@radix-ui/react-slider": "^1.3.6",
     "@radix-ui/react-slot": "^1.1.2",
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^15.1.0",
@@ -26,6 +27,7 @@
     "passkey-kit": "^0.12.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {

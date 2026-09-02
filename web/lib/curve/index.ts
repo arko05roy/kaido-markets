@@ -180,139 +180,55 @@ export function fromWad(v: bigint): number {
   return Number(v) / 1e18;
 }
 
-// --- the actual curve fit --------------------------------------------------
+// --- belief representation & rendering --------------------------------------
 
-/** A point the user drew, in *outcome* coordinates (x = outcome, y = freehand height). */
-export interface DrawnPoint {
+/** A point on a curve in outcome coordinates: `x` = outcome value, `y` = height. */
+export interface CurvePoint {
   x: number;
   y: number;
 }
 
-/** A fitted scalar belief: mean, std-dev (both WAD), clamped to the σ-floor. */
-export interface GaussianFit {
+/** A scalar Gaussian belief: mean `μ` and std-dev `σ`, both WAD-scaled. */
+export interface GaussianBelief {
   muWad: bigint;
   sigmaWad: bigint;
 }
 
 /**
- * Fit a Gaussian `(μ, σ)` to a freehand "hump" — the distribution-mode canvas.
- *
- * The drawn `y` values are treated as an (unnormalised) density sample: μ is the
- * y-weighted centroid of x, σ is the y-weighted RMS spread, both then snapped to
- * the market's `σ_min(k,b)` so the contract's solvency re-check can't reject it.
- * Deterministic: same points + same `(k,b)` ⇒ same WAD output, byte-for-byte.
+ * Clamp a (WAD) σ to the market's effective σ-floor — the value the contract's
+ * `peak ≤ b` re-check will accept (`σ_min(k,b)` plus a sliver of headroom). Use
+ * this on every σ the UI is about to submit so an honest belief is never
+ * rejected with `KaidoError::PeakExceedsB`.
  */
-export function fitGaussianFromHump(
-  points: readonly DrawnPoint[],
-  market: { kWad: bigint; bWad: bigint },
-): GaussianFit {
-  if (points.length < 2) throw new Error("fitGaussianFromHump: need ≥ 2 points");
-  let wSum = 0,
-    wxSum = 0;
-  for (const p of points) {
-    const w = Math.max(0, p.y);
-    wSum += w;
-    wxSum += w * p.x;
-  }
-  if (wSum <= 0) throw new Error("fitGaussianFromHump: zero total height");
-  const mu = wxSum / wSum;
-  let varSum = 0;
-  for (const p of points) {
-    const w = Math.max(0, p.y);
-    varSum += w * (p.x - mu) * (p.x - mu);
-  }
-  const sigmaRaw = Math.sqrt(varSum / wSum);
-  const muWad = toWad(mu);
+export function clampSigma(sigmaWad: bigint, market: { kWad: bigint; bWad: bigint }): bigint {
   const floor = effectiveSigmaFloor(market.kWad, market.bWad);
-  let sigmaWad = toWad(sigmaRaw);
-  if (sigmaWad < floor) sigmaWad = floor;
-  if (sigmaWad <= 0n) sigmaWad = floor > 0n ? floor : 1n;
-  return { muWad, sigmaWad };
+  if (sigmaWad < floor) return floor > 0n ? floor : 1n;
+  return sigmaWad > 0n ? sigmaWad : floor > 0n ? floor : 1n;
+}
+
+/** `n` evenly-spaced x values over `[min, max]` inclusive (for chart grids). */
+export function gridOverRange(min: number, max: number, n: number): number[] {
+  if (!(n > 1) || !Number.isFinite(min) || !Number.isFinite(max)) return [min];
+  if (max <= min) return Array.from({ length: n }, () => min);
+  const step = (max - min) / (n - 1);
+  return Array.from({ length: n }, (_, i) => min + i * step);
 }
 
 /**
- * Resample a freehand path (a sorted-by-x polyline) at the market's checkpoint
- * x-coordinates, returning the interpolated outcome value at each checkpoint.
- * This is the "path → checkpoint values" step for trajectory markets.
- */
-export function pathToCheckpointValues(
-  path: readonly DrawnPoint[],
-  checkpointXs: readonly number[],
-): number[] {
-  if (path.length < 2) throw new Error("pathToCheckpointValues: need ≥ 2 points");
-  const pts = [...path].sort((a, b) => a.x - b.x);
-  return checkpointXs.map((cx) => {
-    if (cx <= pts[0].x) return pts[0].y;
-    if (cx >= pts[pts.length - 1].x) return pts[pts.length - 1].y;
-    let i = 0;
-    while (i < pts.length - 1 && pts[i + 1].x < cx) i++;
-    const a = pts[i],
-      b = pts[i + 1];
-    const t = (cx - a.x) / (b.x - a.x);
-    return a.y + t * (b.y - a.y);
-  });
-}
-
-/**
- * Build a per-checkpoint Gaussian fit for a trajectory market: each checkpoint's
- * μ is the path value there; its σ is derived from local path jitter (a confident,
- * smooth draw ⇒ small σ) and snapped to the market σ-floor. Returns parallel
- * arrays aligned to `checkpointXs`.
- */
-export function fitTrajectory(
-  path: readonly DrawnPoint[],
-  checkpointXs: readonly number[],
-  market: { kWad: bigint; bWad: bigint },
-  opts: { jitterToSigma?: number; minSigma?: number } = {},
-): { musWad: bigint[]; sigmasWad: bigint[] } {
-  const values = pathToCheckpointValues(path, checkpointXs);
-  const jitterScale = opts.jitterToSigma ?? 1;
-  const floor = effectiveSigmaFloor(market.kWad, market.bWad);
-  // Local jitter: residual of each drawn point from the straight chord through
-  // its neighbours, RMS-aggregated near each checkpoint.
-  const sorted = [...path].sort((a, b) => a.x - b.x);
-  const localJitter = (cx: number): number => {
-    let sum = 0,
-      n = 0;
-    for (let i = 1; i < sorted.length - 1; i++) {
-      const p = sorted[i];
-      if (Math.abs(p.x - cx) > Math.max(1e-9, (checkpointXs[1] ?? cx + 1) - cx)) continue;
-      const a = sorted[i - 1],
-        b = sorted[i + 1];
-      const t = b.x === a.x ? 0.5 : (p.x - a.x) / (b.x - a.x);
-      const chord = a.y + t * (b.y - a.y);
-      sum += (p.y - chord) ** 2;
-      n++;
-    }
-    return n > 0 ? Math.sqrt(sum / n) : 0;
-  };
-  const musWad: bigint[] = [];
-  const sigmasWad: bigint[] = [];
-  for (let i = 0; i < checkpointXs.length; i++) {
-    musWad.push(toWad(values[i]));
-    const raw = Math.max(opts.minSigma ?? 0, localJitter(checkpointXs[i]) * jitterScale);
-    let s = toWad(raw);
-    if (s < floor) s = floor;
-    if (s <= 0n) s = floor > 0n ? floor : 1n;
-    sigmasWad.push(s);
-  }
-  return { musWad, sigmasWad };
-}
-
-/**
- * Render a fitted Gaussian back as `(x, y)` samples in outcome coordinates so the
- * UI can draw the *exact* curve the contract will store. `λ` is the
+ * Render a Gaussian belief as `(x, y)` samples in outcome coordinates so the UI
+ * can show the *exact* payout curve the contract will store (ADR-8). `λ` is the
  * `‖λφ‖₂ = k` scaling the AMM uses, so the rendered height is the real payout
  * curve, not a normalised bump.
  */
 export function renderGaussian(
-  fit: GaussianFit,
+  belief: GaussianBelief,
   market: { kWad: bigint },
   xs: readonly number[],
-): DrawnPoint[] {
-  const lam = lambda(market.kWad, fit.sigmaWad);
+): CurvePoint[] {
+  const sigma = belief.sigmaWad > 0n ? belief.sigmaWad : 1n;
+  const lam = lambda(market.kWad, sigma);
   return xs.map((x) => ({
     x,
-    y: fromWad(gaussianPdfScaled(fit.muWad, fit.sigmaWad, lam, toWad(x))),
+    y: fromWad(gaussianPdfScaled(belief.muWad, sigma, lam, toWad(x))),
   }));
 }
