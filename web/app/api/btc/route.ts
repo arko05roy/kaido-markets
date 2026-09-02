@@ -15,6 +15,7 @@ import {
   TransactionBuilder,
   Account,
   BASE_FEE,
+  Keypair,
   nativeToScVal,
   scValToNative,
   xdr,
@@ -26,8 +27,10 @@ import { activeNetwork } from "@/lib/stellar/networks";
 
 export const dynamic = "force-dynamic";
 
-// A throwaway source account for read-only simulation (never submitted).
-const SIM_SOURCE = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF5";
+// A throwaway, never-funded source account for read-only simulation. A random
+// keypair (a fixed string risks an invalid checksum, which `new Account`
+// rejects); the account need not exist on-chain for `simulateTransaction`.
+const SIM_SOURCE = Keypair.random().publicKey();
 
 function resolveFeedId(): string {
   const fromCfg = (() => {
