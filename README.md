@@ -18,7 +18,7 @@ Paradigm Markets is a numerical prediction-market primitive on Stellar: particip
 | Public dApp | [Paradigm Markets app](https://kaido-cyan.vercel.app/) | Linked |
 | Mainnet contract | [Contract](https://stellar.expert/explorer/public/contract/CBRZBLU224KTJSANZIKAOHLXMQUV6GHQBEK5QAK46456WKY2BE6QZXA6) and [deployment transaction](https://stellar.expert/explorer/public/tx/d3650b7c1d7d3a10a54c6e859ff4e318d1091b74ea5eb2fcee7438bed67493f4) | Linked |
 | Public feedback form and public Excel export | Existing [early-interest sheet](https://docs.google.com/spreadsheets/d/1YQnSM6HBn1tFuu6D_6AYoWhP4ogM74c3DbehD4FayIg/edit?usp=sharing) | Not valid evidence: it is not a Google Form response sheet |
-| Smart-contract audit/remediation | [Audit findings and remediation plan](docs/contract-audit-fixes.md) · [remediation commit](https://github.com/arko05roy/paradigm-markets/commit/0f1dff1) | External audit evidence linked |
+| Smart-contract audit/remediation | [Audit findings and remediation plan](docs/contract-audit-fixes.md) · [remediation commit](https://github.com/arko05roy/paradigm-markets/commit/a9c029d) | External audit evidence linked |
 | Launch promotion | [Launch post](https://x.com/kaidomarkets/status/2068592591051071557?s=20) and demo links | Linked |
 | Advanced feature | Fee sponsorship ([service](web/app/api/fee-sponsor/route.ts), [validation](web/lib/stellar/fee-sponsorship.ts)) | Implemented |
 
@@ -54,7 +54,7 @@ The prior README described early-interest signup feedback as if it were mainnet-
 
 ## Smart-contract audit and remediation
 
-Paradigm Markets’ internal smart-contract audit findings and remediation plan is published in [Contract Audit Fix Plan](docs/contract-audit-fixes.md). The corresponding remediation is tracked in [commit `0f1dff1`](https://github.com/arko05roy/paradigm-markets/commit/0f1dff1), with regression coverage in the current contract test suite. This is internal audit evidence; the repository does not attribute it to an external auditor.
+Paradigm Markets’ internal smart-contract audit findings and remediation plan is published in [Contract Audit Fix Plan](docs/contract-audit-fixes.md). The corresponding remediation is tracked in [commit `a9c029d`](https://github.com/arko05roy/paradigm-markets/commit/a9c029d), with regression coverage in the current contract test suite. This is internal audit evidence; the repository does not attribute it to an external auditor.
 
 ## Advanced feature: fee sponsorship
 
