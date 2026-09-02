@@ -53,13 +53,13 @@ export const STELLAR_NETWORKS: Record<StellarNetworkId, StellarNetworkConfig> = 
   },
 };
 
-/** Which network this process targets, from `STELLAR_NETWORK` (default: local). */
+/** Which network this process targets, from `STELLAR_NETWORK` (default: testnet). */
 export function activeNetworkId(): StellarNetworkId {
   const v = process.env.STELLAR_NETWORK;
   if (v === "testnet" || v === "futurenet" || v === "mainnet" || v === "local") {
     return v;
   }
-  return "local";
+  return "testnet";
 }
 
 /** Resolved config for the active network, with env overrides applied. */

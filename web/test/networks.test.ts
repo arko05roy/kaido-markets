@@ -24,8 +24,8 @@ describe("stellar networks config", () => {
     );
   });
 
-  it("defaults the active network to local when unset", () => {
+  it("defaults the active network to testnet when unset", () => {
     delete process.env.STELLAR_NETWORK;
-    expect(activeNetworkId()).toBe("local");
+    expect(activeNetworkId()).toBe("testnet");
   });
 });

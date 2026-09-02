@@ -40,7 +40,8 @@ kaido/
   automatically from `contracts/rust-toolchain.toml`
 - **Stellar CLI** ≥ 23 — <https://developers.stellar.org/docs/tools/cli>
 - **cargo-make** — `cargo install --locked cargo-make`
-- **Docker** — only for `make localnet`
+- **Docker** — *optional*, only for `make localnet` (the offline quickstart loop;
+  Kaido develops and deploys against **Stellar Testnet**, which needs no Docker)
 
 ## Getting started
 
@@ -49,26 +50,36 @@ kaido/
 pnpm install
 cargo make --cwd contracts build-wasm        # or: make bootstrap
 
-# 2. (optional) spin up a local Stellar network
-make localnet                                # RPC at http://localhost:8000/rpc
-#   ...stop it later with: make localnet-stop
+# 2. env — defaults target Stellar Testnet (no local node needed)
+cp .env.example .env
 
-# 3. run the web app
-cp .env.example .env                          # defaults target the local network
+# 3. a funded testnet deployer account (Friendbot funds it)
+stellar keys generate kaido-testnet-deployer --network testnet --fund
+#   ...or just run `make deploy:testnet` and let it generate+fund one.
+
+# 4. run the web app
 pnpm dev                                      # http://localhost:3000
 
-# 4. the usual checks (also what CI runs)
+# 5. the usual checks (also what CI runs)
 pnpm build && pnpm lint && pnpm typecheck && pnpm test     # JS / web
 cargo make --cwd contracts ci                              # fmt + clippy + test + wasm
 pnpm --filter web e2e                                      # Playwright smoke (builds first)
+
+# (optional) offline local network instead of testnet:
+#   make localnet           # RPC at http://localhost:8000/rpc — needs Docker
+#   make localnet-stop
 ```
+
+> Native Rust unit tests (`cargo make test`) use `soroban-sdk` testutils and
+> hit **no network at all** — those run the same whether or not you have a node.
+> Only deploys and the integration/E2E lifecycle suites talk to Testnet RPC.
 
 ## Networks
 
 | Network | Passphrase | RPC |
 |---|---|---|
-| Local | `Standalone Network ; February 2017` | `http://localhost:8000/rpc` |
-| Testnet | `Test SDF Network ; September 2015` | `https://soroban-testnet.stellar.org` |
+| **Testnet** (default) | `Test SDF Network ; September 2015` | `https://soroban-testnet.stellar.org` |
+| Local (optional, Docker) | `Standalone Network ; February 2017` | `http://localhost:8000/rpc` |
 | Mainnet | `Public Global Stellar Network ; September 2015` | a third-party provider |
 
 Static params live in [`config/networks.json`](config/networks.json),

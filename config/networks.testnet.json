@@ -1,0 +1,22 @@
+{
+  "network": "testnet",
+  "networkPassphrase": "Test SDF Network ; September 2015",
+  "rpcUrl": "https://soroban-testnet.stellar.org",
+  "deployedAt": "2026-05-11T15:24:52Z",
+  "deployer": "GDAKWS5C6HWEZRVTJPIBIEML4IZ7SXCUZMZV5XBESS5IXOW6HA3E27Q7",
+  "external": {
+    "usdcSacId": null,
+    "reflectorFeedId": null,
+    "adminAddress": null
+  },
+  "contracts": {
+    "marketFactory": { "id": "CCPVNCNSN2WOZJBQYZJJBPGHOLLCTNOLBECPONS7F73TY55RHP2QVTGH", "wasmHash": "12580cec07a04fb99937e3699331d2cc9e4383943aafb6eb4bb3bde061d3ff99" },
+    "distributionMarket": { "id": "CBJAJRIT3XV7DDA4QF5MV2XZIEFIUUS2O242K2SF3BUAEDVSRGFZBVK3", "wasmHash": "12580cec07a04fb99937e3699331d2cc9e4383943aafb6eb4bb3bde061d3ff99" },
+    "houseVault": { "id": "CCZEQLKCFBE2XVMZW57DXDE5A4R2PHQQP6VP65WPBMBEXE72FBRU7MRA", "wasmHash": "12580cec07a04fb99937e3699331d2cc9e4383943aafb6eb4bb3bde061d3ff99" },
+    "registry": { "id": "CCITQZRPI35W6XG2UL7P4QMM7XS5UYBMLXFGN7XQPAQGP3ZWSERQKK2O", "wasmHash": "e89f98b3b2fb9b4d8e65c6a017bb32d661d2336945e30c2abfcad7da54da368b" },
+    "resolverReflector": { "id": "CC6SMIDQF7EA6NGTTH2KHRXXTEM5LDGAIIMOFNQWWHJZECBXDIJWGMGI", "wasmHash": "12580cec07a04fb99937e3699331d2cc9e4383943aafb6eb4bb3bde061d3ff99" },
+    "resolverAttested": { "id": "CCHXCO7DSXEBYNEOLVBL322IVWEEM4MZKVMPZEHVK62MDFM5UL6TE3QF", "wasmHash": "12580cec07a04fb99937e3699331d2cc9e4383943aafb6eb4bb3bde061d3ff99" },
+    "resolverOptimistic": { "id": "CDXKI7737ANVUJ6YZ4QQV2J533TWRUI5F5MZLKHLGUIYCLSZLIGOTO6I", "wasmHash": "12580cec07a04fb99937e3699331d2cc9e4383943aafb6eb4bb3bde061d3ff99" },
+    "resolverDesignated": { "id": "CC7MGWZ7XLHRM3MDH5AGUWN27E2COCVNDG2KHCZ5ENYAZCYENCY76G6A", "wasmHash": "12580cec07a04fb99937e3699331d2cc9e4383943aafb6eb4bb3bde061d3ff99" }
+  }
+}
