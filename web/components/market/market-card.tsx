@@ -1,21 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import {
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  Lock,
+} from "lucide-react";
+import * as React from "react";
 
 import { ClosesIn } from "@/components/market/closes-in";
-import { MarketCardMetadata } from "@/components/market/market-card-metadata";
-import { MarketCardStats } from "@/components/market/market-card-stats";
 import { useLedgerNow } from "@/components/providers/ledger-time-provider";
+import { Button } from "@/components/ui/button";
 import { fromWad, sigmaFloor } from "@/lib/curve";
 import {
   convictionFromSigma,
   convictionLabel,
   crowdTargetLabel,
-  formatOutcome,
+  formatBeliefMu,
   formatUsdc7dp,
   statusLabel,
+  tierLabel,
 } from "@/lib/market-display";
-import { displayMarketQuestion } from "@/lib/market-metadata";
+import { displayMarketQuestion, outcomeConfigFromMetadata } from "@/lib/market-metadata";
+import type { OutcomeConfig } from "@/lib/outcome-scale";
 import type { SavedMarketMetadata } from "@/lib/market-metadata";
 import type { MarketStats24h } from "@/lib/market-stats";
 import type { MarketCard } from "@/lib/market-types";
@@ -58,12 +68,12 @@ function crowdConviction(card: MarketCard): string | null {
   return convictionLabel(convictionFromSigma(sigmaReal, sigmaMin, sigmaMax));
 }
 
-function resolvedOutcome(card: MarketCard): string | null {
+function resolvedOutcome(card: MarketCard, config: OutcomeConfig | null): string | null {
   const { status } = card;
   if (!status || status.tag !== "Resolved") return null;
   const raw = status.values[0];
   if (raw == null) return null;
-  return formatOutcome(fromWad(BigInt(raw)));
+  return formatBeliefMu(fromWad(BigInt(raw)), config);
 }
 
 function resolvedOutcomeRaw(card: MarketCard): number | null {
@@ -83,7 +93,7 @@ type RangeRailData = {
   maxLabel: string;
 };
 
-function buildRangeRail(card: MarketCard): RangeRailData | null {
+function buildRangeRail(card: MarketCard, config: OutcomeConfig | null): RangeRailData | null {
   const { crowdMuWad, crowdSigmaWad } = card;
   if (crowdMuWad == null || crowdSigmaWad == null) return null;
 
@@ -101,12 +111,11 @@ function buildRangeRail(card: MarketCard): RangeRailData | null {
     zoneRight: toPct(mu + sigma),
     muPct: toPct(mu),
     outcomePct: outcome != null ? toPct(outcome) : null,
-    minLabel: formatOutcome(min),
-    maxLabel: formatOutcome(max),
+    minLabel: formatBeliefMu(min, config),
+    maxLabel: formatBeliefMu(max, config),
   };
 }
 
-/** Crowd belief zone on an outcome rail — Kaido's signature, not a chart. */
 function RangeRail({
   rail,
   tone,
@@ -125,7 +134,7 @@ function RangeRail({
   return (
     <div className={cn("space-y-2", large && "space-y-3")}>
       <div className={cn("relative w-full", large ? "h-14" : "h-9")} aria-hidden>
-        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/[0.1]" />
+        <div className="kaido-grain-track bg-border/40 absolute inset-x-0 top-1/2 h-px -translate-y-1/2" />
         {live && (
           <div
             className={cn(
@@ -141,9 +150,9 @@ function RangeRail({
         )}
         <div
           className={cn(
-            "absolute top-1/2 -translate-y-1/2 rounded-full",
+            "kaido-grain-fill absolute top-1/2 -translate-y-1/2 rounded-full",
             large ? "h-3" : "h-2",
-            live ? "bg-[#d8c69a]/35" : settled ? "bg-white/[0.08]" : "bg-[#d8c69a]/18",
+            live ? "bg-primary/35" : settled ? "bg-muted" : "bg-primary/18",
           )}
           style={{
             left: `${rail.zoneLeft}%`,
@@ -152,16 +161,16 @@ function RangeRail({
         />
         <div
           className={cn(
-            "absolute w-px",
+            "bg-primary absolute w-px",
             large ? "top-0 bottom-3" : "top-0 bottom-2",
-            live ? "bg-[#d8c69a]" : "bg-[#d8c69a]/55",
+            live ? "opacity-100" : "opacity-55",
           )}
           style={{ left: `${rail.muPct}%` }}
         />
         {rail.outcomePct != null && (
           <div
             className={cn(
-              "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#f3efe6]/80 bg-[#f3efe6] shadow-[0_0_10px_rgba(243,239,230,0.35)]",
+              "bg-foreground border-foreground/80 absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-sm",
               large ? "h-3 w-3" : "h-2 w-2",
             )}
             style={{ left: `${rail.outcomePct}%` }}
@@ -170,31 +179,191 @@ function RangeRail({
       </div>
       <div
         className={cn(
-          "flex items-end justify-between gap-2 font-mono tabular-nums tracking-tight",
+          "text-muted-foreground flex items-end justify-between gap-2 font-mono tabular-nums tracking-tight",
           large ? "text-[11px]" : "text-[10px]",
         )}
       >
-        <span className="text-white/25">{rail.minLabel}</span>
-        <span className={cn(large ? "text-xs" : "text-[11px]", live ? "text-[#d8c69a]" : "text-white/45")}>
+        <span>{rail.minLabel}</span>
+        <span className={cn(large ? "text-xs" : "text-[11px]", live && "text-primary")}>
           {settled && rail.outcomePct != null ? "Settled" : "Crowd"} · {crowd}
         </span>
-        <span className="text-white/25">{rail.maxLabel}</span>
+        <span>{rail.maxLabel}</span>
       </div>
     </div>
   );
 }
 
-function toneBorder(tone: CardTone): string {
+function toneIcon(tone: CardTone) {
   switch (tone) {
     case "open":
-      return "border-l-[#d8c69a]/55";
+      return Activity;
     case "locked":
-      return "border-l-amber-500/45";
+      return Lock;
     case "disputable":
-      return "border-l-orange-500/45";
+      return AlertCircle;
     default:
-      return "border-l-white/[0.08]";
+      return CheckCircle2;
   }
+}
+
+function fmtVol(usdc: number): string {
+  if (usdc >= 1_000_000) return `$${(usdc / 1_000_000).toFixed(1)}M`;
+  if (usdc >= 1_000) return `$${(usdc / 1_000).toFixed(1)}k`;
+  return `$${usdc.toFixed(0)}`;
+}
+
+function MarketCardStatsGrid({ stats }: { stats?: MarketStats24h }) {
+  if (!stats) return null;
+
+  const left =
+    stats.volumeUsdc != null
+      ? { label: "24h Volume", value: fmtVol(stats.volumeUsdc) }
+      : stats.crowdMovedPct != null
+        ? {
+            label: "Crowd moved",
+            value: `${stats.crowdMovedPct >= 0 ? "+" : ""}${stats.crowdMovedPct.toFixed(1)}%`,
+          }
+        : null;
+
+  const right =
+    stats.traderCount != null
+      ? { label: "Traders", value: String(stats.traderCount) }
+      : stats.crowdMovedPct != null && stats.volumeUsdc != null
+        ? {
+            label: "Crowd moved",
+            value: `${stats.crowdMovedPct >= 0 ? "+" : ""}${stats.crowdMovedPct.toFixed(1)}%`,
+          }
+        : null;
+
+  if (!left && !right) return null;
+
+  return (
+    <div
+      className="mt-4 grid grid-cols-2 gap-4 border-t border-dashed pt-4"
+      aria-label="Market stats"
+    >
+      {left ? (
+        <div>
+          <p className="text-muted-foreground text-sm">{left.label}</p>
+          <p className="text-3xl leading-tight font-semibold tabular-nums">{left.value}</p>
+        </div>
+      ) : (
+        <div />
+      )}
+      {right ? (
+        <div className="text-right">
+          <p className="text-muted-foreground text-sm">{right.label}</p>
+          <p className="text-3xl leading-tight font-semibold tabular-nums">{right.value}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MarketCardDetails({
+  card,
+  tone,
+  lockSec,
+  conviction,
+  outcome,
+  crowd,
+  urgency,
+}: {
+  card: MarketCard;
+  tone: CardTone;
+  lockSec: number;
+  conviction: string | null;
+  outcome: string | null;
+  crowd: string | null;
+  urgency: "hot" | "warm" | null;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const contentId = React.useId();
+  const { address, info, blendBackedDepth7dp } = card;
+
+  const rows: { label: string; value: string; hot?: boolean }[] = [
+    { label: "Status", value: statusLabel(card.status) },
+  ];
+
+  if (tone === "open") {
+    rows.push({
+      label: "Closes in",
+      value: "",
+      hot: urgency === "hot",
+    });
+  }
+  if (conviction && tone !== "settled") {
+    rows.push({ label: "Conviction", value: conviction });
+  }
+  if (outcome) {
+    rows.push({ label: "Settled at", value: outcome });
+  } else if (crowd && tone === "settled") {
+    rows.push({ label: "Crowd called", value: crowd });
+  }
+  if (info.capped) {
+    rows.push({ label: "Pool", value: "Capped" });
+  }
+  if (blendBackedDepth7dp != null && blendBackedDepth7dp > 0n) {
+    rows.push({ label: "Blend depth", value: `${formatUsdc7dp(blendBackedDepth7dp)} USDC` });
+  }
+  rows.push({
+    label: "Type",
+    value: info.outcome_space.tag === "Trajectory" ? "Path market" : "Range market",
+  });
+  rows.push({ label: "Oracle", value: tierLabel(info.tier) });
+
+  return (
+    <div className="mt-4 border-t pt-4">
+      <button
+        type="button"
+        className="bg-muted flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition-transform active:scale-[0.98]"
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((prev) => !prev);
+        }}
+        aria-expanded={open}
+        aria-controls={contentId}
+      >
+        <span className="text-lg font-semibold">Market details</span>
+        <ChevronDown
+          className={cn(
+            "text-muted-foreground h-5 w-5 transition-transform",
+            open && "rotate-180",
+          )}
+          aria-hidden="true"
+        />
+      </button>
+
+      {open && (
+        <div id={contentId} className="space-y-3 px-2 pt-4">
+          {rows.map((row) => (
+            <div key={row.label} className="flex items-start justify-between gap-3">
+              <span className="text-muted-foreground text-sm">{row.label}</span>
+              <span
+                className={cn(
+                  "text-right text-sm font-medium tabular-nums",
+                  row.hot && "text-amber-400",
+                )}
+              >
+                {row.label === "Closes in" ? <ClosesIn at={lockSec} /> : row.value}
+              </span>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              void navigator.clipboard.writeText(address);
+            }}
+            className="text-primary hover:text-foreground flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-2 text-sm font-medium transition-[color,border-color,transform] duration-150 active:scale-[0.98]"
+          >
+            <Copy className="h-4 w-4" aria-hidden="true" />
+            Copy contract
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function MarketCardItem({
@@ -212,277 +381,122 @@ export function MarketCardItem({
   className?: string;
   style?: React.CSSProperties;
 }) {
-  const { address, info, status, crowdMuWad, blendBackedDepth7dp } = card;
+  const { address, info, status, crowdMuWad } = card;
   const statusText = statusLabel(status);
   const tone = cardTone(statusText);
   const lockSec = Number(info.window.lock);
   const title = displayMarketQuestion(info, crowdMuWad, metadata?.question);
-  const crowd = crowdMuWad != null ? crowdTargetLabel(crowdMuWad) : null;
-  const outcome = resolvedOutcome(card);
+  const outcomeConfig = outcomeConfigFromMetadata(metadata);
+  const crowd = crowdMuWad != null ? crowdTargetLabel(crowdMuWad, outcomeConfig) : null;
+  const outcome = resolvedOutcome(card, outcomeConfig);
   const conviction = crowdConviction(card);
   const urgency = useClosingUrgency(lockSec, tone === "open");
-  const rail = buildRangeRail(card);
+  const rail = buildRangeRail(card, outcomeConfig);
   const tradable = tone === "open";
   const featured = variant === "featured";
+  const Icon = toneIcon(tone);
+  const actionLabel = tradable ? "Trade range" : "View market";
+  const heroValue = outcome ?? crowd ?? statusText;
+  const heroSuffix =
+    outcome != null ? "settled" : crowd != null ? "crowd" : tone === "open" ? "live" : "";
 
   return (
     <Link
       href={`/markets/${address}`}
-      className={cn("group block h-full", className)}
+      className={cn(
+        "group block h-full transition-transform duration-150 active:scale-[0.99]",
+        className,
+      )}
       style={style}
     >
-      <article
+      <section
+        aria-label={`${title} market card`}
         className={cn(
-          "relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#1c1c21]",
-          "border-l-[3px] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]",
-          "transition-[border-color,background-color,box-shadow] duration-250 ease-out",
-          "motion-safe:group-hover:border-[#d8c69a]/16 motion-safe:group-hover:bg-[#1f1f25]",
-          "motion-safe:group-hover:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.55)]",
-          "focus-within:outline-none focus-within:ring-2 focus-within:ring-[#d8c69a]/35 focus-within:ring-offset-2 focus-within:ring-offset-[#141416]",
-          toneBorder(tone),
-          tone === "settled" && "opacity-[0.92]",
-          featured &&
-            "border-[#d8c69a]/20 shadow-[0_0_80px_-20px_rgba(216,198,154,0.3)] motion-safe:group-hover:shadow-[0_0_100px_-16px_rgba(216,198,154,0.35)]",
+          "bg-card relative flex h-full flex-col overflow-hidden rounded-2xl border p-6 shadow-sm transition-[box-shadow,border-color] duration-200",
+          "group-hover:border-primary/20 group-hover:shadow-md",
+          featured && "border-primary/20 shadow-[0_0_80px_-20px_rgba(216,198,154,0.25)]",
         )}
       >
-        {featured && (
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(216,198,154,0.09),transparent_60%)]" />
-        )}
-        <div
-          className={cn(
-            "relative flex flex-1 flex-col gap-4",
-            featured ? "p-6 sm:p-8 lg:grid lg:grid-cols-[1fr_minmax(0,42%)] lg:items-center lg:gap-8" : "p-5 sm:p-6",
+        <div aria-hidden className="kaido-grain pointer-events-none absolute inset-0 rounded-2xl" />
+
+        <div className="relative flex h-full flex-col">
+          {featured && (
+            <p className="text-primary mb-3 font-mono text-[10px] uppercase tracking-[0.22em]">
+              Spotlight · highest activity
+            </p>
           )}
-        >
-          {featured ? (
-            <>
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d8c69a]/80 lg:col-span-2">
-                Spotlight · highest activity
-              </span>
-              <div className="flex flex-col gap-4">
-                {/* meta row */}
-                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {tone === "open" && (
-                      <span className="relative flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
-                        <span className="relative flex h-1.5 w-1.5">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
-                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                        </span>
-                        Open
-                      </span>
-                    )}
-                    {tone !== "open" && (
-                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
-                        {statusText}
-                      </span>
-                    )}
-                    {info.capped && <span className="text-[#d8c69a]/70">·</span>}
-                    {info.capped && (
-                      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#d8c69a]/70">
-                        Capped
-                      </span>
-                    )}
-                    {blendBackedDepth7dp != null && blendBackedDepth7dp > 0n && (
-                      <>
-                        <span className="text-white/20">·</span>
-                        <span className="font-mono text-[10px] text-emerald-300/75">
-                          Blend {formatUsdc7dp(blendBackedDepth7dp)} USDC
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  {tone === "open" && (
-                    <div className="text-right">
-                      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/30">
-                        Closes in
-                      </p>
-                      <p
-                        className={cn(
-                          "font-mono text-sm tabular-nums",
-                          urgency === "hot" ? "text-amber-300" : "text-[#f3efe6]",
-                        )}
-                      >
-                        <ClosesIn at={lockSec} />
-                      </p>
-                    </div>
-                  )}
-                </div>
 
-                <h2 className="font-serif text-[1.5rem] leading-[1.15] tracking-[-0.02em] text-[#f3efe6] sm:text-[1.75rem] lg:text-[2rem]">
-                  {title}
-                </h2>
-
-                <MarketCardStats stats={stats} variant="chips" />
-
-                {tone === "settled" && outcome && (
-                  <p className="font-mono text-[11px] text-white/40">
-                    Oracle settled at <span className="text-[#f3efe6]/80">{outcome}</span>
-                  </p>
+          <header className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2">
+              <Icon className="text-primary mt-0.5 h-6 w-6 shrink-0" aria-hidden="true" />
+              <h3
+                className={cn(
+                  "line-clamp-2 text-pretty leading-snug font-semibold",
+                  featured ? "text-2xl" : "text-xl",
                 )}
-
-                <div className="mt-auto flex items-center justify-between gap-3 border-t border-white/[0.05] pt-4 lg:mt-2">
-                  <div className="min-w-0">
-                    {conviction && tone !== "settled" ? (
-                      <p className="font-mono text-[11px] text-white/40">
-                        Crowd conviction{" "}
-                        <span className="text-[#d8c69a]/90">{conviction}</span>
-                      </p>
-                    ) : tone === "settled" && crowd ? (
-                      <p className="font-mono text-[11px] text-white/35">
-                        Crowd called <span className="text-white/55">{crowd}</span>
-                      </p>
-                    ) : (
-                      <p className="font-mono text-[11px] text-white/30">On-chain market</p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <MarketCardMetadata address={address} info={info} />
-                    <span
-                      className={cn(
-                        "inline-flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em]",
-                        "transition-[color,gap] duration-200 group-hover:gap-2.5",
-                        tradable
-                          ? "text-[#d8c69a] group-hover:text-[#f3efe6]"
-                          : "text-white/40 group-hover:text-white/60",
-                      )}
-                    >
-                      {tradable ? "Trade range" : "View market"}
-                      <span
-                        aria-hidden
-                        className="inline-block transition-transform duration-200 group-hover:translate-x-0.5"
-                      >
-                        →
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col justify-center">
-                {rail && crowd ? (
-                  <RangeRail rail={rail} tone={tone} crowd={crowd} size="large" />
-                ) : crowd ? (
-                  <p className="font-mono text-sm text-white/50">
-                    Crowd call <span className="text-[#d8c69a]">{crowd}</span>
-                  </p>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <>
-              {/* meta row */}
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {tone === "open" && (
-                <span className="relative flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  </span>
-                  Open
-                </span>
-              )}
-              {tone !== "open" && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
-                  {statusText}
-                </span>
-              )}
-              {info.capped && (
-                <span className="text-[#d8c69a]/70">·</span>
-              )}
-              {info.capped && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#d8c69a]/70">
-                  Capped
-                </span>
-              )}
-              {blendBackedDepth7dp != null && blendBackedDepth7dp > 0n && (
-                <>
-                  <span className="text-white/20">·</span>
-                  <span className="font-mono text-[10px] text-emerald-300/75">
-                    Blend {formatUsdc7dp(blendBackedDepth7dp)} USDC
-                  </span>
-                </>
-              )}
+              >
+                {title}
+              </h3>
             </div>
-            {tone === "open" && (
-              <div className="text-right">
-                <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/30">
-                  Closes in
+            <Button
+              variant="link"
+              size="sm"
+              tabIndex={-1}
+              aria-hidden
+              className="text-muted-foreground group-hover:text-foreground pointer-events-none shrink-0 text-sm font-medium"
+            >
+              {actionLabel}
+            </Button>
+          </header>
+
+          <p
+            className={cn(
+              "mb-4 leading-none font-semibold tracking-tight tabular-nums",
+              featured ? "text-4xl sm:text-5xl" : "text-4xl",
+              urgency === "hot" && tone === "open" && "text-amber-400",
+            )}
+          >
+            {heroValue}
+            {heroSuffix && (
+              <span className="text-muted-foreground ml-2 text-2xl font-medium">
+                {heroSuffix}
+              </span>
+            )}
+          </p>
+
+          <div className={cn(featured && "lg:grid lg:grid-cols-2 lg:items-center lg:gap-6")}>
+            <div className={cn(featured && "space-y-4")}>
+              {rail && crowd ? (
+                <RangeRail rail={rail} tone={tone} crowd={crowd} size={featured ? "large" : "default"} />
+              ) : crowd ? (
+                <p className="text-muted-foreground text-sm">
+                  Crowd call <span className="text-primary">{crowd}</span>
                 </p>
-                <p
-                  className={cn(
-                    "font-mono text-sm tabular-nums",
-                    urgency === "hot" ? "text-amber-300" : "text-[#f3efe6]",
-                  )}
-                >
-                  <ClosesIn at={lockSec} />
-                </p>
+              ) : null}
+
+              {!featured && <MarketCardStatsGrid stats={stats} />}
+            </div>
+
+            {featured && (
+              <div className="mt-4 space-y-4 lg:mt-0">
+                <MarketCardStatsGrid stats={stats} />
               </div>
             )}
           </div>
 
-          <h2 className="font-serif text-[1.2rem] leading-[1.15] tracking-[-0.02em] text-[#f3efe6] sm:text-[1.35rem]">
-            {title}
-          </h2>
-
-          {rail && crowd ? (
-            <RangeRail rail={rail} tone={tone} crowd={crowd} />
-          ) : crowd ? (
-            <p className="font-mono text-sm text-white/50">
-              Crowd call <span className="text-[#d8c69a]">{crowd}</span>
-            </p>
-          ) : null}
-
-          <MarketCardStats stats={stats} />
-
-          {tone === "settled" && outcome && (
-            <p className="font-mono text-[11px] text-white/40">
-              Oracle settled at <span className="text-[#f3efe6]/80">{outcome}</span>
-            </p>
-          )}
-
-          <div className="mt-auto flex items-center justify-between gap-3 border-t border-white/[0.05] pt-4">
-            <div className="min-w-0">
-              {conviction && tone !== "settled" ? (
-                <p className="font-mono text-[11px] text-white/40">
-                  Crowd conviction{" "}
-                  <span className="text-[#d8c69a]/90">{conviction}</span>
-                </p>
-              ) : tone === "settled" && crowd ? (
-                <p className="font-mono text-[11px] text-white/35">
-                  Crowd called <span className="text-white/55">{crowd}</span>
-                </p>
-              ) : (
-                <p className="font-mono text-[11px] text-white/30">On-chain market</p>
-              )}
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1">
-              <MarketCardMetadata address={address} info={info} />
-              <span
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em]",
-                  "transition-[color,gap] duration-200 group-hover:gap-2.5",
-                  tradable
-                    ? "text-[#d8c69a] group-hover:text-[#f3efe6]"
-                    : "text-white/40 group-hover:text-white/60",
-                )}
-              >
-                {tradable ? "Trade range" : "View market"}
-                <span
-                  aria-hidden
-                  className="inline-block transition-transform duration-200 group-hover:translate-x-0.5"
-                >
-                  →
-                </span>
-              </span>
-            </div>
+          <div className="mt-auto">
+            <MarketCardDetails
+              card={card}
+              tone={tone}
+              lockSec={lockSec}
+              conviction={conviction}
+              outcome={outcome}
+              crowd={crowd}
+              urgency={urgency}
+            />
           </div>
-            </>
-          )}
         </div>
-      </article>
+      </section>
     </Link>
   );
 }

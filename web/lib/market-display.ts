@@ -4,6 +4,7 @@
  */
 import { registry } from "@kaido/contract-bindings";
 import { fromWad, renderGaussian, WAD } from "@/lib/curve";
+import { formatCallLabel, type OutcomeConfig } from "@/lib/outcome-scale";
 
 type MarketInfo = registry.MarketInfo;
 type MarketStatus = registry.MarketStatus;
@@ -136,6 +137,44 @@ export function formatContractTradeError(message: string): string {
   return message;
 }
 
+/** T1 attested resolver — simulation failures → next-step hints. */
+export function formatAttestedResolverError(message: string): string {
+  if (message.includes("Error(Contract, #7)") || message.includes("NoPendingReport")) {
+    return "Nothing to finalize yet — submit the signed report on-chain first (step 2).";
+  }
+  if (message.includes("Error(Contract, #10)") || message.includes("NotInChallengeWindow")) {
+    return "Challenge window still open — wait for it to end, then finalize.";
+  }
+  if (message.includes("Error(Contract, #3)") || message.includes("NotYetResolveTime")) {
+    return "Resolve time hasn’t passed yet — wait until the market window ends.";
+  }
+  if (message.includes("Error(Contract, #4)") || message.includes("BadSignature")) {
+    return "Signature didn’t verify — fetch a fresh signed report and submit again.";
+  }
+  if (message.includes("Error(Contract, #5)") || message.includes("ReportExpired")) {
+    return "Report timestamp is stale — fetch a new signed report.";
+  }
+  if (message.includes("Error(Contract, #6)") || message.includes("AlreadyFinalized")) {
+    return "Outcome already finalized — use Resolve market to settle payouts.";
+  }
+  if (message.includes("Error(Contract, #8)") || message.includes("ChallengeWindowClosed")) {
+    return "Challenge window closed — dispute is no longer available.";
+  }
+  if (message.includes("Error(Contract, #9)") || message.includes("AlreadyDisputed")) {
+    return "This report is already disputed.";
+  }
+  return message;
+}
+
+/** User-facing belief readout — nearest axis label when metadata defines one. */
+export function formatBeliefMu(v: number, config?: OutcomeConfig | null): string {
+  if (config) {
+    const label = formatCallLabel(config, v);
+    if (label) return label;
+  }
+  return formatOutcome(v);
+}
+
 /** Format a real-unit outcome for display (prices, scores, etc.). */
 export function formatOutcome(v: number, kind?: import("@/lib/outcome-scale").OutcomeKind): string {
   if (!Number.isFinite(v)) return "—";
@@ -250,17 +289,21 @@ export function marketQuestion(info: MarketCopyInput, crowdMuWad?: bigint): stri
   return `What number prints on ${date}?`;
 }
 
-export function marketSubtitle(info: MarketCopyInput, crowdMuWad?: bigint): string {
+export function marketSubtitle(
+  info: MarketCopyInput,
+  crowdMuWad?: bigint,
+  outcomeConfig?: OutcomeConfig | null,
+): string {
   const parts: string[] = [];
   if (crowdMuWad != null) {
-    parts.push(`Crowd target: ${formatOutcome(fromWad(crowdMuWad))}`);
+    parts.push(`Crowd target: ${formatBeliefMu(fromWad(crowdMuWad), outcomeConfig)}`);
   }
   parts.push(`Resolves ${fmtResolveDateLong(info.window.resolve)}`);
   return parts.join(" · ");
 }
 
-export function crowdTargetLabel(muWad: bigint): string {
-  return formatOutcome(fromWad(muWad));
+export function crowdTargetLabel(muWad: bigint, outcomeConfig?: OutcomeConfig | null): string {
+  return formatBeliefMu(fromWad(muWad), outcomeConfig);
 }
 
 export function edgeVsCrowd(yourMu: number, crowdMu: number): {

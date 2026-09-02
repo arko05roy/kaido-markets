@@ -10,6 +10,7 @@ import { type TradeMarketView } from "@/components/forecast/trade-panel";
 import { type SettlementMarketView } from "@/components/market/settlement-panel";
 import { crowdTargetLabel, marketSubtitle } from "@/lib/market-display";
 import type { MarketStats24h } from "@/lib/market-stats";
+import { parseOutcomeConfig } from "@/lib/outcome-scale";
 import type { MarketParams } from "@/lib/stellar/kaido";
 import { type LiveCrowdSnapshot, useLiveCrowd } from "@/lib/use-live-crowd";
 
@@ -75,7 +76,32 @@ export function MarketLivePage({
     [applyOptimistic, refresh, router],
   );
 
-  const liveSubtitle = marketSubtitle(header.params, crowdMuWad);
+  const outcomeConfig = useMemo(
+    () =>
+      view.kind === "scalar"
+        ? parseOutcomeConfig({
+            marketStyle: view.marketStyle,
+            outcomeMin: view.outcomeMin,
+            outcomeMax: view.outcomeMax,
+            divisions: view.divisions,
+            divisionLabels: view.divisionLabels,
+            optionLow: view.optionLow,
+            optionHigh: view.optionHigh,
+          })
+        : null,
+    [
+      view.kind,
+      view.marketStyle,
+      view.outcomeMin,
+      view.outcomeMax,
+      view.divisions,
+      view.divisionLabels,
+      view.optionLow,
+      view.optionHigh,
+    ],
+  );
+
+  const liveSubtitle = marketSubtitle(header.params, crowdMuWad, outcomeConfig);
 
   return (
     <>
@@ -83,7 +109,7 @@ export function MarketLivePage({
         title={marketTitle}
         subtitle={liveSubtitle}
         status={header.status}
-        crowdTarget={crowdTargetLabel(crowdMuWad)}
+        crowdTarget={crowdTargetLabel(crowdMuWad, outcomeConfig)}
         closesAt={header.closesAt}
         statusTag={header.statusTag}
         blendBackedDepth7dp={header.blendBackedDepth7dp}

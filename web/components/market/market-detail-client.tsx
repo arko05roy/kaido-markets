@@ -22,6 +22,7 @@ import type { GaussianBelief } from "@/lib/curve";
 import type { MarketStats24h } from "@/lib/market-stats";
 import { isTradingWindowStale } from "@/lib/market-display";
 import type { LiveCrowdSnapshot } from "@/lib/use-live-crowd";
+import { parseOutcomeConfig } from "@/lib/outcome-scale";
 import { cn } from "@/lib/utils";
 
 import { MarketActions } from "@/app/markets/[id]/market-actions";
@@ -75,6 +76,31 @@ export function MarketDetailClient({
     [view, marketTitle],
   );
 
+  const outcomeConfig = useMemo(
+    () =>
+      view.kind === "scalar"
+        ? parseOutcomeConfig({
+            marketStyle: view.marketStyle,
+            outcomeMin: view.outcomeMin,
+            outcomeMax: view.outcomeMax,
+            divisions: view.divisions,
+            divisionLabels: view.divisionLabels,
+            optionLow: view.optionLow,
+            optionHigh: view.optionHigh,
+          })
+        : null,
+    [
+      view.kind,
+      view.marketStyle,
+      view.outcomeMin,
+      view.outcomeMax,
+      view.divisions,
+      view.divisionLabels,
+      view.optionLow,
+      view.optionHigh,
+    ],
+  );
+
   return (
     <div className="space-y-6">
       <StaleMarketBanner show={staleDeepLink} />
@@ -107,7 +133,11 @@ export function MarketDetailClient({
                   className="absolute inset-y-0 left-0 w-[3px] bg-[#d8c69a]/45"
                 />
                 <div className="space-y-4 p-4 sm:p-6">
-                  <ChartCommentary crowdMuWad={crowdMuWad} yourBelief={yourBelief} />
+                  <ChartCommentary
+                    crowdMuWad={crowdMuWad}
+                    yourBelief={yourBelief}
+                    outcomeConfig={outcomeConfig}
+                  />
                   <ConsensusChart
                     view={view}
                     resolved={resolved}

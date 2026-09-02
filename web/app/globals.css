@@ -231,3 +231,23 @@
 .kaido-section-sub {
   @apply text-sm text-white/50;
 }
+
+/* Low-fi grain — dot dither on dark surfaces (market cards, rails) */
+.kaido-grain {
+  opacity: 0.045;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 0.45px, transparent 0.45px);
+  background-size: 2px 2px;
+}
+
+.kaido-grain-fill::after,
+.kaido-grain-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0.12;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.7) 0.4px, transparent 0.4px);
+  background-size: 2px 2px;
+  mix-blend-mode: overlay;
+}

@@ -9,7 +9,9 @@ import {
   formatXTickAt,
   formatCallLabel,
   interiorTicks,
+  outcomeReportOptions,
   parseOutcomeConfig,
+  parseReportValue,
   parseTickLabels,
   snapToDivision,
   tickLabelItems,
@@ -119,5 +121,31 @@ describe("outcome-scale", () => {
 
   it("defaults opening call to midpoint", () => {
     expect(defaultOpeningCall({ style: "binary", min: 0, max: 100, divisions: [0, 100] })).toBe("50");
+  });
+
+  it("lists binary report options for resolvers", () => {
+    const cfg = parseOutcomeConfig({ marketStyle: "binary", optionLow: "Nope", optionHigh: "Yep" })!;
+    expect(outcomeReportOptions(cfg)).toEqual([
+      { value: 0, label: "Nope" },
+      { value: 100, label: "Yep" },
+    ]);
+  });
+
+  it("parses resolver labels into on-chain values", () => {
+    const binary = parseOutcomeConfig({ marketStyle: "binary", optionLow: "Nope", optionHigh: "Yep" })!;
+    expect(parseReportValue("Yep", binary)).toBe(100);
+    expect(parseReportValue("Nope", binary)).toBe(0);
+    expect(parseReportValue("yes", binary)).toBe(100);
+
+    const kaido = parseOutcomeConfig({
+      marketStyle: "kaido",
+      outcomeMin: 0,
+      outcomeMax: 100,
+      divisions: [25, 75],
+      divisionLabels: ["Low", "High"],
+    })!;
+    expect(parseReportValue("High", kaido)).toBe(75);
+    expect(parseReportValue("42", kaido)).toBe(42);
+    expect(parseReportValue("$65,000", null)).toBe(65000);
   });
 });

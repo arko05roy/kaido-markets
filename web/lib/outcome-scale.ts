@@ -239,6 +239,51 @@ export function chartHeightForTickCount(count: number): number {
   return 280;
 }
 
+/** Discrete outcomes a resolver can pick — binary sides or labeled axis ticks. */
+export function outcomeReportOptions(
+  config: OutcomeConfig | null,
+): { value: number; label: string }[] | null {
+  if (!config) return null;
+  if (config.style === "binary") {
+    return [
+      { value: config.min, label: config.optionLow ?? "No" },
+      { value: config.max, label: config.optionHigh ?? "Yes" },
+    ];
+  }
+  const hasText = config.divisionLabels?.some((l) => l.trim().length > 0);
+  if (hasText && config.divisions.length >= 2) return tickLabelItems(config);
+  return null;
+}
+
+/** Map resolver-facing text (labels or numbers) to the on-chain outcome value. */
+export function parseReportValue(raw: string, config: OutcomeConfig | null): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const asNum = parseNumericLabel(trimmed);
+  if (asNum != null) {
+    if (!config || (asNum >= config.min && asNum <= config.max)) return asNum;
+  }
+
+  if (config?.style === "binary") {
+    const low = (config.optionLow ?? "No").trim().toLowerCase();
+    const high = (config.optionHigh ?? "Yes").trim().toLowerCase();
+    const t = trimmed.toLowerCase();
+    if (t === low || t === "no" || t === "n") return config.min;
+    if (t === high || t === "yes" || t === "y") return config.max;
+  }
+
+  if (config?.divisionLabels?.length) {
+    const t = trimmed.toLowerCase();
+    for (let i = 0; i < config.divisions.length; i++) {
+      const lab = config.divisionLabels[i]?.trim();
+      if (lab && lab.toLowerCase() === t) return config.divisions[i];
+    }
+  }
+
+  return asNum;
+}
+
 export function parseOutcomeConfig(meta: {
   marketStyle?: string;
   outcomeKind?: string;

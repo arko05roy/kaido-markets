@@ -18,6 +18,12 @@ import { ResultCard } from "@/components/market/result-card";
 import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 import { useWallet } from "@/components/wallet/provider";
 import { fromWad, toWad } from "@/lib/curve";
+import { formatAttestedResolverError, formatBeliefMu } from "@/lib/market-display";
+import {
+  outcomeReportOptions,
+  parseReportValue,
+  type OutcomeConfig,
+} from "@/lib/outcome-scale";
 import { fetchWalletPositions } from "@/lib/indexer/wallet-positions";
 import {
   formatUsdc7dp,
@@ -82,6 +88,79 @@ function fmtCountdown(targetSec: number, nowSec: number): string {
   return `${s}s`;
 }
 
+function attestedPhaseLabel(phase: number): string {
+  switch (phase) {
+    case 0:
+      return "Awaiting signed report";
+    case 1:
+      return "Challenge window open";
+    case 2:
+      return "Disputed";
+    case 3:
+      return "Finalized";
+    default:
+      return `Phase ${phase}`;
+  }
+}
+
+function parseOutcomeInput(raw: string, config: OutcomeConfig | null): number | null {
+  return parseReportValue(raw, config);
+}
+
+function OutcomeReportPicker({
+  config,
+  value,
+  onChange,
+  placeholder,
+}: {
+  config: OutcomeConfig | null;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const options = outcomeReportOptions(config);
+  if (options) {
+    const selected = options.find((o) => value === String(o.value) || value === o.label);
+    return (
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => {
+          const active = selected?.value === o.value;
+          return (
+            <Button
+              key={o.label}
+              type="button"
+              size="sm"
+              variant={active ? "default" : "outline"}
+              className={active ? "bg-[#f3efe6] text-[#0b0b0c] hover:bg-white" : undefined}
+              onClick={() => onChange(String(o.value))}
+            >
+              {o.label}
+            </Button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const hint =
+    config && config.style === "kaido"
+      ? `Enter a number between ${config.min.toLocaleString()} and ${config.max.toLocaleString()}`
+      : "Enter the final outcome value";
+
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? "e.g. 65000"}
+        className="kaido-input w-48"
+      />
+      <span className="text-xs text-white/40">{hint}</span>
+    </div>
+  );
+}
+
 function mergePositions(local: SavedPosition[], chainIds: string[]): SavedPosition[] {
   const byId = new Map<string, SavedPosition>();
   for (const id of chainIds) {
@@ -97,10 +176,13 @@ function mergePositions(local: SavedPosition[], chainIds: string[]): SavedPositi
 export function SettlementPanel({
   config,
   market,
+  outcomeConfig = null,
   refreshKey = 0,
 }: {
   config: KaidoConfig;
   market: SettlementMarketView;
+  /** Off-chain axis labels — same metadata traders see on the chart. */
+  outcomeConfig?: OutcomeConfig | null;
   /** Bump after a trade so we reload saved positions. */
   refreshKey?: number;
 }) {
@@ -125,6 +207,11 @@ export function SettlementPanel({
     signature: Buffer;
   } | null>(null);
   const [attestedPhase, setAttestedPhase] = useState<number | null>(null);
+  const [attestedPending, setAttestedPending] = useState<{
+    valueWad: bigint;
+    challengeDeadline: number;
+  } | null>(null);
+  const [resolverEpoch, bumpResolverEpoch] = useState(0);
   const [optPhase, setOptPhase] = useState<number | null>(null);
   const [optBond, setOptBond] = useState("1");
   const [optAltValue, setOptAltValue] = useState("");
@@ -197,26 +284,40 @@ export function SettlementPanel({
   useEffect(() => {
     if (!market.resolver || !isT1) {
       setAttestedPhase(null);
+      setAttestedPending(null);
       return;
     }
     let cancelled = false;
-    void new resolverAttested.Client({
+    const client = new resolverAttested.Client({
       contractId: market.resolver,
       networkPassphrase: config.networkPassphrase,
       rpcUrl: config.rpcUrl,
       allowHttp: config.rpcUrl.startsWith("http://"),
-    })
-      .phase()
-      .then((t) => {
-        if (!cancelled) setAttestedPhase(Number(t.result));
+    });
+    void Promise.all([client.phase(), client.pending_report()])
+      .then(([phaseTx, pendingTx]) => {
+        if (cancelled) return;
+        setAttestedPhase(Number(phaseTx.result));
+        const pending = pendingTx.result;
+        if (pending && typeof pending === "object" && "value" in pending) {
+          setAttestedPending({
+            valueWad: BigInt(pending.value),
+            challengeDeadline: Number(pending.challenge_deadline),
+          });
+        } else {
+          setAttestedPending(null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setAttestedPhase(null);
+        if (!cancelled) {
+          setAttestedPhase(null);
+          setAttestedPending(null);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [market.resolver, isT1, config, refreshKey, positionsEpoch]);
+  }, [market.resolver, isT1, config, refreshKey, positionsEpoch, resolverEpoch]);
 
   useEffect(() => {
     if (!market.resolver || !isT2) {
@@ -247,6 +348,18 @@ export function SettlementPanel({
   const canT2Actions =
     wallet && isT2 && market.resolver && !isResolved && nowSec >= market.windowResolve;
 
+  const canSignAttested = attestedPhase === 0 || attestedPhase == null;
+  const canSubmitAttestedOnChain = Boolean(attestedSig) && attestedPhase === 0;
+  const attestedChallengeOpen =
+    attestedPhase === 1 &&
+    attestedPending != null &&
+    nowSec <= attestedPending.challengeDeadline;
+  const canFinalizeAttested =
+    attestedPhase === 1 &&
+    attestedPending != null &&
+    nowSec > attestedPending.challengeDeadline;
+  const canDisputeAttested = attestedChallengeOpen;
+
   useEffect(() => {
     let cancelled = false;
     void kaido
@@ -267,9 +380,9 @@ export function SettlementPanel({
 
   const reportT3 = useCallback(async () => {
     if (!wallet || !market.resolver) return;
-    const v = Number(reportValue.trim());
-    if (!Number.isFinite(v)) {
-      setError("enter a numeric outcome");
+    const v = parseOutcomeInput(reportValue, outcomeConfig);
+    if (v == null) {
+      setError(outcomeConfig ? "pick the winning outcome" : "enter a numeric outcome");
       return;
     }
     setReporting(true);
@@ -282,13 +395,13 @@ export function SettlementPanel({
     } finally {
       setReporting(false);
     }
-  }, [wallet, market.resolver, reportValue, kaido]);
+  }, [wallet, market.resolver, reportValue, kaido, outcomeConfig]);
 
   const fetchAttestedSignature = useCallback(async () => {
     if (!market.resolver) return;
-    const v = Number(reportValue.trim());
-    if (!Number.isFinite(v)) {
-      setError("enter a numeric outcome");
+    const v = parseOutcomeInput(reportValue, outcomeConfig);
+    if (v == null) {
+      setError(outcomeConfig ? "pick the winning outcome" : "enter a numeric outcome");
       return;
     }
     setResolverBusy("sign");
@@ -311,12 +424,13 @@ export function SettlementPanel({
         reportedAt: BigInt(json.reportedAt!),
         signature: Buffer.from(json.signature!, "hex"),
       });
+      bumpResolverEpoch((n) => n + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "sign failed");
     } finally {
       setResolverBusy(null);
     }
-  }, [market.resolver, reportValue]);
+  }, [market.resolver, reportValue, outcomeConfig]);
 
   const submitAttested = useCallback(async () => {
     if (!wallet || !market.resolver || !attestedSig) return;
@@ -332,8 +446,10 @@ export function SettlementPanel({
       );
       setAttestedSig(null);
       setReportValue("");
+      bumpResolverEpoch((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "submit failed");
+      const raw = e instanceof Error ? e.message : "submit failed";
+      setError(formatAttestedResolverError(raw));
     } finally {
       setResolverBusy(null);
     }
@@ -341,16 +457,26 @@ export function SettlementPanel({
 
   const finalizeAttested = useCallback(async () => {
     if (!wallet || !market.resolver) return;
+    if (!canFinalizeAttested) {
+      setError(
+        attestedPhase === 0
+          ? "Submit the signed report on-chain first."
+          : "Challenge window still open — wait before finalizing.",
+      );
+      return;
+    }
     setResolverBusy("finalize");
     setError(null);
     try {
       await kaido.finalizeAttestedReport(market.resolver, wallet.signer);
+      bumpResolverEpoch((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "finalize failed");
+      const raw = e instanceof Error ? e.message : "finalize failed";
+      setError(formatAttestedResolverError(raw));
     } finally {
       setResolverBusy(null);
     }
-  }, [wallet, market.resolver, kaido]);
+  }, [wallet, market.resolver, kaido, canFinalizeAttested, attestedPhase]);
 
   const disputeAttested = useCallback(async () => {
     if (!wallet || !market.resolver) return;
@@ -358,8 +484,10 @@ export function SettlementPanel({
     setError(null);
     try {
       await kaido.disputeAttestedReport(market.resolver, wallet.signer);
+      bumpResolverEpoch((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "dispute failed");
+      const raw = e instanceof Error ? e.message : "dispute failed";
+      setError(formatAttestedResolverError(raw));
     } finally {
       setResolverBusy(null);
     }
@@ -367,10 +495,10 @@ export function SettlementPanel({
 
   const proposeOptimistic = useCallback(async () => {
     if (!wallet || !market.resolver) return;
-    const v = Number(reportValue.trim());
+    const v = parseOutcomeInput(reportValue, outcomeConfig);
     const bond = Number(optBond.trim());
-    if (!Number.isFinite(v) || !Number.isFinite(bond) || bond <= 0) {
-      setError(`enter outcome and bond (${sym})`);
+    if (v == null || !Number.isFinite(bond) || bond <= 0) {
+      setError(outcomeConfig ? `pick an outcome and bond (${sym})` : `enter outcome and bond (${sym})`);
       return;
     }
     setResolverBusy("propose");
@@ -388,14 +516,14 @@ export function SettlementPanel({
     } finally {
       setResolverBusy(null);
     }
-  }, [wallet, market.resolver, reportValue, optBond, kaido]);
+  }, [wallet, market.resolver, reportValue, optBond, kaido, outcomeConfig, sym]);
 
   const disputeOptimistic = useCallback(async () => {
     if (!wallet || !market.resolver) return;
-    const v = Number(optAltValue.trim());
+    const v = parseOutcomeInput(optAltValue, outcomeConfig);
     const bond = Number(optBond.trim());
-    if (!Number.isFinite(v) || !Number.isFinite(bond) || bond <= 0) {
-      setError("enter alternative outcome and bond");
+    if (v == null || !Number.isFinite(bond) || bond <= 0) {
+      setError(outcomeConfig ? `pick a dispute outcome and bond (${sym})` : `enter dispute outcome and bond (${sym})`);
       return;
     }
     setResolverBusy("opt-dispute");
@@ -412,7 +540,7 @@ export function SettlementPanel({
     } finally {
       setResolverBusy(null);
     }
-  }, [wallet, market.resolver, optAltValue, optBond, kaido]);
+  }, [wallet, market.resolver, optAltValue, optBond, kaido, outcomeConfig, sym]);
 
   const finalizeOptimistic = useCallback(async () => {
     if (!wallet || !market.resolver) return;
@@ -572,8 +700,10 @@ export function SettlementPanel({
       {resolvedOutcomes?.length ? (
         <p className="text-sm text-white/65">
           Final outcome:{" "}
-          <span className="font-mono text-lg text-[#d8c69a]">
-            {resolvedOutcomes.map((x) => fromWad(x).toPrecision(6)).join(" · ")}
+          <span className="text-lg font-medium text-[#d8c69a]">
+            {resolvedOutcomes
+              .map((x) => formatBeliefMu(fromWad(x), outcomeConfig))
+              .join(" · ")}
           </span>
         </p>
       ) : null}
@@ -673,53 +803,91 @@ export function SettlementPanel({
       )}
 
       {canT1Actions && (
-        <div className="flex flex-col gap-2 border border-dashed border-white/15 px-4 py-3 text-sm">
-          <span className="font-medium text-[#f3efe6]">T1 attested resolver</span>
-          {attestedPhase != null && (
-            <span className="text-xs text-white/40">phase: {attestedPhase}</span>
-          )}
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1">
-              <span>Outcome value</span>
-              <input
-                type="text"
-                value={reportValue}
-                onChange={(e) => setReportValue(e.target.value)}
-                className="kaido-input w-40 font-mono"
-              />
-            </label>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={resolverBusy != null || !reportValue.trim()}
-              onClick={() => void fetchAttestedSignature()}
-            >
-              {resolverBusy === "sign" ? "Signing…" : "Get signed report"}
-            </Button>
-            <Button
-              size="sm"
-              disabled={resolverBusy != null || !attestedSig}
-              onClick={() => void submitAttested()}
-            >
-              {resolverBusy === "submit" ? "Submitting…" : "Submit on-chain"}
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={resolverBusy != null}
-              onClick={() => void finalizeAttested()}
-            >
-              Finalize
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              disabled={resolverBusy != null}
-              onClick={() => void disputeAttested()}
-            >
-              Dispute
-            </Button>
+        <div className="flex flex-col gap-3 border border-dashed border-white/15 px-4 py-3 text-sm">
+          <div>
+            <span className="font-medium text-[#f3efe6]">T1 attested resolver</span>
+            {attestedPhase != null && (
+              <p className="mt-1 text-xs text-white/40">{attestedPhaseLabel(attestedPhase)}</p>
+            )}
           </div>
+
+          <ol className="list-decimal space-y-3 pl-4 text-white/55">
+            <li className={canSignAttested ? "text-white/80" : "text-white/35"}>
+              <span className="font-medium text-[#f3efe6]">Pick outcome &amp; sign</span>
+              <div className="mt-2 flex flex-col gap-2">
+                <OutcomeReportPicker
+                  config={outcomeConfig}
+                  value={reportValue}
+                  onChange={setReportValue}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={resolverBusy != null || !reportValue.trim() || !canSignAttested}
+                  onClick={() => void fetchAttestedSignature()}
+                >
+                  {resolverBusy === "sign" ? "Signing…" : "1. Get signed report"}
+                </Button>
+                {attestedSig && canSignAttested && (
+                  <p className="text-xs text-emerald-300/80">Signed — ready to submit on-chain.</p>
+                )}
+              </div>
+            </li>
+            <li className={canSubmitAttestedOnChain || attestedPhase === 1 ? "text-white/80" : "text-white/35"}>
+              <span className="font-medium text-[#f3efe6]">Submit on-chain</span>
+              <p className="mt-1 text-xs text-white/40">
+                Posts the attestation to the resolver contract. Required before finalize.
+              </p>
+              <Button
+                size="sm"
+                className="mt-2"
+                disabled={resolverBusy != null || !canSubmitAttestedOnChain}
+                onClick={() => void submitAttested()}
+              >
+                {resolverBusy === "submit" ? "Submitting…" : "2. Submit on-chain"}
+              </Button>
+            </li>
+            <li className={attestedPhase === 1 ? "text-white/80" : "text-white/35"}>
+              <span className="font-medium text-[#f3efe6]">Challenge window → finalize</span>
+              {attestedPending && attestedPhase === 1 && (
+                <p className="mt-1 text-xs text-white/45">
+                  Pending:{" "}
+                  <span className="text-[#d8c69a]">
+                    {formatBeliefMu(fromWad(attestedPending.valueWad), outcomeConfig)}
+                  </span>
+                  {attestedChallengeOpen ? (
+                    <>
+                      {" "}
+                      · dispute until{" "}
+                      <span className="font-mono text-[#d8c69a]">
+                        {fmtCountdown(attestedPending.challengeDeadline, nowSec)}
+                      </span>
+                    </>
+                  ) : canFinalizeAttested ? (
+                    <> · ready to finalize</>
+                  ) : null}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={resolverBusy != null || !canFinalizeAttested}
+                  onClick={() => void finalizeAttested()}
+                >
+                  {resolverBusy === "finalize" ? "Finalizing…" : "3. Finalize"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={resolverBusy != null || !canDisputeAttested}
+                  onClick={() => void disputeAttested()}
+                >
+                  Dispute
+                </Button>
+              </div>
+            </li>
+          </ol>
         </div>
       )}
 
@@ -729,59 +897,58 @@ export function SettlementPanel({
           {optPhase != null && (
             <span className="text-xs text-white/40">phase: {optPhase}</span>
           )}
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1">
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-2">
               <span>Proposed outcome</span>
-              <input
-                type="text"
+              <OutcomeReportPicker
+                config={outcomeConfig}
                 value={reportValue}
-                onChange={(e) => setReportValue(e.target.value)}
-                className="kaido-input w-36 font-mono"
+                onChange={setReportValue}
               />
             </label>
+            <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1">
               <span>Bond ({sym})</span>
               <input
                 type="text"
                 value={optBond}
                 onChange={(e) => setOptBond(e.target.value)}
-                className="kaido-input w-24 font-mono"
+                className="kaido-input w-24"
               />
             </label>
             <Button size="sm" disabled={resolverBusy != null} onClick={() => void proposeOptimistic()}>
               Propose
             </Button>
-            <label className="flex flex-col gap-1">
-              <span>Dispute value</span>
-              <input
-                type="text"
+            </div>
+            <label className="flex flex-col gap-2">
+              <span>Dispute with</span>
+              <OutcomeReportPicker
+                config={outcomeConfig}
                 value={optAltValue}
-                onChange={(e) => setOptAltValue(e.target.value)}
-                className="kaido-input w-36 font-mono"
+                onChange={setOptAltValue}
               />
             </label>
+            <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" disabled={resolverBusy != null} onClick={() => void disputeOptimistic()}>
               Dispute
             </Button>
             <Button size="sm" variant="outline" disabled={resolverBusy != null} onClick={() => void finalizeOptimistic()}>
               Finalize
             </Button>
+            </div>
           </div>
         </div>
       )}
 
       {canReportT3 && (
-        <div className="flex flex-wrap items-end gap-2 border border-dashed border-white/15 px-4 py-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-[#f3efe6]">T3 designated report (outcome value)</span>
-            <input
-              type="text"
-              value={reportValue}
-              onChange={(e) => setReportValue(e.target.value)}
-              placeholder="e.g. 65000"
-              className="kaido-input w-40 font-mono"
-            />
-          </label>
+        <div className="flex flex-col gap-3 border border-dashed border-white/15 px-4 py-3">
+          <span className="text-sm font-medium text-[#f3efe6]">T3 designated report</span>
+          <OutcomeReportPicker
+            config={outcomeConfig}
+            value={reportValue}
+            onChange={setReportValue}
+            placeholder="e.g. 65000"
+          />
           <Button size="sm" onClick={() => void reportT3()} disabled={reporting || !reportValue.trim()}>
             {reporting ? "Reporting…" : "Report outcome"}
           </Button>

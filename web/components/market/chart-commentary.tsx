@@ -1,22 +1,25 @@
 "use client";
 
-import { edgeVsCrowd, formatOutcome } from "@/lib/market-display";
+import { edgeVsCrowd, formatBeliefMu } from "@/lib/market-display";
 import { fromWad } from "@/lib/curve";
 import type { GaussianBelief } from "@/lib/curve";
+import type { OutcomeConfig } from "@/lib/outcome-scale";
 
 export function ChartCommentary({
   crowdMuWad,
   yourBelief,
+  outcomeConfig,
 }: {
   crowdMuWad: bigint;
   yourBelief?: GaussianBelief | null;
+  outcomeConfig?: OutcomeConfig | null;
 }) {
   if (!yourBelief) return null;
 
   const crowd = fromWad(crowdMuWad);
   const yours = fromWad(yourBelief.muWad);
-  const crowdLabel = formatOutcome(crowd);
-  const yourLabel = formatOutcome(yours);
+  const crowdLabel = formatBeliefMu(crowd, outcomeConfig);
+  const yourLabel = formatBeliefMu(yours, outcomeConfig);
   const { stance } = edgeVsCrowd(yours, crowd);
 
   return (

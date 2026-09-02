@@ -1,10 +1,11 @@
 "use client";
 
 import { type KaidoConfig } from "@kaido/sdk";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { AdvancedBlock } from "@/components/app/advanced-block";
 import { tradingPhase } from "@/lib/market-display";
+import { parseOutcomeConfig } from "@/lib/outcome-scale";
 import { useLedgerNow } from "@/components/providers/ledger-time-provider";
 import {
   MobileTradeBar,
@@ -56,6 +57,22 @@ export function MarketActions({
     marketTitle: marketTitle ?? tradeMarket.marketTitle,
   };
 
+  const outcomeConfig = useMemo(
+    () =>
+      tradeMarket.kind === "scalar"
+        ? parseOutcomeConfig({
+            marketStyle: tradeMarket.marketStyle,
+            outcomeMin: tradeMarket.outcomeMin,
+            outcomeMax: tradeMarket.outcomeMax,
+            divisions: tradeMarket.divisions,
+            divisionLabels: tradeMarket.divisionLabels,
+            optionLow: tradeMarket.optionLow,
+            optionHigh: tradeMarket.optionHigh,
+          })
+        : null,
+    [tradeMarket],
+  );
+
   const bumpPosition = (consensus: LiveCrowdSnapshot) => {
     setPositionRefresh((n) => n + 1);
     onPositionOpened?.(consensus);
@@ -83,6 +100,7 @@ export function MarketActions({
           <SettlementPanel
             config={config}
             market={settlementMarket}
+            outcomeConfig={outcomeConfig}
             refreshKey={positionRefresh}
           />
         )}

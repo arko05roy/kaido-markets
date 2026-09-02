@@ -607,7 +607,7 @@ export function TradePanel({
                   marketTitle: market.marketTitle ?? "Market",
                   call: callLabel,
                   conviction: convictionText,
-                  crowdTarget: crowdTargetLabel(consensusScalar.muWad),
+                  crowdTarget: crowdTargetLabel(consensusScalar.muWad, outcomeConfig),
                   maxWin: `+${displayPayout.maxWin.toFixed(2)} ${sym}`,
                   consensus: consensusScalar,
                   yours: scalarBelief,

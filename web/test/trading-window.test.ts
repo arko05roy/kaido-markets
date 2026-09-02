@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatAttestedResolverError,
   isTradingWindowOpen,
   isTradingWindowStale,
   tradingPhase,
@@ -19,5 +20,11 @@ describe("trading window phases", () => {
     expect(isTradingWindowStale("Open", window, 900)).toBe(false);
     expect(isTradingWindowOpen("Open", window, 900)).toBe(false);
     expect(isTradingWindowStale("Open", window, 2500)).toBe(true);
+  });
+});
+
+describe("formatAttestedResolverError", () => {
+  it("maps NoPendingReport to a next-step hint", () => {
+    expect(formatAttestedResolverError('Error(Contract, #7)')).toContain("submit");
   });
 });
