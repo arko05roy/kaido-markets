@@ -22,6 +22,9 @@ export default function Home() {
           <Link href="/chartguessr">ChartGuessr</Link>
         </Button>
         <Button asChild variant="outline">
+          <Link href="/markets">Markets</Link>
+        </Button>
+        <Button asChild variant="outline">
           <Link href="/create">Create a market</Link>
         </Button>
         <Button asChild variant="ghost">
