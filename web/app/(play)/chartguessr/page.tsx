@@ -90,7 +90,8 @@ export default async function ChartGuessrPage() {
   };
 
   const kaido = new Kaido(config);
-  const marketAddress = process.env.NEXT_PUBLIC_CHARTGUESSR_MARKET ?? null;
+  const marketAddress =
+    process.env.NEXT_PUBLIC_CHARTGUESSR_MARKET ?? deployed.demo.chartGuessrMarket ?? null;
   const market = marketAddress ? await loadMarket(kaido, marketAddress) : null;
 
   return (

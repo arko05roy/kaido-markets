@@ -134,10 +134,13 @@ for c in ${CONTRACTS}; do
       CTOR_ARGS=(-- --admin "${ADMIN}" --usdc "${USDC_SAC_ID}")
       ;;
     resolver-reflector)
-      # demo resolver: resolve_time = now+2h, 12-record TWAP.
+      # demo resolver (scalar mode): resolve_time = now+2h, 12-record TWAP,
+      # no checkpoints. A second, trajectory-mode resolver is deployed below
+      # for the ChartGuessr demo market.
       CTOR_ARGS=(-- --oracle "${REFLECTOR_FEED_ID}" \
         --asset "{\"Other\":\"${REFLECTOR_ASSET_SYMBOL}\"}" \
-        --resolve-time "$(( $(date +%s) + 7200 ))" --twap-records 12)
+        --resolve-time "$(( $(date +%s) + 7200 ))" --twap-records 12 \
+        --checkpoints '[]')
       ;;
     registry)
       # placeholder factory = admin; rewired to the real factory id below.
@@ -217,6 +220,46 @@ else
   echo "   (factory create_market failed — re-run manually)" >&2
 fi
 
+# --- demo: a trajectory ChartGuessr-on-BTC market (Sprint 3) -------------
+# Deploys a *second* resolver-reflector in trajectory mode (3 checkpoints on
+# the BTC feed), then `factory.create_trajectory_market` against it. The
+# resulting market id is what the web app's `NEXT_PUBLIC_CHARTGUESSR_MARKET`
+# points at; we also record it in the live-ids file under `demo`. A fresh
+# market every run (testnet resets — build.md §0a).
+echo "-- ChartGuessr trajectory demo ------------"
+T_NOW="$(date +%s)"
+CP1="$(( T_NOW + 600 ))"; CP2="$(( T_NOW + 1200 ))"; CP3="$(( T_NOW + 1800 ))"
+TJ_RESOLVE="$(( CP3 + 60 ))"
+TJ_OPEN="${T_NOW}"; TJ_LOCK="$(( CP3 - 60 ))"
+CHECKPOINTS_JSON="[${CP1},${CP2},${CP3}]"
+# initial consensus: flat at μ = 50 (WAD), σ = 1 (WAD) per checkpoint — the
+# real curve gets traded in; this is just a non-degenerate seed.
+MUS0_JSON="[\"${MU0_18}\",\"${MU0_18}\",\"${MU0_18}\"]"
+SIGMAS0_JSON="[\"${WAD18}\",\"${WAD18}\",\"${WAD18}\"]"
+CHARTGUESSR_RESOLVER=""
+CHARTGUESSR_MARKET=""
+if CHARTGUESSR_RESOLVER="$(stellar contract deploy --wasm-hash "${HASH_resolver_reflector}" \
+     --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+     -- --oracle "${REFLECTOR_FEED_ID}" --asset "{\"Other\":\"${REFLECTOR_ASSET_SYMBOL}\"}" \
+        --resolve-time "${TJ_RESOLVE}" --twap-records 1 --checkpoints "${CHECKPOINTS_JSON}" 2>/dev/null)"; then
+  echo "   trajectory resolver : ${CHARTGUESSR_RESOLVER}"
+  if CHARTGUESSR_MARKET="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+       -- create_trajectory_market \
+          --creator "${DEPLOYER_ADDR}" \
+          --k "${WAD18}" --b "${B18}" --fee-bps 30 \
+          --resolver "${CHARTGUESSR_RESOLVER}" --tier 0 \
+          --checkpoints "${CHECKPOINTS_JSON}" \
+          --window-open "${TJ_OPEN}" --window-lock "${TJ_LOCK}" --window-resolve "${TJ_RESOLVE}" \
+          --mus0 "${MUS0_JSON}" --sigmas0 "${SIGMAS0_JSON}" 2>/dev/null)"; then
+    CHARTGUESSR_MARKET="${CHARTGUESSR_MARKET//\"/}"
+    echo "   chartguessr market  : ${CHARTGUESSR_MARKET}"
+  else
+    echo "   (create_trajectory_market failed — re-run manually)" >&2
+  fi
+else
+  echo "   (trajectory resolver deploy failed — re-run manually)" >&2
+fi
+
 json_or_null() { [[ -n "$1" ]] && printf '"%s"' "$1" || printf 'null'; }
 
 # --- write the live-ids file --------------------------------------------
@@ -235,6 +278,10 @@ cat > "${OUT}" <<EOF
     "reflectorFeedId": $(json_or_null "${REFLECTOR_FEED_ID}"),
     "adminAddress": $(json_or_null "${ADMIN_ADDRESS}")
   },
+  "demo": {
+    "chartGuessrMarket": $(json_or_null "${CHARTGUESSR_MARKET}"),
+    "chartGuessrResolver": $(json_or_null "${CHARTGUESSR_RESOLVER}")
+  },
   "contracts": {${CONTRACTS_JSON}
   }
 }
@@ -242,3 +289,10 @@ EOF
 
 echo
 echo "OK: deployed ${N} contracts to ${NETWORK}; wrote ${OUT#${ROOT}/}"
+if [[ -n "${CHARTGUESSR_MARKET}" ]]; then
+  echo
+  echo "ChartGuessr demo market: ${CHARTGUESSR_MARKET}"
+  echo "  point the web app at it with:"
+  echo "    export NEXT_PUBLIC_CHARTGUESSR_MARKET=${CHARTGUESSR_MARKET}"
+  echo "  (or it's picked up automatically from ${OUT#${ROOT}/} \"demo.chartGuessrMarket\")"
+fi

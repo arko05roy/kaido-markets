@@ -49,7 +49,13 @@ fn boot() -> World {
     let asset = sep_40_oracle::Asset::Other(Symbol::new(&env, "BTC"));
     let resolver_id = env.register(
         resolver_reflector::ResolverReflector,
-        (oracle_id.clone(), asset, W_RESOLVE, 1u32),
+        (
+            oracle_id.clone(),
+            asset,
+            W_RESOLVE,
+            1u32,
+            soroban_sdk::Vec::<u64>::new(&env),
+        ),
     );
     let _ = ResolverReflectorClient::new(&env, &resolver_id);
 

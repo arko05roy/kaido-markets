@@ -38,7 +38,11 @@ if (typeof window !== "undefined") {
  */
 export const ResolverError = {
   1: {message:"AlreadyInitialized"},
-  2: {message:"NotInitialized"}
+  2: {message:"NotInitialized"},
+  /**
+   * `checkpoints` not strictly ascending, or `resolve_time` < last checkpoint.
+   */
+  3: {message:"BadCheckpoints"}
 }
 
 /**
@@ -434,14 +438,19 @@ owner: string;
 export interface Client {
   /**
    * Construct and simulate a status transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Non-trapping status.
+   * Non-trapping status. `ResolvedVec` in trajectory mode, `Resolved` in
+   * scalar mode; `Stale` if the oracle can't supply (all) the price(s).
    */
   status: (options?: MethodOptions) => Promise<AssembledTransaction<ResolverStatus>>
 
   /**
    * Construct and simulate a resolve transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Realised outcome `x₀` in WAD. Panics with `ResolverNotReady` before
-   * `resolve_time`, `OracleStale` if the oracle has no usable price.
+   * Realised outcome `x₀` in WAD. In trajectory mode this returns the value
+   * at the *last* checkpoint (and caches the full vector — read it via
+   * [`status`](Self::status)); `DistributionMarket` only ever calls
+   * [`status`](Self::status), so callers wanting the trajectory use that.
+   * Panics with `ResolverNotReady` before `resolve_time`, `OracleStale` if
+   * the oracle has no usable price.
    */
   resolve: (options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
@@ -449,7 +458,7 @@ export interface Client {
 export class Client extends ContractClient {
   static async deploy<T = Client>(
         /** Constructor/Initialization Args for the contract's `__constructor` method */
-        {oracle, asset, resolve_time, twap_records}: {oracle: string, asset: Asset, resolve_time: u64, twap_records: u32},
+        {oracle, asset, resolve_time, twap_records, checkpoints}: {oracle: string, asset: Asset, resolve_time: u64, twap_records: u32, checkpoints: Array<u64>},
     /** Options for initializing a Client as well as for calling a method, with extras specific to deploying. */
     options: MethodOptions &
       Omit<ContractClientOptions, "contractId"> & {
@@ -461,14 +470,14 @@ export class Client extends ContractClient {
         format?: "hex" | "base64";
       }
   ): Promise<AssembledTransaction<T>> {
-    return ContractClient.deploy({oracle, asset, resolve_time, twap_records}, options)
+    return ContractClient.deploy({oracle, asset, resolve_time, twap_records, checkpoints}, options)
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAABAAAAElFcnJvcnMgc3BlY2lmaWMgdG8gdGhpcyByZXNvbHZlciAoa2VwdCBvdXQgb2YgdGhlIHNoYXJlZCBbYEthaWRvRXJyb3JgXSkuAAAAAAAAAAAAAA1SZXNvbHZlckVycm9yAAAAAAAAAgAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAg==",
-        "AAAAAAAAABROb24tdHJhcHBpbmcgc3RhdHVzLgAAAAZzdGF0dXMAAAAAAAAAAAABAAAH0AAAAA5SZXNvbHZlclN0YXR1cwAA",
-        "AAAAAAAAAIZSZWFsaXNlZCBvdXRjb21lIGB44oKAYCBpbiBXQUQuIFBhbmljcyB3aXRoIGBSZXNvbHZlck5vdFJlYWR5YCBiZWZvcmUKYHJlc29sdmVfdGltZWAsIGBPcmFjbGVTdGFsZWAgaWYgdGhlIG9yYWNsZSBoYXMgbm8gdXNhYmxlIHByaWNlLgAAAAAAB3Jlc29sdmUAAAAAAAAAAAEAAAAL",
-        "AAAAAAAAAKBXaXJlIHRoZSByZXNvbHZlciB0byBhIHNwZWNpZmljIG9yYWNsZSArIGFzc2V0ICsgcmVzb2x2ZSB0aW1lLgpgdHdhcF9yZWNvcmRzYCBpcyB0aGUgbnVtYmVyIG9mIHRyYWlsaW5nIG9yYWNsZSB0aWNrcyB0byBhdmVyYWdlOyBgMWAKZGVnZW5lcmF0ZXMgdG8gYSBzcG90IHJlYWQuAAAADV9fY29uc3RydWN0b3IAAAAAAAAEAAAAAAAAAAZvcmFjbGUAAAAAABMAAAAAAAAABWFzc2V0AAAAAAAH0AAAAAVBc3NldAAAAAAAAAAAAAAMcmVzb2x2ZV90aW1lAAAABgAAAAAAAAAMdHdhcF9yZWNvcmRzAAAABAAAAAA=",
+      new ContractSpec([ "AAAABAAAAElFcnJvcnMgc3BlY2lmaWMgdG8gdGhpcyByZXNvbHZlciAoa2VwdCBvdXQgb2YgdGhlIHNoYXJlZCBbYEthaWRvRXJyb3JgXSkuAAAAAAAAAAAAAA1SZXNvbHZlckVycm9yAAAAAAAAAwAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAgAAAEpgY2hlY2twb2ludHNgIG5vdCBzdHJpY3RseSBhc2NlbmRpbmcsIG9yIGByZXNvbHZlX3RpbWVgIDwgbGFzdCBjaGVja3BvaW50LgAAAAAADkJhZENoZWNrcG9pbnRzAAAAAAAD",
+        "AAAAAAAAAIhOb24tdHJhcHBpbmcgc3RhdHVzLiBgUmVzb2x2ZWRWZWNgIGluIHRyYWplY3RvcnkgbW9kZSwgYFJlc29sdmVkYCBpbgpzY2FsYXIgbW9kZTsgYFN0YWxlYCBpZiB0aGUgb3JhY2xlIGNhbid0IHN1cHBseSAoYWxsKSB0aGUgcHJpY2UocykuAAAABnN0YXR1cwAAAAAAAAAAAAEAAAfQAAAADlJlc29sdmVyU3RhdHVzAAA=",
+        "AAAAAAAAAXtSZWFsaXNlZCBvdXRjb21lIGB44oKAYCBpbiBXQUQuIEluIHRyYWplY3RvcnkgbW9kZSB0aGlzIHJldHVybnMgdGhlIHZhbHVlCmF0IHRoZSAqbGFzdCogY2hlY2twb2ludCAoYW5kIGNhY2hlcyB0aGUgZnVsbCB2ZWN0b3Ig4oCUIHJlYWQgaXQgdmlhCltgc3RhdHVzYF0oU2VsZjo6c3RhdHVzKSk7IGBEaXN0cmlidXRpb25NYXJrZXRgIG9ubHkgZXZlciBjYWxscwpbYHN0YXR1c2BdKFNlbGY6OnN0YXR1cyksIHNvIGNhbGxlcnMgd2FudGluZyB0aGUgdHJhamVjdG9yeSB1c2UgdGhhdC4KUGFuaWNzIHdpdGggYFJlc29sdmVyTm90UmVhZHlgIGJlZm9yZSBgcmVzb2x2ZV90aW1lYCwgYE9yYWNsZVN0YWxlYCBpZgp0aGUgb3JhY2xlIGhhcyBubyB1c2FibGUgcHJpY2UuAAAAAAdyZXNvbHZlAAAAAAAAAAABAAAACw==",
+        "AAAAAAAAAbZXaXJlIHRoZSByZXNvbHZlciB0byBhIHNwZWNpZmljIG9yYWNsZSArIGFzc2V0ICsgcmVzb2x2ZSB0aW1lLgoKKiBgdHdhcF9yZWNvcmRzYCDigJQgdHJhaWxpbmcgb3JhY2xlIHRpY2tzIHRvIGF2ZXJhZ2UgaW4gKipzY2FsYXIgbW9kZSoqOwpgMWAgZGVnZW5lcmF0ZXMgdG8gYSBzcG90IHJlYWQuCiogYGNoZWNrcG9pbnRzYCDigJQgaWYgbm9uLWVtcHR5LCB0aGlzIHJlc29sdmVyIGlzIGluICoqdHJhamVjdG9yeSBtb2RlKio6Cml0IHJlcG9ydHMgYFJlc29sdmVyU3RhdHVzOjpSZXNvbHZlZFZlY2Agd2l0aCB0aGUgb3JhY2xlIHByaWNlIGF0IGVhY2gKY2hlY2twb2ludCB0aW1lc3RhbXAgKGFzY2VuZGluZzsgYHJlc29sdmVfdGltZWAgbXVzdCBiZSDiiaUgdGhlIGxhc3QKb25lKS4gRW1wdHkg4oeSIHNjYWxhciBtb2RlIChgdHdhcF9yZWNvcmRzYCBhcHBsaWVzKS4AAAAAAA1fX2NvbnN0cnVjdG9yAAAAAAAABQAAAAAAAAAGb3JhY2xlAAAAAAATAAAAAAAAAAVhc3NldAAAAAAAB9AAAAAFQXNzZXQAAAAAAAAAAAAADHJlc29sdmVfdGltZQAAAAYAAAAAAAAADHR3YXBfcmVjb3JkcwAAAAQAAAAAAAAAC2NoZWNrcG9pbnRzAAAAA+oAAAAGAAAAAA==",
         "AAAAAgAAAApBc3NldCB0eXBlAAAAAAAAAAAABUFzc2V0AAAAAAAAAgAAAAEAAAAAAAAAB1N0ZWxsYXIAAAAAAQAAABMAAAABAAAAAAAAAAVPdGhlcgAAAAAAAAEAAAAR",
         "AAAAAQAAAC9QcmljZSBkYXRhIGZvciBhbiBhc3NldCBhdCBhIHNwZWNpZmljIHRpbWVzdGFtcAAAAAAAAAAACVByaWNlRGF0YQAAAAAAAAIAAAAAAAAABXByaWNlAAAAAAAACwAAAAAAAAAJdGltZXN0YW1wAAAAAAAABg==",
         "AAAABQAAADlFbWl0dGVkIGJ5IGBEaXN0cmlidXRpb25NYXJrZXQ6OnRyYWRlYCAodG9waWMgYCJ0cmFkZSJgKS4AAAAAAAAAAAAABVRyYWRlAAAAAAAAAQAAAAV0cmFkZQAAAAAAAAUAAAATUG9zaXRpb24gaWQgbWludGVkLgAAAAACaWQAAAAAAAYAAAAAAAAAC1RoZSB0cmFkZXIuAAAAAAZ0cmFkZXIAAAAAABMAAAAAAAAAGENvbGxhdGVyYWwgbG9ja2VkIChXQUQpLgAAAApjb2xsYXRlcmFsAAAAAAALAAAAAAAAAA9GZWUgcGFpZCAoV0FEKS4AAAAAA2ZlZQAAAAALAAAAAAAAAClUaGUgbmV3IGFnZ3JlZ2F0ZSBiZWxpZWYgYWZ0ZXIgdGhlIHRyYWRlLgAAAAAAAAZiZWxpZWYAAAAAB9AAAAAGQmVsaWVmAAAAAAAAAAAAAg==",

@@ -32,12 +32,18 @@ enum DataKey {
     Oracle,
     /// The quoted [`Asset`].
     Asset,
-    /// `u64` — when `resolve()` becomes valid.
+    /// `u64` — when `resolve()` becomes valid (≥ the last checkpoint, in
+    /// trajectory mode).
     ResolveTime,
-    /// `u32` — number of trailing price records to TWAP over.
+    /// `u32` — number of trailing price records to TWAP over (scalar mode).
     TwapRecords,
-    /// `i128` — cached resolved outcome (WAD), once known.
+    /// `i128` — cached resolved scalar outcome (WAD), once known.
     Resolved,
+    /// `Vec<u64>` — checkpoint timestamps (ascending) when this resolver is in
+    /// **trajectory mode**; absent / empty ⇒ scalar mode.
+    Checkpoints,
+    /// `Vec<i128>` — cached realised per-checkpoint values (WAD), once known.
+    ResolvedVec,
 }
 
 /// Errors specific to this resolver (kept out of the shared [`KaidoError`]).
@@ -47,6 +53,8 @@ enum DataKey {
 pub enum ResolverError {
     AlreadyInitialized = 1,
     NotInitialized = 2,
+    /// `checkpoints` not strictly ascending, or `resolve_time` < last checkpoint.
+    BadCheckpoints = 3,
 }
 
 #[contract]
@@ -55,18 +63,40 @@ pub struct ResolverReflector;
 #[contractimpl]
 impl ResolverReflector {
     /// Wire the resolver to a specific oracle + asset + resolve time.
-    /// `twap_records` is the number of trailing oracle ticks to average; `1`
-    /// degenerates to a spot read.
+    ///
+    /// * `twap_records` — trailing oracle ticks to average in **scalar mode**;
+    ///   `1` degenerates to a spot read.
+    /// * `checkpoints` — if non-empty, this resolver is in **trajectory mode**:
+    ///   it reports `ResolverStatus::ResolvedVec` with the oracle price at each
+    ///   checkpoint timestamp (ascending; `resolve_time` must be ≥ the last
+    ///   one). Empty ⇒ scalar mode (`twap_records` applies).
     pub fn __constructor(
         env: Env,
         oracle: Address,
         asset: Asset,
         resolve_time: u64,
         twap_records: u32,
+        checkpoints: Vec<u64>,
     ) {
         let s = env.storage().instance();
         if s.has(&DataKey::Oracle) {
             panic_with_error!(&env, ResolverError::AlreadyInitialized);
+        }
+        if !checkpoints.is_empty() {
+            // strictly ascending, and resolve_time ≥ last checkpoint.
+            let mut prev: Option<u64> = None;
+            for cp in checkpoints.iter() {
+                if let Some(p) = prev {
+                    if cp <= p {
+                        panic_with_error!(&env, ResolverError::BadCheckpoints);
+                    }
+                }
+                prev = Some(cp);
+            }
+            if resolve_time < prev.unwrap() {
+                panic_with_error!(&env, ResolverError::BadCheckpoints);
+            }
+            s.set(&DataKey::Checkpoints, &checkpoints);
         }
         s.set(&DataKey::Oracle, &oracle);
         s.set(&DataKey::Asset, &asset);
@@ -75,18 +105,33 @@ impl ResolverReflector {
         s.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
     }
 
-    /// Realised outcome `x₀` in WAD. Panics with `ResolverNotReady` before
-    /// `resolve_time`, `OracleStale` if the oracle has no usable price.
+    /// Realised outcome `x₀` in WAD. In trajectory mode this returns the value
+    /// at the *last* checkpoint (and caches the full vector — read it via
+    /// [`status`](Self::status)); `DistributionMarket` only ever calls
+    /// [`status`](Self::status), so callers wanting the trajectory use that.
+    /// Panics with `ResolverNotReady` before `resolve_time`, `OracleStale` if
+    /// the oracle has no usable price.
     pub fn resolve(env: Env) -> i128 {
         let s = env.storage().instance();
         if let Some(v) = s.get::<_, i128>(&DataKey::Resolved) {
             return v;
+        }
+        if let Some(v) = s.get::<_, Vec<i128>>(&DataKey::ResolvedVec) {
+            return v.last().unwrap_or(0);
         }
         let resolve_time: u64 = s
             .get(&DataKey::ResolveTime)
             .unwrap_or_else(|| panic_with_error!(&env, ResolverError::NotInitialized));
         if env.ledger().timestamp() < resolve_time {
             panic_with_error!(&env, KaidoError::ResolverNotReady);
+        }
+        if s.has(&DataKey::Checkpoints) {
+            let xs = read_trajectory(&env)
+                .unwrap_or_else(|| panic_with_error!(&env, KaidoError::OracleStale));
+            let last = xs.last().unwrap_or(0);
+            s.set(&DataKey::ResolvedVec, &xs);
+            s.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
+            return last;
         }
         let price =
             read_price(&env).unwrap_or_else(|| panic_with_error!(&env, KaidoError::OracleStale));
@@ -95,9 +140,13 @@ impl ResolverReflector {
         price
     }
 
-    /// Non-trapping status.
+    /// Non-trapping status. `ResolvedVec` in trajectory mode, `Resolved` in
+    /// scalar mode; `Stale` if the oracle can't supply (all) the price(s).
     pub fn status(env: Env) -> ResolverStatus {
         let s = env.storage().instance();
+        if let Some(v) = s.get::<_, Vec<i128>>(&DataKey::ResolvedVec) {
+            return ResolverStatus::ResolvedVec(v);
+        }
         if let Some(v) = s.get::<_, i128>(&DataKey::Resolved) {
             return ResolverStatus::Resolved(v);
         }
@@ -108,11 +157,46 @@ impl ResolverReflector {
         if env.ledger().timestamp() < resolve_time {
             return ResolverStatus::Pending;
         }
+        if s.has(&DataKey::Checkpoints) {
+            return match read_trajectory(&env) {
+                Some(xs) => ResolverStatus::ResolvedVec(xs),
+                None => ResolverStatus::Stale,
+            };
+        }
         match read_price(&env) {
             Some(v) => ResolverStatus::Resolved(v),
             None => ResolverStatus::Stale,
         }
     }
+}
+
+/// Read the oracle price at each configured checkpoint, converted to WAD, in
+/// checkpoint order. `None` if any checkpoint has no usable price (the whole
+/// trajectory then resolves `Stale`). A checkpoint with no exact tick falls
+/// back to the latest price so a momentarily-gappy feed doesn't strand the
+/// market — acceptable for a T0 resolver (a stricter tier wouldn't).
+fn read_trajectory(env: &Env) -> Option<Vec<i128>> {
+    let s = env.storage().instance();
+    let oracle: Address = s.get(&DataKey::Oracle)?;
+    let asset: Asset = s.get(&DataKey::Asset)?;
+    let checkpoints: Vec<u64> = s.get(&DataKey::Checkpoints)?;
+    let client = PriceFeedClient::new(env, &oracle);
+    let decimals = client.decimals();
+    let mut out: Vec<i128> = Vec::new(env);
+    for cp in checkpoints.iter() {
+        let raw = match client.price(&asset, &cp) {
+            Some(pd) if pd.price > 0 => pd.price,
+            _ => {
+                let last = client.lastprice(&asset)?;
+                if last.price <= 0 {
+                    return None;
+                }
+                last.price
+            }
+        };
+        out.push_back(to_wad(raw, decimals));
+    }
+    Some(out)
 }
 
 /// Read the (TWAP-smoothed) price for the configured asset and convert it to

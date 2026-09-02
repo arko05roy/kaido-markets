@@ -5,7 +5,7 @@ use super::*;
 use sep_40_oracle::testutils::{MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    vec, Address, Env, String, Symbol,
+    vec, Address, Env, String, Symbol, Vec,
 };
 
 const RESOLVE_TIME: u64 = 10_000;
@@ -41,7 +41,32 @@ fn deploy_resolver(
 ) -> ResolverReflectorClient<'static> {
     let id = env.register(
         ResolverReflector,
-        (oracle_id.clone(), asset.clone(), RESOLVE_TIME, twap),
+        (
+            oracle_id.clone(),
+            asset.clone(),
+            RESOLVE_TIME,
+            twap,
+            Vec::<u64>::new(env),
+        ),
+    );
+    ResolverReflectorClient::new(env, &id)
+}
+
+fn deploy_trajectory_resolver(
+    env: &Env,
+    oracle_id: &Address,
+    asset: &Asset,
+    checkpoints: Vec<u64>,
+) -> ResolverReflectorClient<'static> {
+    let id = env.register(
+        ResolverReflector,
+        (
+            oracle_id.clone(),
+            asset.clone(),
+            RESOLVE_TIME,
+            1u32,
+            checkpoints,
+        ),
     );
     ResolverReflectorClient::new(env, &id)
 }
@@ -82,6 +107,44 @@ fn twap_averages_records() {
     env.ledger().set_timestamp(RESOLVE_TIME + 1);
     // mean(100,200,300) = 200
     assert_eq!(r.resolve(), 200i128 * WAD_LOCAL);
+}
+
+#[test]
+fn trajectory_resolves_per_checkpoint() {
+    let (env, oracle, asset) = setup();
+    let scale = 10i128.pow(ORACLE_DECIMALS);
+    // checkpoints on the 300s resolution grid (the mock rounds to it), all ≤ RESOLVE_TIME.
+    let cps = vec![&env, 9_000u64, 9_300u64, 9_600u64];
+    oracle.set_price(&vec![&env, 60_000i128 * scale], &9_000u64);
+    oracle.set_price(&vec![&env, 61_000i128 * scale], &9_300u64);
+    oracle.set_price(&vec![&env, 62_000i128 * scale], &9_600u64);
+    let r = deploy_trajectory_resolver(&env, &oracle_addr(&oracle), &asset, cps);
+
+    assert_eq!(r.status(), ResolverStatus::Pending);
+    env.ledger().set_timestamp(RESOLVE_TIME + 1);
+
+    let expected = vec![
+        &env,
+        60_000i128 * WAD_LOCAL,
+        61_000i128 * WAD_LOCAL,
+        62_000i128 * WAD_LOCAL,
+    ];
+    assert_eq!(r.status(), ResolverStatus::ResolvedVec(expected.clone()));
+    // resolve() returns the last checkpoint and caches the vector.
+    assert_eq!(r.resolve(), 62_000i128 * WAD_LOCAL);
+    assert_eq!(r.status(), ResolverStatus::ResolvedVec(expected));
+}
+
+#[test]
+#[should_panic]
+fn non_ascending_checkpoints_rejected() {
+    let (env, oracle, asset) = setup();
+    deploy_trajectory_resolver(
+        &env,
+        &oracle_addr(&oracle),
+        &asset,
+        vec![&env, 9_000u64, 9_000u64],
+    );
 }
 
 #[test]
