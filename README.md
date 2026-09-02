@@ -33,6 +33,7 @@ Bet on where a number lands — not whether it crosses a line.
 # User Excel Sheet (60+ users)
 
 Sheet - https://docs.google.com/spreadsheets/d/1YQnSM6HBn1tFuu6D_6AYoWhP4ogM74c3DbehD4FayIg/edit?usp=sharing
+Summary - https://docs.google.com/document/d/1B0UL2CXzapLUw3I7YVD1kcKL8YDNTikY_bHcfkiMxyk/edit?usp=sharing
 
 ## Description
 
