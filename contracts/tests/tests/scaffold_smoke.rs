@@ -28,12 +28,30 @@ macro_rules! check_scaffold {
 
 #[test]
 fn scaffold_contracts_link() {
-    check_scaffold!(
-        "market-factory",
-        market_factory::MarketFactory,
-        market_factory::MarketFactoryClient
-    );
-    check_scaffold!("registry", registry::Registry, registry::RegistryClient);
+    // market-factory and registry now have real Sprint-3 logic (no
+    // `scaffold_version`); a smoke check that they construct + answer views.
+    // (The full create→deploy→init→register lifecycle test, which needs the
+    // DistributionMarket WASM uploaded into the env, lands in a follow-up once
+    // the wasm-build-before-test ordering is wired — build.md §5 Sprint 3.)
+    {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let factory_addr = Address::generate(&env);
+        let reg = env.register(registry::Registry, (admin.clone(), factory_addr.clone()));
+        let reg = registry::RegistryClient::new(&env, &reg);
+        assert_eq!(reg.count(), 0);
+        assert_eq!(reg.factory(), factory_addr);
+
+        let dm_wasm = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+        let usdc = Address::generate(&env);
+        let f = env.register(
+            market_factory::MarketFactory,
+            (admin, dm_wasm, reg.address.clone(), usdc),
+        );
+        let f = market_factory::MarketFactoryClient::new(&env, &f);
+        assert_eq!(f.count(), 0);
+        assert_eq!(f.registry(), reg.address);
+    }
     // house-vault and resolver-reflector now have real Sprint-2 logic (no
     // `scaffold_version`) — they're exercised by their own crates' tests and
     // by `lifecycle.rs`.

@@ -356,4 +356,41 @@ pub struct Resolved {
     pub x0: i128,
 }
 
-// MarketRegistered (Registry) lands in Sprint 3.
+// --------------------------------------------------------------------------- //
+// Registry (Sprint 3) — the frontend's index of live markets.
+// --------------------------------------------------------------------------- //
+
+/// The summary the [`Registry`] indexes for each market — enough for the
+/// frontend's market list without a per-market `get_params` round-trip. The
+/// market contract itself stays the source of truth for live state (belief,
+/// status, pool).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarketInfo {
+    /// The deployed `DistributionMarket` contract.
+    pub market: Address,
+    /// Scalar vs. trajectory.
+    pub outcome_space: OutcomeSpace,
+    /// Belief parameterisation.
+    pub parameterization: Parameterization,
+    /// Capped-Gaussian flag.
+    pub capped: bool,
+    /// The resolver contract.
+    pub resolver: Address,
+    /// The resolver's declared trust tier (the UI badge — ADR-5).
+    pub tier: ResolverTier,
+    /// Open / lock / resolve timestamps.
+    pub window: MarketWindow,
+    /// Who created the market (called `MarketFactory::create_market`).
+    pub creator: Address,
+}
+
+/// Emitted by `Registry::register` (topic `"market_registered"`).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarketRegistered {
+    /// The newly-indexed market.
+    pub market: Address,
+    /// Its summary.
+    pub info: MarketInfo,
+}

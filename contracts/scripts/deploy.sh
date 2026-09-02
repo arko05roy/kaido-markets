@@ -98,12 +98,19 @@ echo "reflector feed : ${REFLECTOR_FEED_ID:-<unset — see Reflector /oracles ta
 echo "admin          : ${ADMIN_ADDRESS:-<unset>}"
 echo
 
+# Admin for the registry / factory / house-vault (a multisig on mainnet —
+# resolved from .env, never hardcoded; falls back to the deployer on non-mainnet).
+ADMIN="${ADMIN_ADDRESS:-${DEPLOYER_ADDR}}"
+
 # --- build wasm ----------------------------------------------------------
 ( cd "${CONTRACTS_DIR}" && cargo make build-wasm )
 WASM_DIR="${CONTRACTS_DIR}/target/wasm32v1-none/release"
 
-# Contracts to deploy. Keep in sync with contracts/contracts/*.
-CONTRACTS="market-factory distribution-market house-vault registry resolver-reflector resolver-attested resolver-optimistic resolver-designated"
+# Deploy order matters: `distribution-market` (its WASM hash feeds the factory),
+# the resolvers and `house-vault` (no inter-deps), then `registry` (constructed
+# with a placeholder factory = admin), then `market-factory` (needs the registry
+# id + the dm WASM hash), and finally `registry.set_factory(<factory id>)`.
+CONTRACTS="distribution-market resolver-reflector resolver-attested resolver-optimistic resolver-designated house-vault registry market-factory"
 
 # kebab-case -> camelCase, portably (no GNU sed).
 to_camel() { awk 'BEGIN{FS="-"}{out=$1;for(i=2;i<=NF;i++)out=out toupper(substr($i,1,1)) substr($i,2);print out}' <<<"$1"; }
@@ -117,19 +124,29 @@ for c in ${CONTRACTS}; do
   echo "-- ${c} --------------------------------"
   hash="$(stellar contract upload --wasm "${wasm}" --network "${NETWORK}" "${SOURCE_ARG[@]}")"
   echo "   wasm hash : ${hash}"
-  # Most contracts deploy with no constructor args; `house-vault` and
-  # `resolver-reflector` have `__constructor`s (Sprint 2). `distribution-market`
-  # uses an explicit `init(...)` invoked below (incl. the USDC SAC id).
+  eval "HASH_$(echo "${c}" | tr '-' '_')=${hash}"
+  # `distribution-market` uses an explicit `init(...)` (invoked below);
+  # `house-vault` / `resolver-reflector` / `registry` / `market-factory` have
+  # `__constructor`s. None hardcode per-network ids — they take them as args.
   CTOR_ARGS=()
   case "${c}" in
     house-vault)
-      CTOR_ARGS=(-- --admin "${ADMIN_MULTISIG:-${SOURCE_PUBKEY:-}}" --usdc "${USDC_SAC_ID}")
+      CTOR_ARGS=(-- --admin "${ADMIN}" --usdc "${USDC_SAC_ID}")
       ;;
     resolver-reflector)
       # demo resolver: resolve_time = now+2h, 12-record TWAP.
       CTOR_ARGS=(-- --oracle "${REFLECTOR_FEED_ID}" \
         --asset "{\"Other\":\"${REFLECTOR_ASSET_SYMBOL}\"}" \
         --resolve-time "$(( $(date +%s) + 7200 ))" --twap-records 12)
+      ;;
+    registry)
+      # placeholder factory = admin; rewired to the real factory id below.
+      CTOR_ARGS=(-- --admin "${ADMIN}" --factory "${ADMIN}")
+      ;;
+    market-factory)
+      CTOR_ARGS=(-- --admin "${ADMIN}" \
+        --market-wasm "${HASH_distribution_market}" \
+        --registry "${ID_registry}" --usdc "${USDC_SAC_ID}")
       ;;
   esac
   id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}" "${CTOR_ARGS[@]}")"
@@ -142,6 +159,12 @@ for c in ${CONTRACTS}; do
   eval "ID_$(echo "${c}" | tr '-' '_')=${id}"
   N=$(( N + 1 ))
 done
+
+# --- wire the registry to the real factory -------------------------------
+echo "-- registry.set_factory(${ID_market_factory}) --"
+stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+  -- set_factory --new-factory "${ID_market_factory}" || \
+  echo "   (set_factory failed — re-run manually)" >&2
 
 # --- seed + verify the distribution-market (Sprint 1 deliverable) ---------
 # Initialise the just-deployed scalar Gaussian market with a small demo curve:
@@ -171,6 +194,27 @@ if stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK
     -- get_state || true
 else
   echo "   (init invoke failed — the contract is deployed; re-run init manually with the same args)" >&2
+fi
+
+# --- demo: create a market through the factory (Sprint 3) ----------------
+# Proves the permissionless path: factory deploys a fresh DistributionMarket,
+# inits it, and registers it. Same demo curve as above; a *new* market every run.
+echo "-- market-factory.create_market (demo) ----"
+if MKT="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+     -- create_market \
+        --creator "${DEPLOYER_ADDR}" \
+        --k "${WAD18}" --b "${B18}" --fee-bps 30 \
+        --resolver "${ID_resolver_reflector}" --tier 0 \
+        --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
+        --mu0 "${MU0_18}" --sigma0 "${WAD18}" 2>/dev/null)"; then
+  MKT="${MKT//\"/}"
+  echo "   created market : ${MKT}"
+  echo "   registry.count ->"
+  stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- count || true
+  echo "   registry.get(${MKT}) ->"
+  stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- get --market "${MKT}" || true
+else
+  echo "   (factory create_market failed — re-run manually)" >&2
 fi
 
 json_or_null() { [[ -n "$1" ]] && printf '"%s"' "$1" || printf 'null'; }
