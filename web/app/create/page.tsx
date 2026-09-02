@@ -7,7 +7,6 @@
  */
 import { type KaidoConfig } from "@kaido/sdk";
 
-import { WalletProvider } from "@/components/wallet/provider";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 
@@ -66,9 +65,7 @@ export default function CreateMarketPage() {
 
   return (
     <main className="flex flex-1 flex-col p-6 sm:p-8">
-      <WalletProvider network={networkId} networkPassphrase={net.networkPassphrase}>
-        <CreateMarketWizard config={config} resolvers={resolvers} />
-      </WalletProvider>
+      <CreateMarketWizard config={config} resolvers={resolvers} />
     </main>
   );
 }

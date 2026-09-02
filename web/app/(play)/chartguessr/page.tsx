@@ -9,7 +9,6 @@
  */
 import { Kaido, type KaidoConfig } from "@kaido/sdk";
 
-import { WalletProvider } from "@/components/wallet/provider";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 
@@ -96,9 +95,7 @@ export default async function ChartGuessrPage() {
 
   return (
     <main className="flex flex-1 flex-col p-6 sm:p-8">
-      <WalletProvider network={networkId} networkPassphrase={net.networkPassphrase}>
-        <ChartGuessrGame config={config} market={market} />
-      </WalletProvider>
+      <ChartGuessrGame config={config} market={market} />
     </main>
   );
 }
