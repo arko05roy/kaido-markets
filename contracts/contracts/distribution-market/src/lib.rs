@@ -77,6 +77,8 @@ enum DataKey {
     Usdc,
     /// `u64` — next position id.
     PosCounter,
+    /// `u64` — open positions not yet claimed (scalar + trajectory).
+    UnclaimedPositions,
     /// [`PositionData`] keyed by id (persistent).
     Position(u64),
     /// `i128` — total LP collateral pool (WAD).
@@ -213,6 +215,7 @@ impl DistributionMarket {
         storage.set(&DataKey::SigmaMin, &sigma_min);
         storage.set(&DataKey::Usdc, &usdc);
         storage.set(&DataKey::PosCounter, &0u64);
+        storage.set(&DataKey::UnclaimedPositions, &0u64);
         storage.set(&DataKey::CollateralPool, &0i128);
         storage.set(&DataKey::LpTotalShares, &0i128);
         storage.set(&DataKey::FeePool, &0i128);
@@ -315,6 +318,10 @@ impl DistributionMarket {
         let locked: i128 = storage.get(&DataKey::LockedCollateral).unwrap();
         storage.set(&DataKey::LockedCollateral, &(locked + collateral_wad));
         storage.set(&DataKey::Belief, &g);
+        storage.set(
+            &DataKey::UnclaimedPositions,
+            &storage.get(&DataKey::UnclaimedPositions).unwrap_or(0u64).saturating_add(1),
+        );
         maybe_blend_tap_trade(&env, collateral_7dp);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
@@ -412,6 +419,13 @@ impl DistributionMarket {
         env.storage()
             .persistent()
             .remove(&DataKey::Position(position_id));
+        storage.set(
+            &DataKey::UnclaimedPositions,
+            &storage
+                .get(&DataKey::UnclaimedPositions)
+                .unwrap_or(0u64)
+                .saturating_sub(1),
+        );
         maybe_blend_unwind_claim(&env, 0);
         if returned_7dp > 0 {
             let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
@@ -499,18 +513,29 @@ impl DistributionMarket {
     }
 
     /// Burn LP `shares` and withdraw the proportional slice of `pool + fee_pool`
-    /// in USDC. Allowed while `Open` (partial exit of free collateral) or after
-    /// resolution.
+    /// in USDC. While `Open`, only the slice not reserved for locked trader
+    /// collateral is withdrawable. Blocked during `Locked`, `Disputable`, and
+    /// after resolution until every position is claimed.
     pub fn remove_liquidity(env: Env, lp: Address, shares: i128) -> i128 {
         lp.require_auth();
         let storage = env.storage().instance();
-        match storage.get::<_, MarketStatus>(&DataKey::Status) {
-            Some(MarketStatus::Open)
-            | Some(MarketStatus::Locked)
-            | Some(MarketStatus::Resolved(_))
-            | Some(MarketStatus::ResolvedVec)
-            | Some(MarketStatus::Disputable) => {}
-            None => panic_with_error!(&env, KaidoError::NotInitialized),
+        if !storage.has(&DataKey::Params) {
+            panic_with_error!(&env, KaidoError::NotInitialized);
+        }
+        Self::sync_status(&env);
+        let status = storage
+            .get::<_, MarketStatus>(&DataKey::Status)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::NotInitialized));
+        match status {
+            MarketStatus::Locked | MarketStatus::Disputable => {
+                panic_with_error!(&env, KaidoError::MarketClosed);
+            }
+            MarketStatus::Resolved(_) | MarketStatus::ResolvedVec => {
+                if storage.get(&DataKey::UnclaimedPositions).unwrap_or(0u64) > 0 {
+                    panic_with_error!(&env, KaidoError::MarketClosed);
+                }
+            }
+            MarketStatus::Open => {}
         }
         if shares <= 0 {
             panic_with_error!(&env, KaidoError::InvalidAmount);
@@ -524,9 +549,15 @@ impl DistributionMarket {
         let pool: i128 = storage.get(&DataKey::CollateralPool).unwrap();
         let fee_pool: i128 = storage.get(&DataKey::FeePool).unwrap();
         let denom = total_shares.max(1);
-        let pool_part = mul_div_floor(pool, shares, denom);
-        let fee_part = mul_div_floor(fee_pool, shares, denom);
-        let withdraw_7dp = (pool_part + fee_part) / MONEY_SCALE;
+        let locked: i128 = storage
+            .get(&DataKey::LockedCollateral)
+            .unwrap_or(0);
+        let (pool_part, fee_part) = cap_lp_withdraw_parts(pool, fee_pool, locked, shares, denom);
+        let withdraw_wad = pool_part + fee_part;
+        if withdraw_wad <= 0 {
+            panic_with_error!(&env, KaidoError::InsufficientLiquidity);
+        }
+        let withdraw_7dp = withdraw_wad / MONEY_SCALE;
 
         storage.set(&DataKey::CollateralPool, &(pool - pool_part));
         storage.set(&DataKey::FeePool, &(fee_pool - fee_part));
@@ -748,6 +779,7 @@ impl DistributionMarket {
         storage.set(&DataKey::SigmaMin, &sigma_min);
         storage.set(&DataKey::Usdc, &usdc);
         storage.set(&DataKey::PosCounter, &0u64);
+        storage.set(&DataKey::UnclaimedPositions, &0u64);
         storage.set(&DataKey::CollateralPool, &0i128);
         storage.set(&DataKey::LpTotalShares, &0i128);
         storage.set(&DataKey::FeePool, &0i128);
@@ -857,6 +889,10 @@ impl DistributionMarket {
         let summary = g_curves.get(0).unwrap();
         storage.set(&DataKey::Beliefs, &g_curves);
         storage.set(&DataKey::Belief, &summary);
+        storage.set(
+            &DataKey::UnclaimedPositions,
+            &storage.get(&DataKey::UnclaimedPositions).unwrap_or(0u64).saturating_add(1),
+        );
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
         TradeTrajectory {
@@ -902,6 +938,13 @@ impl DistributionMarket {
         env.storage()
             .persistent()
             .remove(&DataKey::TrajPosition(position_id));
+        storage.set(
+            &DataKey::UnclaimedPositions,
+            &storage
+                .get(&DataKey::UnclaimedPositions)
+                .unwrap_or(0u64)
+                .saturating_sub(1),
+        );
         if returned_7dp > 0 {
             let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
             token::TokenClient::new(&env, &usdc).transfer(
@@ -1118,6 +1161,28 @@ fn mul_div_floor(a: i128, b: i128, c: i128) -> i128 {
 /// `ceil(a / c)` for `a ≥ 0`, `c > 0`.
 fn ceil_div(a: i128, c: i128) -> i128 {
     (a + c - 1) / c
+}
+
+/// Proportional LP withdrawal capped so `pool + fee_pool − withdrawal ≥ locked`.
+fn cap_lp_withdraw_parts(
+    pool: i128,
+    fee_pool: i128,
+    locked: i128,
+    shares: i128,
+    denom: i128,
+) -> (i128, i128) {
+    let pool_part = mul_div_floor(pool, shares, denom);
+    let fee_part = mul_div_floor(fee_pool, shares, denom);
+    let total = pool_part + fee_part;
+    let withdrawable = (pool + fee_pool).saturating_sub(locked);
+    if total <= withdrawable {
+        return (pool_part, fee_part);
+    }
+    if withdrawable <= 0 {
+        return (0, 0);
+    }
+    let capped_pool = mul_div_floor(withdrawable, pool_part, total.max(1));
+    (capped_pool, withdrawable - capped_pool)
 }
 
 /// BlendTap: JIT borrow after a trade when a [`BlendAdapter`] is configured.

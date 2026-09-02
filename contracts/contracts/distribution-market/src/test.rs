@@ -265,6 +265,75 @@ fn resolve_too_early_and_pending() {
 }
 
 #[test]
+fn lp_remove_rejected_when_locked() {
+    let c = setup();
+    let lp = Address::generate(&c.env);
+    c.usdc_admin.mint(&lp, &5_000_000_000i128);
+    let shares = c.market.add_liquidity(&lp, &lp_scale_for_amount(1_000_000_000i128));
+    c.env.ledger().set_timestamp(W_LOCK + 1);
+    assert!(c.market.try_remove_liquidity(&lp, &shares).is_err());
+}
+
+#[test]
+fn lp_remove_rejected_when_disputable() {
+    let c = setup();
+    let lp = Address::generate(&c.env);
+    c.usdc_admin.mint(&lp, &5_000_000_000i128);
+    let shares = c.market.add_liquidity(&lp, &lp_scale_for_amount(1_000_000_000i128));
+    c.env.ledger().set_timestamp(W_RESOLVE + 1);
+    c.resolver.set(&ResolverStatus::Stale);
+    c.market.resolve();
+    assert_eq!(c.market.get_state().status, MarketStatus::Disputable);
+    assert!(c.market.try_remove_liquidity(&lp, &shares).is_err());
+}
+
+#[test]
+fn lp_remove_blocked_until_positions_claimed() {
+    let c = setup();
+    let lp = Address::generate(&c.env);
+    c.usdc_admin.mint(&lp, &5_000_000_000i128);
+    let shares = c.market.add_liquidity(&lp, &lp_scale_for_amount(5_000_000_000i128));
+
+    let trader = Address::generate(&c.env);
+    c.usdc_admin.mint(&trader, &10_000_000_000i128);
+    let id = c
+        .market
+        .trade(&trader, &(55 * WAD), &(2 * WAD), &10_000_000_000i128);
+
+    c.env.ledger().set_timestamp(W_RESOLVE + 1);
+    c.resolver.set(&ResolverStatus::Resolved(50 * WAD));
+    c.market.resolve();
+    assert!(c.market.try_remove_liquidity(&lp, &shares).is_err());
+
+    let got = c.market.claim(&id);
+    assert!(got >= 0);
+    assert!(c.market.try_remove_liquidity(&lp, &shares).is_ok());
+}
+
+#[test]
+fn lp_remove_capped_when_locked_exceeds_pool() {
+    let c = setup();
+    let lp = Address::generate(&c.env);
+    c.usdc_admin.mint(&lp, &20_000_000_000i128);
+    // Small LP seed — trader collateral will exceed the pool slice.
+    let shares = c.market.add_liquidity(&lp, &lp_scale_for_amount(1_000_000i128));
+
+    let trader = Address::generate(&c.env);
+    c.usdc_admin.mint(&trader, &10_000_000_000i128);
+    let id = c
+        .market
+        .trade(&trader, &(55 * WAD), &(2 * WAD), &10_000_000_000i128);
+
+    assert!(c.market.try_remove_liquidity(&lp, &shares).is_err());
+
+    c.env.ledger().set_timestamp(W_RESOLVE + 1);
+    c.resolver.set(&ResolverStatus::Resolved(55 * WAD));
+    c.market.resolve();
+    let got = c.market.claim(&id);
+    assert!(got >= 0);
+}
+
+#[test]
 fn lp_add_and_remove() {
     let c = setup();
     let lp = Address::generate(&c.env);
@@ -597,6 +666,29 @@ mod trajectory {
             c.token.balance(&trader) + c.token.balance(&lp) + c.token.balance(&c.market.address);
         assert_eq!(total_in, total_out);
         assert!(c.token.balance(&c.market.address) >= 0);
+    }
+
+    #[test]
+    fn lp_remove_blocked_until_trajectory_claimed() {
+        let c = setup_traj(2);
+        let lp = Address::generate(&c.env);
+        let trader = Address::generate(&c.env);
+        c.usdc_admin.mint(&lp, &10_000_000_000i128);
+        c.usdc_admin.mint(&trader, &10_000_000_000i128);
+        let shares = c.market.add_liquidity(&lp, &lp_scale_for_amount(2_000_000_000i128));
+        let mus = svec![&c.env, MU0 + WAD, MU0 + 2 * WAD];
+        let sigmas = svec![&c.env, SIGMA0, SIGMA0];
+        let id = c
+            .market
+            .trade_trajectory(&trader, &mus, &sigmas, &10_000_000_000i128);
+
+        c.env.ledger().set_timestamp(W_RESOLVE + 1);
+        let xs = svec![&c.env, MU0 + WAD, MU0 + 2 * WAD];
+        c.resolver.set(&ResolverStatus::ResolvedVec(xs));
+        c.market.resolve();
+        assert!(c.market.try_remove_liquidity(&lp, &shares).is_err());
+        let _ = c.market.claim_trajectory(&id);
+        assert!(c.market.try_remove_liquidity(&lp, &shares).is_ok());
     }
 
     #[test]
