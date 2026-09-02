@@ -53,9 +53,11 @@ fn boot() -> World {
     let reg_id = env.register(Registry, (admin.clone(), admin.clone()));
     let registry = RegistryClient::new(&env, &reg_id);
 
+    let treasury = Address::generate(&env);
+
     let fac_id = env.register(
         MarketFactory,
-        (admin.clone(), dm_hash, reg_id.clone(), usdc),
+        (admin.clone(), dm_hash, reg_id.clone(), usdc, treasury),
     );
     let factory = MarketFactoryClient::new(&env, &fac_id);
     registry.set_factory(&fac_id);
@@ -86,6 +88,7 @@ fn create_market_deploys_inits_and_registers() {
         &W_RESOLVE,
         &MU0,
         &SIGMA0,
+        &0u32,
     );
 
     // deployed + initialised
@@ -126,6 +129,7 @@ fn create_market_deploys_inits_and_registers() {
         &W_RESOLVE,
         &MU0,
         &SIGMA0,
+        &0u32,
     );
     assert_ne!(m2, market);
     assert_eq!(w.registry.count(), 2);
@@ -185,5 +189,6 @@ fn create_market_rejects_sigma_below_floor() {
         &W_RESOLVE,
         &MU0,
         &1i128,
+        &0u32,
     );
 }

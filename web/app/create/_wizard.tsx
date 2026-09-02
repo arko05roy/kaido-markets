@@ -75,6 +75,7 @@ export function CreateMarketWizard({
   const [k, setK] = useState("1");
   const [b, setB] = useState("1");
   const [feeBps, setFeeBps] = useState("30");
+  const [capped, setCapped] = useState(false);
   const [tierIdx, setTierIdx] = useState(0);
   const [resolverAddr, setResolverAddr] = useState(resolvers.reflector);
   const [windowOpen, setWindowOpen] = useState(() => nowPlus(2));
@@ -134,6 +135,7 @@ export function CreateMarketWizard({
           {
             k: kw, b: bw, feeBps: fee, resolver: resolverAddr.trim(), tier,
             windowOpen: wo, windowLock: wl, windowResolve: wr, mu0: m, sigma0: s,
+            capped,
           },
           wallet.signer,
         );
@@ -221,9 +223,28 @@ export function CreateMarketWizard({
       </div>
       <p className="-mt-3 text-xs text-muted-foreground">
         σ-floor for these k, b:{" "}
-        <span className="font-mono">{sigmaMinWad != null ? fromWad(sigmaMinWad).toPrecision(6) : "—"}</span>{" "}
-        — every belief σ must be ≥ this or the contract rejects it.
+        <span className="font-mono">{sigmaMinWad != null ? fromWad(sigmaMinWad).toPrecision(6) : "—"}</span>
+        {capped ? (
+          <> — capped mode: sharp beliefs allowed (no σ floor).</>
+        ) : (
+          <> — every belief σ must be ≥ this or the contract rejects it.</>
+        )}
       </p>
+
+      <Field label="Belief shape">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={capped}
+            onChange={(e) => setCapped(e.target.checked)}
+            className="size-4 rounded border"
+          />
+          Capped Gaussian — allow σ below σ<sub>min</sub>; payout density is capped at <code className="font-mono">b</code>
+        </label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Uncapped (default) enforces the solvency σ-floor. Capped markets use min(b, λφ) so traders can express sharp views.
+        </p>
+      </Field>
 
       <Field label="Resolver tier">
         <div className="flex flex-wrap gap-2">
@@ -287,9 +308,9 @@ export function CreateMarketWizard({
                 return (
                   <BeliefChart
                     mode="scalar"
-                    market={{ kWad, bWad }}
+                    market={{ kWad, bWad, capped }}
                     range={{ min: muReal - 5 * sigReal, max: muReal + 5 * sigReal }}
-                    consensus={{ muWad: muW, sigmaWad: clampSigma(sigW, { kWad, bWad }) }}
+                    consensus={{ muWad: muW, sigmaWad: capped ? sigW : clampSigma(sigW, { kWad, bWad }) }}
                   />
                 );
               })()

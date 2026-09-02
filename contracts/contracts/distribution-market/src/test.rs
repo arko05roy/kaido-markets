@@ -26,6 +26,24 @@ const MU0: i128 = 50 * WAD;
 const SIGMA0: i128 = WAD;
 const SQRT_2PI: i128 = 2_506_628_274_631_000_502;
 
+/// Extra `init` / `try_init` tail args (uncapped, default fee split).
+fn init_tail(env: &Env, _usdc: &Address) -> (u32, Address, Address, u32, u32, u32) {
+    (
+        0,
+        Address::generate(env),
+        Address::generate(env),
+        7_000,
+        2_000,
+        1_000,
+    )
+}
+
+/// LP scale `y` (WAD) to deposit `amount_7dp` USDC when free collateral is `B`.
+fn lp_scale_for_amount(amount_7dp: i128) -> i128 {
+    let amount_wad = amount_7dp * MONEY_SCALE;
+    kaido_math::mul_div(amount_wad, WAD, B).min(WAD).max(1)
+}
+
 // --- a minimal Resolver mock (implements the kaido_common::Resolver shape) ---
 #[sct]
 #[derive(Clone)]
@@ -66,6 +84,8 @@ fn setup() -> Ctx {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let creator = Address::generate(&env);
     let sac = env.register_stellar_asset_contract_v2(admin.clone());
     let usdc = sac.address();
     let resolver_id = env.register(MockResolver, ());
@@ -84,6 +104,12 @@ fn setup() -> Ctx {
         &MU0,
         &SIGMA0,
         &usdc,
+        &0u32,
+        &treasury,
+        &creator,
+        &7_000u32,
+        &2_000u32,
+        &1_000u32,
     );
     Ctx {
         usdc_admin: token::StellarAssetClient::new(&env, &usdc),
@@ -136,6 +162,7 @@ fn init_emits_event() {
 #[test]
 fn init_one_shot() {
     let c = setup();
+    let (cap, tre, cre, flp, ftr, fcr) = init_tail(&c.env, &c.usdc);
     assert!(c
         .market
         .try_init(
@@ -149,7 +176,13 @@ fn init_one_shot() {
             &W_RESOLVE,
             &MU0,
             &SIGMA0,
-            &c.usdc
+            &c.usdc,
+            &cap,
+            &tre,
+            &cre,
+            &flp,
+            &ftr,
+            &fcr,
         )
         .is_err());
 }
@@ -160,7 +193,7 @@ fn full_lifecycle_balances_conserve() {
     // an LP seeds the pool so the AMM side has collateral to pay winners.
     let lp = Address::generate(&c.env);
     c.usdc_admin.mint(&lp, &1_000_000_000i128);
-    c.market.add_liquidity(&lp, &1_000_000_000i128);
+    c.market.add_liquidity(&lp, &lp_scale_for_amount(1_000_000_000i128));
 
     let trader = Address::generate(&c.env);
     c.usdc_admin.mint(&trader, &10_000_000_000i128); // 1000 USDC, 7dp
@@ -183,7 +216,6 @@ fn full_lifecycle_balances_conserve() {
     let got = c.market.claim(&id);
     assert!(got >= 0);
     assert!(c.market.try_get_position(&id).is_err());
-    // USDC conserves exactly: trader + lp(=0) + market-leftover == everything in.
     let total_out =
         c.token.balance(&trader) + c.token.balance(&lp) + c.token.balance(&c.market.address);
     assert_eq!(total_in, total_out);
@@ -235,12 +267,16 @@ fn lp_add_and_remove() {
     let c = setup();
     let lp = Address::generate(&c.env);
     c.usdc_admin.mint(&lp, &5_000_000_000i128);
-    let shares = c.market.add_liquidity(&lp, &1_000_000_000i128);
+    let shares = c.market.add_liquidity(&lp, &lp_scale_for_amount(1_000_000_000i128));
     assert!(shares > 0);
     assert_eq!(c.market.lp_shares(&lp), shares);
     assert_eq!(c.token.balance(&c.market.address), 1_000_000_000i128);
 
-    assert!(c.market.try_remove_liquidity(&lp, &shares).is_err());
+    assert!(c.market.try_remove_liquidity(&lp, &shares).is_ok());
+    // re-add for the resolve path below
+    c.usdc_admin.mint(&lp, &5_000_000_000i128);
+    let shares2 = c.market.add_liquidity(&lp, &lp_scale_for_amount(1_000_000_000i128));
+    assert!(shares2 > 0);
 
     c.env.ledger().set_timestamp(W_RESOLVE + 1);
     c.resolver.set(&ResolverStatus::Resolved(50 * WAD));
@@ -257,6 +293,7 @@ fn rejects_bad_params() {
         let id = c.env.register(DistributionMarket, ());
         DistributionMarketClient::new(&c.env, &id)
     };
+    let (cap, tre, cre, flp, ftr, fcr) = init_tail(&c.env, &c.usdc);
     assert!(fresh()
         .try_init(
             &K,
@@ -269,7 +306,13 @@ fn rejects_bad_params() {
             &W_RESOLVE,
             &MU0,
             &SIGMA0,
-            &c.usdc
+            &c.usdc,
+            &cap,
+            &tre,
+            &cre,
+            &flp,
+            &ftr,
+            &fcr,
         )
         .is_err());
     assert!(fresh()
@@ -284,7 +327,13 @@ fn rejects_bad_params() {
             &10_000u64,
             &MU0,
             &SIGMA0,
-            &c.usdc
+            &c.usdc,
+            &cap,
+            &tre,
+            &cre,
+            &flp,
+            &ftr,
+            &fcr,
         )
         .is_err());
     assert!(fresh()
@@ -299,7 +348,13 @@ fn rejects_bad_params() {
             &W_RESOLVE,
             &MU0,
             &1_000i128,
-            &c.usdc
+            &c.usdc,
+            &cap,
+            &tre,
+            &cre,
+            &flp,
+            &ftr,
+            &fcr,
         )
         .is_err());
 }
@@ -352,14 +407,14 @@ proptest! {
         let c = setup();
         let sigma_min: i128 = c.market.get_state().sigma_min;
 
-        // a deep LP seed so the AMM side can always pay winners.
+        // Seed the full free collateral pool (b = 100 USDC).
         let lp = Address::generate(&c.env);
-        let lp_in: i128 = 1_000_000_000_000; // 100k USDC, 7dp
-        c.usdc_admin.mint(&lp, &lp_in);
-        c.market.add_liquidity(&lp, &lp_in);
+        let lp_deposit_7dp = B / MONEY_SCALE;
+        c.usdc_admin.mint(&lp, &lp_deposit_7dp);
+        c.market.add_liquidity(&lp, &WAD);
 
         let mint: i128 = 50_000_000_000; // 5000 USDC, 7dp — generous, per trader
-        let mut total_in: i128 = lp_in;
+        let mut total_in: i128 = lp_deposit_7dp;
         let mut traders: std::vec::Vec<Address> = std::vec::Vec::new();
         let mut ids: std::vec::Vec<u64> = std::vec::Vec::new();
 
@@ -418,13 +473,13 @@ proptest! {
             // collateral posted ≥ realised loss  ⇔  payout never negative.
             prop_assert!(got >= 0, "negative claim {} for position {}", got, id);
         }
-        // LPs withdraw whatever remains.
-        let lp_out = c.market.remove_liquidity(&lp, &c.market.lp_shares(&lp));
+        // LPs withdraw whatever remains (already in `lp` wallet — don't add `lp_out` twice).
+        let _lp_out = c.market.remove_liquidity(&lp, &c.market.lp_shares(&lp));
 
         // USDC conserved exactly: everything that came in is now sitting in some
         // trader's balance, the LP's balance, or (rounding dust / fees) the
         // contract itself — nothing minted, nothing burned.
-        let mut total_out: i128 = lp_out + c.token.balance(&c.market.address);
+        let mut total_out: i128 = c.token.balance(&lp) + c.token.balance(&c.market.address);
         for t in &traders {
             total_out += c.token.balance(t);
         }
@@ -461,6 +516,7 @@ mod trajectory {
             mus.push_back(MU0 + (i as i128) * WAD);
             sigmas.push_back(SIGMA0);
         }
+        let (_cap, tre, cre, flp, ftr, fcr) = init_tail(&env, &usdc);
         market.init_trajectory(
             &K,
             &B,
@@ -474,6 +530,11 @@ mod trajectory {
             &mus,
             &sigmas,
             &usdc,
+            &tre,
+            &cre,
+            &flp,
+            &ftr,
+            &fcr,
         );
         Ctx {
             usdc_admin: token::StellarAssetClient::new(&env, &usdc),
@@ -507,7 +568,7 @@ mod trajectory {
         c.usdc_admin.mint(&lp, &10_000_000_000i128);
         let total_in = c.token.balance(&trader) + c.token.balance(&lp);
         // fund the pool with b per checkpoint (b_7dp = 100*WAD/MONEY_SCALE = 1e9; 3 checkpoints).
-        c.market.add_liquidity(&lp, &3_000_000_000i128);
+        c.market.add_liquidity(&lp, &lp_scale_for_amount(3_000_000_000i128));
 
         // shift the consensus on each checkpoint a little.
         let mus = svec![&c.env, MU0 + WAD, MU0 + 2 * WAD, MU0 + 3 * WAD];

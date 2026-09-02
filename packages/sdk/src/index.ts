@@ -15,6 +15,7 @@ import {
   marketFactory,
   registry,
   distributionMarket,
+  resolverDesignated,
 } from "@kaido/contract-bindings";
 import {
   Keypair,
@@ -125,6 +126,8 @@ export interface CreateMarketArgs {
   /** Initial consensus belief (WAD). */
   mu0: bigint;
   sigma0: bigint;
+  /** Enable capped Gaussians (sharp beliefs allowed; Sprint 5). */
+  capped?: boolean;
 }
 
 export interface CreateTrajectoryMarketArgs
@@ -173,6 +176,7 @@ export class Kaido {
       window_resolve: args.windowResolve,
       mu0: args.mu0,
       sigma0: args.sigma0,
+      capped_flag: args.capped ? 1 : 0,
     });
     return settle(tx, signer, this.config, { force: true });
   }
@@ -239,13 +243,28 @@ export class Kaido {
 
   // --- liquidity ----------------------------------------------------------
 
-  /** Add `amount7dp` of USDC liquidity. Returns LP shares minted. */
-  async addLiquidity(marketId: string, amount7dp: bigint, signer: KaidoSigner): Promise<bigint> {
+  /** Add liquidity at scale `scaleYWad` (WAD = 100%). Returns LP shares minted. */
+  async addLiquidityScaled(
+    marketId: string,
+    scaleYWad: bigint,
+    signer: KaidoSigner,
+  ): Promise<bigint> {
     const tx = await this.market(marketId, signer).add_liquidity({
       lp: signer.accountId,
-      amount_7dp: amount7dp,
+      scale_y: scaleYWad,
     });
     return settle(tx, signer, this.config, { force: true });
+  }
+
+  /** @deprecated Use {@link addLiquidityScaled} — computes scale from a USDC amount. */
+  async addLiquidity(marketId: string, amount7dp: bigint, signer: KaidoSigner): Promise<bigint> {
+    const free = await this.market(marketId).free_collateral().then((t) => t.result);
+    if (free <= 0n) throw new Error("no free collateral for LP");
+    const amountWad = amount7dp * 10_000_000_000n;
+    let scale = (amountWad * WAD) / BigInt(free);
+    if (scale > WAD) scale = WAD;
+    if (scale <= 0n) scale = 1n;
+    return this.addLiquidityScaled(marketId, scale, signer);
   }
 
   /** Burn `shares` LP shares. Returns USDC (7dp) returned. */
@@ -255,6 +274,33 @@ export class Kaido {
       shares,
     });
     return settle(tx, signer, this.config, { force: true });
+  }
+
+  /** Treasury claims accrued fee share (7dp USDC). */
+  async claimTreasuryFees(marketId: string, signer: KaidoSigner): Promise<bigint> {
+    const tx = await this.market(marketId, signer).claim_treasury_fees();
+    return settle(tx, signer, this.config, { force: true });
+  }
+
+  /** Market creator claims accrued fee share (7dp USDC). */
+  async claimCreatorFees(marketId: string, signer: KaidoSigner): Promise<bigint> {
+    const tx = await this.market(marketId, signer).claim_creator_fees();
+    return settle(tx, signer, this.config, { force: true });
+  }
+
+  /**
+   * T3 designated resolver: the named reporter posts the outcome (WAD).
+   * Call before `resolve()` on the market.
+   */
+  async reportDesignatedOutcome(
+    resolverId: string,
+    valueWad: bigint,
+    signer: KaidoSigner,
+  ): Promise<void> {
+    const tx = await new resolverDesignated.Client(
+      clientOptions(this.config, resolverId, signer),
+    ).report({ reporter: signer.accountId, value: valueWad });
+    await settle(tx, signer, this.config, { force: true });
   }
 
   // --- resolution / claims ------------------------------------------------

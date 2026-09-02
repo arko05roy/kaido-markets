@@ -22,6 +22,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub mod capped;
 pub mod consts;
 pub mod erf;
 pub mod exp;
@@ -32,6 +33,10 @@ pub mod gaussian;
 pub use erf::{erf_wad, erfc_wad};
 pub use exp::{exp_wad, MAX_EXP_ARG};
 pub use fp::{mul_div, shl2, sqrt_wad, wdiv, wmul, WAD};
+pub use capped::{
+    capped_gaussian_pdf_scaled, capped_l2_norm, capped_l2_norm_squared, capped_lambda,
+    capped_worst_case_collateral,
+};
 pub use gaussian::{
     gaussian_l2_norm, gaussian_pdf_scaled, lambda, sigma_floor, worst_case_collateral,
 };

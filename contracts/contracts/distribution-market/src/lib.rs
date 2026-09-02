@@ -23,6 +23,7 @@ use kaido_common::{
     TrajectoryPositionData,
 };
 use kaido_math::{
+    capped_gaussian_pdf_scaled, capped_lambda, capped_worst_case_collateral,
     gaussian_pdf_scaled, lambda as lambda_of, sigma_floor, worst_case_collateral, WAD as MATH_WAD,
 };
 use soroban_sdk::{
@@ -64,6 +65,22 @@ enum DataKey {
     LpShares(Address),
     /// `i128` — accrued LP fee pool (WAD).
     FeePool,
+    /// `i128` — accrued treasury fees (WAD, 7-dp at claim).
+    TreasuryFees,
+    /// `i128` — accrued creator fees (WAD).
+    CreatorFees,
+    /// `Address` — protocol treasury for fee claims.
+    Treasury,
+    /// `Address` — market creator for fee claims.
+    Creator,
+    /// `u32` — share of each trade fee to LPs (bps of fee, sum with below = 10000).
+    FeeLpBps,
+    /// `u32` — share of each trade fee to treasury.
+    FeeTreasuryBps,
+    /// `u32` — share of each trade fee to creator.
+    FeeCreatorBps,
+    /// `i128` — collateral locked in open trader positions (WAD).
+    LockedCollateral,
     /// `i128` — realised outcome `x₀` (WAD), once resolved.
     ResolvedOutcome,
     // --- trajectory markets (ADR-4) ---
@@ -98,6 +115,12 @@ impl DistributionMarket {
         mu0: i128,
         sigma0: i128,
         usdc: Address,
+        capped_flag: u32,
+        treasury: Address,
+        creator: Address,
+        fee_lp_bps: u32,
+        fee_treasury_bps: u32,
+        fee_creator_bps: u32,
     ) {
         let storage = env.storage().instance();
         if storage.has(&DataKey::Params) {
@@ -127,19 +150,19 @@ impl DistributionMarket {
         if sigma0 <= 0 {
             panic_with_error!(&env, KaidoError::InvalidSigma);
         }
-        let sigma_min = sigma_floor(k, b);
-        if sigma0 < sigma_min {
+        let capped = capped_flag != 0;
+        if fee_lp_bps + fee_treasury_bps + fee_creator_bps != 10_000 {
+            panic_with_error!(&env, KaidoError::FeeTooHigh);
+        }
+        let sigma_min = if capped { 0 } else { sigma_floor(k, b) };
+        if !capped && sigma0 < sigma_min {
             panic_with_error!(&env, KaidoError::SigmaBelowFloor);
         }
-        let lambda0 = lambda_of(k, sigma0);
-        if gaussian_pdf_scaled(mu0, sigma0, lambda0, mu0) > b {
-            panic_with_error!(&env, KaidoError::PeakExceedsCollateral);
-        }
-
+        let belief = make_belief(&env, k, b, sigma_min, mu0, sigma0, capped);
         let params = MarketParams {
             outcome_space: OutcomeSpace::Scalar,
             parameterization: Parameterization::Gaussian,
-            capped: false,
+            capped,
             k,
             b,
             fee_bps,
@@ -151,12 +174,12 @@ impl DistributionMarket {
                 resolve: window_resolve,
             },
         };
-        let belief = Belief {
-            mu: mu0,
-            sigma: sigma0,
-            lambda: lambda0,
-        };
         storage.set(&DataKey::Params, &params);
+        storage.set(&DataKey::Treasury, &treasury);
+        storage.set(&DataKey::Creator, &creator);
+        storage.set(&DataKey::FeeLpBps, &fee_lp_bps);
+        storage.set(&DataKey::FeeTreasuryBps, &fee_treasury_bps);
+        storage.set(&DataKey::FeeCreatorBps, &fee_creator_bps);
         storage.set(&DataKey::Belief, &belief);
         storage.set(&DataKey::Status, &MarketStatus::Open);
         storage.set(&DataKey::SigmaMin, &sigma_min);
@@ -165,6 +188,9 @@ impl DistributionMarket {
         storage.set(&DataKey::CollateralPool, &0i128);
         storage.set(&DataKey::LpTotalShares, &0i128);
         storage.set(&DataKey::FeePool, &0i128);
+        storage.set(&DataKey::TreasuryFees, &0i128);
+        storage.set(&DataKey::CreatorFees, &0i128);
+        storage.set(&DataKey::LockedCollateral, &0i128);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
         MarketCreated {
@@ -207,21 +233,20 @@ impl DistributionMarket {
             panic_with_error!(&env, KaidoError::InvalidSigma);
         }
         let sigma_min: i128 = storage.get(&DataKey::SigmaMin).unwrap();
-        if sigma2 < sigma_min {
+        if !params.capped && sigma2 < sigma_min {
             panic_with_error!(&env, KaidoError::SigmaBelowFloor);
         }
-        let lambda2 = lambda_of(params.k, sigma2);
-        if gaussian_pdf_scaled(mu2, sigma2, lambda2, mu2) > params.b {
-            panic_with_error!(&env, KaidoError::PeakExceedsB);
-        }
         let f: Belief = storage.get(&DataKey::Belief).unwrap();
-        let g = Belief {
-            mu: mu2,
-            sigma: sigma2,
-            lambda: lambda2,
+        let g = make_belief(&env, params.k, params.b, sigma_min, mu2, sigma2, params.capped);
+        let collateral_wad = if params.capped {
+            capped_worst_case_collateral(
+                (g.mu, g.sigma, g.lambda),
+                (f.mu, f.sigma, f.lambda),
+                params.b,
+            )
+        } else {
+            worst_case_collateral((g.mu, g.sigma, g.lambda), (f.mu, f.sigma, f.lambda))
         };
-        let collateral_wad =
-            worst_case_collateral((g.mu, g.sigma, g.lambda), (f.mu, f.sigma, f.lambda));
         let fee_wad = mul_div_floor(collateral_wad, params.fee_bps as i128, 10_000);
         let total_7dp = ceil_div(collateral_wad + fee_wad, MONEY_SCALE);
         let fee_7dp = ceil_div(fee_wad, MONEY_SCALE);
@@ -256,8 +281,9 @@ impl DistributionMarket {
             PERSISTENT_TTL_TARGET,
         );
 
-        let fee_pool: i128 = storage.get(&DataKey::FeePool).unwrap();
-        storage.set(&DataKey::FeePool, &(fee_pool + fee_wad));
+        accrue_fee_split(&env, fee_wad);
+        let locked: i128 = storage.get(&DataKey::LockedCollateral).unwrap();
+        storage.set(&DataKey::LockedCollateral, &(locked + collateral_wad));
         storage.set(&DataKey::Belief, &g);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
@@ -322,6 +348,9 @@ impl DistributionMarket {
     /// clamped at `0` in USDC (floor 7-dp), deletes the position.
     pub fn claim(env: Env, position_id: u64) -> i128 {
         let storage = env.storage().instance();
+        let params: MarketParams = storage
+            .get(&DataKey::Params)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::NotInitialized));
         let x0: i128 = match storage.get(&DataKey::Status) {
             Some(MarketStatus::Resolved(x0)) => x0,
             _ => panic_with_error!(&env, KaidoError::MarketNotResolved),
@@ -331,8 +360,8 @@ impl DistributionMarket {
             .persistent()
             .get(&DataKey::Position(position_id))
             .unwrap_or_else(|| panic_with_error!(&env, KaidoError::PositionNotFound));
-        let g_at = gaussian_pdf_scaled(pos.after.mu, pos.after.sigma, pos.after.lambda, x0);
-        let f_at = gaussian_pdf_scaled(pos.before.mu, pos.before.sigma, pos.before.lambda, x0);
+        let g_at = pdf_at(&params, &pos.after, x0);
+        let f_at = pdf_at(&params, &pos.before, x0);
         let returned_7dp = (pos.collateral + (g_at - f_at)).max(0) / MONEY_SCALE; // floor
         let returned_wad = returned_7dp * MONEY_SCALE;
         // net settlement vs. the LP pool: trader's collateral minus what they
@@ -342,6 +371,11 @@ impl DistributionMarket {
         storage.set(
             &DataKey::CollateralPool,
             &(pool + (pos.collateral - returned_wad)),
+        );
+        let locked: i128 = storage.get(&DataKey::LockedCollateral).unwrap();
+        storage.set(
+            &DataKey::LockedCollateral,
+            &(locked.saturating_sub(pos.collateral)),
         );
 
         env.storage()
@@ -359,14 +393,14 @@ impl DistributionMarket {
     }
 
     // --------------------------------------------------------------------- //
-    // LP — minimal version (full economics: Sprint 5, build.md §5)
+    // LP — full economics (Sprint 5): scale `y` deposits `y·(b−locked)`,
+    // mints `y·L` shares; LPs earn the fee-pool share on exit.
     // --------------------------------------------------------------------- //
 
-    /// Deposit USDC into the LP collateral pool; mint shares pro-rata
-    /// (`shares = amount` for the first LP, else `amount · total_shares /
-    /// pool`). Allowed only while the market is `Open`. The `y·(b−f)`
-    /// curve-scaling LP design is Sprint 5.
-    pub fn add_liquidity(env: Env, lp: Address, amount_7dp: i128) -> i128 {
+    /// Add liquidity at scale `scale_y` (WAD; `WAD` = 100%). Deposits
+    /// `scale_y·(b − locked_collateral)` USDC and mints `scale_y·L` LP shares
+    /// (or `scale_y` shares when `L = 0`). Only while `Open`.
+    pub fn add_liquidity(env: Env, lp: Address, scale_y: i128) -> i128 {
         lp.require_auth();
         let storage = env.storage().instance();
         if !storage.has(&DataKey::Params) {
@@ -376,22 +410,34 @@ impl DistributionMarket {
         if storage.get::<_, MarketStatus>(&DataKey::Status).unwrap() != MarketStatus::Open {
             panic_with_error!(&env, KaidoError::MarketNotOpen);
         }
-        if amount_7dp <= 0 {
+        if scale_y <= 0 || scale_y > MATH_WAD {
+            panic_with_error!(&env, KaidoError::InvalidAmount);
+        }
+        let params: MarketParams = storage.get(&DataKey::Params).unwrap();
+        let locked: i128 = storage.get(&DataKey::LockedCollateral).unwrap_or(0);
+        let pool: i128 = storage.get(&DataKey::CollateralPool).unwrap_or(0);
+        let free_wad = params.b.saturating_sub(locked).saturating_sub(pool);
+        if free_wad <= 0 {
+            panic_with_error!(&env, KaidoError::InsufficientLiquidity);
+        }
+        let deposit_wad = mul_div_floor(scale_y, free_wad, MATH_WAD);
+        let deposit_7dp = ceil_div(deposit_wad, MONEY_SCALE);
+        if deposit_7dp <= 0 {
             panic_with_error!(&env, KaidoError::InvalidAmount);
         }
         let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
         token::TokenClient::new(&env, &usdc).transfer(
             &lp,
             env.current_contract_address(),
-            &amount_7dp,
+            &deposit_7dp,
         );
-        let amount_wad = amount_7dp * MONEY_SCALE;
+        let amount_wad = deposit_7dp * MONEY_SCALE;
         let pool: i128 = storage.get(&DataKey::CollateralPool).unwrap();
         let total_shares: i128 = storage.get(&DataKey::LpTotalShares).unwrap();
-        let minted = if total_shares == 0 || pool == 0 {
-            amount_wad
+        let minted = if total_shares == 0 {
+            scale_y
         } else {
-            mul_div_floor(amount_wad, total_shares, pool)
+            mul_div_floor(scale_y, total_shares, MATH_WAD)
         };
         storage.set(&DataKey::CollateralPool, &(pool + amount_wad));
         storage.set(&DataKey::LpTotalShares, &(total_shares + minted));
@@ -407,25 +453,25 @@ impl DistributionMarket {
 
         LiquidityAdded {
             lp,
-            amount: amount_7dp,
+            amount: deposit_7dp,
             shares: minted,
         }
         .publish(&env);
         minted
     }
 
-    /// Burn LP `shares` and withdraw the proportional slice of `pool +
-    /// fee_pool` in USDC. Allowed once the market is `Resolved`/`Disputable`
-    /// (pool exposure settled) — minimal scope; mid-life partial withdrawal of
-    /// *free* collateral is Sprint 5.
+    /// Burn LP `shares` and withdraw the proportional slice of `pool + fee_pool`
+    /// in USDC. Allowed while `Open` (partial exit of free collateral) or after
+    /// resolution.
     pub fn remove_liquidity(env: Env, lp: Address, shares: i128) -> i128 {
         lp.require_auth();
         let storage = env.storage().instance();
         match storage.get::<_, MarketStatus>(&DataKey::Status) {
-            Some(MarketStatus::Resolved(_))
+            Some(MarketStatus::Open)
+            | Some(MarketStatus::Locked)
+            | Some(MarketStatus::Resolved(_))
             | Some(MarketStatus::ResolvedVec)
             | Some(MarketStatus::Disputable) => {}
-            Some(_) => panic_with_error!(&env, KaidoError::MarketNotResolved),
             None => panic_with_error!(&env, KaidoError::NotInitialized),
         }
         if shares <= 0 {
@@ -468,6 +514,56 @@ impl DistributionMarket {
         }
         .publish(&env);
         withdraw_7dp
+    }
+
+    /// Treasury claims accrued fee share (7-dp USDC).
+    pub fn claim_treasury_fees(env: Env) -> i128 {
+        let storage = env.storage().instance();
+        let treasury: Address = storage
+            .get(&DataKey::Treasury)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::NotInitialized));
+        treasury.require_auth();
+        let fees: i128 = storage.get(&DataKey::TreasuryFees).unwrap_or(0);
+        if fees <= 0 {
+            panic_with_error!(&env, KaidoError::NothingToWithdraw);
+        }
+        let out_7dp = fees / MONEY_SCALE;
+        storage.set(&DataKey::TreasuryFees, &0i128);
+        if out_7dp > 0 {
+            let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
+            token::TokenClient::new(&env, &usdc).transfer(
+                &env.current_contract_address(),
+                &treasury,
+                &out_7dp,
+            );
+        }
+        storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
+        out_7dp
+    }
+
+    /// Market creator claims accrued fee share (7-dp USDC).
+    pub fn claim_creator_fees(env: Env) -> i128 {
+        let storage = env.storage().instance();
+        let creator: Address = storage
+            .get(&DataKey::Creator)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::NotInitialized));
+        creator.require_auth();
+        let fees: i128 = storage.get(&DataKey::CreatorFees).unwrap_or(0);
+        if fees <= 0 {
+            panic_with_error!(&env, KaidoError::NothingToWithdraw);
+        }
+        let out_7dp = fees / MONEY_SCALE;
+        storage.set(&DataKey::CreatorFees, &0i128);
+        if out_7dp > 0 {
+            let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
+            token::TokenClient::new(&env, &usdc).transfer(
+                &env.current_contract_address(),
+                &creator,
+                &out_7dp,
+            );
+        }
+        storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
+        out_7dp
     }
 
     // --------------------------------------------------------------------- //
@@ -527,10 +623,18 @@ impl DistributionMarket {
         mus0: Vec<i128>,
         sigmas0: Vec<i128>,
         usdc: Address,
+        treasury: Address,
+        creator: Address,
+        fee_lp_bps: u32,
+        fee_treasury_bps: u32,
+        fee_creator_bps: u32,
     ) {
         let storage = env.storage().instance();
         if storage.has(&DataKey::Params) {
             panic_with_error!(&env, KaidoError::AlreadyInitialized);
+        }
+        if fee_lp_bps + fee_treasury_bps + fee_creator_bps != 10_000 {
+            panic_with_error!(&env, KaidoError::FeeTooHigh);
         }
         if k <= 0 {
             panic_with_error!(&env, KaidoError::InvalidK);
@@ -570,6 +674,7 @@ impl DistributionMarket {
                 sigma_min,
                 mus0.get(i).unwrap(),
                 sigmas0.get(i).unwrap(),
+                false,
             ));
         }
 
@@ -589,6 +694,11 @@ impl DistributionMarket {
             },
         };
         storage.set(&DataKey::Params, &params);
+        storage.set(&DataKey::Treasury, &treasury);
+        storage.set(&DataKey::Creator, &creator);
+        storage.set(&DataKey::FeeLpBps, &fee_lp_bps);
+        storage.set(&DataKey::FeeTreasuryBps, &fee_treasury_bps);
+        storage.set(&DataKey::FeeCreatorBps, &fee_creator_bps);
         storage.set(&DataKey::Checkpoints, &checkpoints);
         storage.set(&DataKey::Beliefs, &beliefs);
         // a single-Belief summary (first checkpoint) so `get_state` works for
@@ -601,6 +711,9 @@ impl DistributionMarket {
         storage.set(&DataKey::CollateralPool, &0i128);
         storage.set(&DataKey::LpTotalShares, &0i128);
         storage.set(&DataKey::FeePool, &0i128);
+        storage.set(&DataKey::TreasuryFees, &0i128);
+        storage.set(&DataKey::CreatorFees, &0i128);
+        storage.set(&DataKey::LockedCollateral, &0i128);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
         // reuse `MarketCreated` with the first checkpoint's belief as a summary.
@@ -655,6 +768,7 @@ impl DistributionMarket {
                 sigma_min,
                 mus2.get(i).unwrap(),
                 sigmas2.get(i).unwrap(),
+                false,
             );
             let f = f_curves.get(i).unwrap();
             collateral_wad +=
@@ -695,8 +809,9 @@ impl DistributionMarket {
             PERSISTENT_TTL_TARGET,
         );
 
-        let fee_pool: i128 = storage.get(&DataKey::FeePool).unwrap();
-        storage.set(&DataKey::FeePool, &(fee_pool + fee_wad));
+        accrue_fee_split(&env, fee_wad);
+        let locked: i128 = storage.get(&DataKey::LockedCollateral).unwrap_or(0);
+        storage.set(&DataKey::LockedCollateral, &(locked + collateral_wad));
         let summary = g_curves.get(0).unwrap();
         storage.set(&DataKey::Beliefs, &g_curves);
         storage.set(&DataKey::Belief, &summary);
@@ -796,6 +911,26 @@ impl DistributionMarket {
             .unwrap_or(0)
     }
 
+    /// Free collateral available for LP entry: `b − locked − pool` (WAD).
+    pub fn free_collateral(env: Env) -> i128 {
+        let storage = env.storage().instance();
+        let params: MarketParams = storage
+            .get(&DataKey::Params)
+            .unwrap_or_else(|| panic_with_error!(&env, KaidoError::NotInitialized));
+        let locked: i128 = storage.get(&DataKey::LockedCollateral).unwrap_or(0);
+        let pool: i128 = storage.get(&DataKey::CollateralPool).unwrap_or(0);
+        params.b.saturating_sub(locked).saturating_sub(pool)
+    }
+
+    /// `(treasury_fees_wad, creator_fees_wad)`.
+    pub fn pending_fees(env: Env) -> (i128, i128) {
+        let s = env.storage().instance();
+        (
+            s.get(&DataKey::TreasuryFees).unwrap_or(0),
+            s.get(&DataKey::CreatorFees).unwrap_or(0),
+        )
+    }
+
     /// `(collateral_pool_wad, lp_total_shares, fee_pool_wad)`.
     pub fn pool_state(env: Env) -> (i128, i128, i128) {
         let s = env.storage().instance();
@@ -835,27 +970,68 @@ fn decode_tier(env: &Env, tier: u32) -> ResolverTier {
     }
 }
 
-/// Validate `(μ, σ)` against a market's `(k, b, σ_min)` and build the [`Belief`]
-/// with `λ = k·√(2σ√π)`: σ must be `> 0` and `≥ σ_min`, and the resulting peak
-/// `λ·φ(0)` must not exceed `b`.
-fn make_belief(env: &Env, k: i128, b: i128, sigma_min: i128, mu: i128, sigma: i128) -> Belief {
+/// Validate `(μ, σ)` and build the [`Belief`] with the right `λ` (capped or not).
+fn make_belief(
+    env: &Env,
+    k: i128,
+    b: i128,
+    sigma_min: i128,
+    mu: i128,
+    sigma: i128,
+    capped: bool,
+) -> Belief {
     if sigma <= 0 {
         panic_with_error!(env, KaidoError::InvalidSigma);
     }
-    if sigma < sigma_min {
+    if !capped && sigma < sigma_min {
         panic_with_error!(env, KaidoError::SigmaBelowFloor);
     }
-    let lambda = lambda_of(k, sigma);
-    // The σ-floor makes `peak == b` *mathematically*; in fixed point the
-    // truncations in `sigma_floor` / `lambda` / `sqrt_wad` / `gaussian_pdf_scaled`
-    // can leave the computed peak a few ULPs above `b` when σ is *at* the floor.
-    // Allow a negligible tolerance (≪ a stroop of `b`) so an honest σ == σ_min
-    // belief isn't rejected; anything genuinely over-peaked is far beyond this.
-    let peak_tol = (b / 1_048_576) + 1_024; // b·2^-20 + 1024
-    if gaussian_pdf_scaled(mu, sigma, lambda, mu) > b.saturating_add(peak_tol) {
+    let lambda = if capped {
+        capped_lambda(k, sigma, b)
+    } else {
+        lambda_of(k, sigma)
+    };
+    let peak = if capped {
+        capped_gaussian_pdf_scaled(mu, sigma, lambda, b, mu)
+    } else {
+        gaussian_pdf_scaled(mu, sigma, lambda, mu)
+    };
+    let peak_tol = (b / 1_048_576) + 1_024;
+    if !capped && peak > b.saturating_add(peak_tol) {
+        panic_with_error!(env, KaidoError::PeakExceedsB);
+    }
+    if capped && peak > b {
         panic_with_error!(env, KaidoError::PeakExceedsB);
     }
     Belief { mu, sigma, lambda }
+}
+
+fn pdf_at(params: &MarketParams, belief: &Belief, x: i128) -> i128 {
+    if params.capped {
+        capped_gaussian_pdf_scaled(belief.mu, belief.sigma, belief.lambda, params.b, x)
+    } else {
+        gaussian_pdf_scaled(belief.mu, belief.sigma, belief.lambda, x)
+    }
+}
+
+fn accrue_fee_split(env: &Env, fee_wad: i128) {
+    let storage = env.storage().instance();
+    let lp_bps: u32 = storage.get(&DataKey::FeeLpBps).unwrap_or(10_000);
+    let treasury_bps: u32 = storage.get(&DataKey::FeeTreasuryBps).unwrap_or(0);
+    let creator_bps: u32 = storage.get(&DataKey::FeeCreatorBps).unwrap_or(0);
+    let creator_bps: u32 = storage.get(&DataKey::FeeCreatorBps).unwrap_or(0);
+    let creator_part = mul_div_floor(fee_wad, creator_bps as i128, 10_000);
+    let lp_part = mul_div_floor(fee_wad, lp_bps as i128, 10_000);
+    let treasury_part = mul_div_floor(fee_wad, treasury_bps as i128, 10_000);
+    // any rounding dust stays with LPs
+    let lp_part = lp_part + (fee_wad - lp_part - treasury_part - creator_part);
+    let fee_pool: i128 = storage.get(&DataKey::FeePool).unwrap_or(0);
+    storage.set(&DataKey::FeePool, &(fee_pool + lp_part));
+    let treasury_fees: i128 = storage.get(&DataKey::TreasuryFees).unwrap_or(0);
+    storage.set(&DataKey::TreasuryFees, &(treasury_fees + treasury_part));
+    let creator_fees: i128 = storage.get(&DataKey::CreatorFees).unwrap_or(0);
+    storage.set(&DataKey::CreatorFees, &(creator_fees + creator_part));
+    env.storage().instance().extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 }
 
 fn mul_div_floor(a: i128, b: i128, c: i128) -> i128 {

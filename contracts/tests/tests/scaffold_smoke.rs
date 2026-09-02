@@ -96,8 +96,27 @@ fn distribution_market_init_and_reads() {
         WAD,
     );
 
+    let treasury = Address::generate(&env);
+    let creator = Address::generate(&env);
+
     client.init(
-        &k, &b, &fee, &resolver, &tier, &w_open, &w_lock, &w_resolve, &mu0, &sigma0, &usdc,
+        &k,
+        &b,
+        &fee,
+        &resolver,
+        &tier,
+        &w_open,
+        &w_lock,
+        &w_resolve,
+        &mu0,
+        &sigma0,
+        &usdc,
+        &0u32,
+        &treasury,
+        &creator,
+        &7_000u32,
+        &2_000u32,
+        &1_000u32,
     );
     // `init` emitted exactly one event (`MarketCreated`). Check immediately —
     // the test env's event buffer reflects the most recent invocation.
@@ -131,7 +150,24 @@ fn distribution_market_init_and_reads() {
     // init is one-shot.
     assert!(client
         .try_init(
-            &k, &b, &fee, &resolver, &tier, &w_open, &w_lock, &w_resolve, &mu0, &sigma0, &usdc
+            &k,
+            &b,
+            &fee,
+            &resolver,
+            &tier,
+            &w_open,
+            &w_lock,
+            &w_resolve,
+            &mu0,
+            &sigma0,
+            &usdc,
+            &0u32,
+            &treasury,
+            &creator,
+            &7_000u32,
+            &2_000u32,
+            &1_000u32,
+        )
         )
         .is_err());
 }

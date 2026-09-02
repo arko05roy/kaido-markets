@@ -49,7 +49,14 @@ trait DistributionMarketIface {
         mu0: i128,
         sigma0: i128,
         usdc: Address,
+        capped_flag: u32,
+        treasury: Address,
+        creator: Address,
+        fee_lp_bps: u32,
+        fee_treasury_bps: u32,
+        fee_creator_bps: u32,
     );
+    fn free_collateral(env: Env) -> i128;
     #[allow(clippy::too_many_arguments)]
     fn init_trajectory(
         env: Env,
@@ -65,6 +72,11 @@ trait DistributionMarketIface {
         mus0: Vec<i128>,
         sigmas0: Vec<i128>,
         usdc: Address,
+        treasury: Address,
+        creator: Address,
+        fee_lp_bps: u32,
+        fee_treasury_bps: u32,
+        fee_creator_bps: u32,
     );
 }
 
@@ -82,6 +94,11 @@ const INSTANCE_TTL_THRESHOLD: u32 = INSTANCE_TTL_TARGET - 14 * LEDGERS_PER_DAY;
 /// `distribution_market::MAX_FEE_BPS` (the market re-checks anyway).
 pub const MAX_FEE_BPS: u32 = 1_000;
 
+/// Default fee split of the per-trade fee: 70% LPs, 20% treasury, 10% creator.
+pub const DEFAULT_FEE_LP_BPS: u32 = 7_000;
+pub const DEFAULT_FEE_TREASURY_BPS: u32 = 2_000;
+pub const DEFAULT_FEE_CREATOR_BPS: u32 = 1_000;
+
 #[contracttype]
 #[derive(Clone)]
 enum DataKey {
@@ -93,6 +110,8 @@ enum DataKey {
     Registry,
     /// `Address` — the USDC SAC (settlement asset; per-network, never hardcoded).
     Usdc,
+    /// `Address` — protocol treasury for fee claims on new markets.
+    Treasury,
     /// `u64` — monotonic counter, used as the deploy salt so addresses are
     /// deterministic and collision-free.
     Counter,
@@ -111,17 +130,20 @@ impl MarketFactory {
         market_wasm: BytesN<32>,
         registry: Address,
         usdc: Address,
+        treasury: Address,
     ) {
         let s = env.storage().instance();
         s.set(&DataKey::Admin, &admin);
         s.set(&DataKey::MarketWasm, &market_wasm);
         s.set(&DataKey::Registry, &registry);
         s.set(&DataKey::Usdc, &usdc);
+        s.set(&DataKey::Treasury, &treasury);
         s.set(&DataKey::Counter, &0u64);
         s.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
     }
 
-    /// Create a scalar-Gaussian market. All numeric belief fields are WAD-scaled
+    /// Create a scalar-Gaussian market. Set `capped_flag` to `1` for capped
+    /// Gaussians (sharp beliefs allowed; ADR-3). All numeric belief fields are WAD-scaled
     /// (`1e18`; ADR-1/ADR-2). `tier` is the resolver's trust badge code
     /// (`0..=3`; ADR-5). Returns the deployed market's address.
     pub fn create_market(
@@ -137,6 +159,7 @@ impl MarketFactory {
         window_resolve: u64,
         mu0: i128,
         sigma0: i128,
+        capped_flag: u32,
     ) -> Address {
         creator.require_auth();
         let s = env.storage().instance();
@@ -171,9 +194,11 @@ impl MarketFactory {
         if sigma0 <= 0 {
             panic_with_error!(&env, KaidoError::InvalidSigma);
         }
-        if sigma0 < kaido_math::sigma_floor(k, b) {
+        let capped = capped_flag != 0;
+        if !capped && sigma0 < kaido_math::sigma_floor(k, b) {
             panic_with_error!(&env, KaidoError::SigmaBelowFloor);
         }
+        let treasury: Address = s.get(&DataKey::Treasury).unwrap();
 
         // --- deploy + init ---
         let counter: u64 = s.get(&DataKey::Counter).unwrap();
@@ -195,6 +220,12 @@ impl MarketFactory {
             &mu0,
             &sigma0,
             &usdc,
+            &capped_flag,
+            &treasury,
+            &creator,
+            &DEFAULT_FEE_LP_BPS,
+            &DEFAULT_FEE_TREASURY_BPS,
+            &DEFAULT_FEE_CREATOR_BPS,
         );
 
         // --- register ---
@@ -202,7 +233,7 @@ impl MarketFactory {
             market: market.clone(),
             outcome_space: OutcomeSpace::Scalar,
             parameterization: Parameterization::Gaussian,
-            capped: false,
+            capped,
             resolver,
             tier: tier_enum,
             window: MarketWindow {
@@ -276,6 +307,7 @@ impl MarketFactory {
                 panic_with_error!(&env, KaidoError::SigmaBelowFloor);
             }
         }
+        let treasury: Address = s.get(&DataKey::Treasury).unwrap();
 
         let counter: u64 = s.get(&DataKey::Counter).unwrap();
         s.set(&DataKey::Counter, &(counter + 1));
@@ -297,6 +329,11 @@ impl MarketFactory {
             &mus0,
             &sigmas0,
             &usdc,
+            &treasury,
+            &creator,
+            &DEFAULT_FEE_LP_BPS,
+            &DEFAULT_FEE_TREASURY_BPS,
+            &DEFAULT_FEE_CREATOR_BPS,
         );
 
         let info = MarketInfo {

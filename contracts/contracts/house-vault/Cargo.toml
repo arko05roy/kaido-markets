@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 soroban-sdk = { workspace = true }
 kaido-common = { workspace = true }
+kaido-math = { workspace = true }
 distribution-market = { path = "../distribution-market" }
 
 [dev-dependencies]

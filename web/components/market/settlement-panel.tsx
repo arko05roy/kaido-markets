@@ -3,14 +3,14 @@
 /**
  * Post-trade lifecycle on /markets/[id]: window phase, resolve, claim payouts.
  */
-import { Kaido, type KaidoConfig } from "@kaido/sdk";
+import { Kaido, type KaidoConfig, distributionMarket } from "@kaido/sdk";
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ResultCard } from "@/components/market/result-card";
 import { useWallet } from "@/components/wallet/provider";
-import { fromWad } from "@/lib/curve";
+import { fromWad, toWad } from "@/lib/curve";
 import { fetchWalletPositions } from "@/lib/indexer/wallet-positions";
 import {
   formatUsdc7dp,
@@ -31,6 +31,10 @@ export interface SettlementMarketView {
   bWad?: string;
   /** Resolved outcome value(s) in WAD, if known. */
   resolvedWad?: string[];
+  /** On-chain resolver tier (for T3 report UI). */
+  resolverTier?: number;
+  resolver?: string;
+  capped?: boolean;
 }
 
 type Phase = "open" | "locked" | "awaiting_resolve" | "resolved" | "disputable";
@@ -104,6 +108,10 @@ export function SettlementPanel({
   const [loadingChain, setLoadingChain] = useState(false);
   const [manualId, setManualId] = useState("");
   const [positionsEpoch, bumpPositionsEpoch] = useState(0);
+  const [reportValue, setReportValue] = useState("");
+  const [reporting, setReporting] = useState(false);
+  const [feeBusy, setFeeBusy] = useState<"treasury" | "creator" | null>(null);
+  const [pendingFees, setPendingFees] = useState<{ treasury: bigint; creator: bigint } | null>(null);
   const [lastClaim, setLastClaim] = useState<{
     positionId: string;
     payout7dp: bigint;
@@ -156,6 +164,80 @@ export function SettlementPanel({
     const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const isT3 = market.resolverTier === distributionMarket.ResolverTier.Designated;
+  const canReportT3 =
+    wallet &&
+    isT3 &&
+    market.resolver &&
+    !isResolved &&
+    nowSec >= market.windowResolve;
+
+  useEffect(() => {
+    let cancelled = false;
+    void kaido
+      .market(market.address)
+      .pending_fees()
+      .then((t) => {
+        if (cancelled) return;
+        const [treasury, creator] = t.result as [bigint, bigint];
+        setPendingFees({ treasury: BigInt(treasury), creator: BigInt(creator) });
+      })
+      .catch(() => {
+        if (!cancelled) setPendingFees(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kaido, market.address, refreshKey, positionsEpoch]);
+
+  const reportT3 = useCallback(async () => {
+    if (!wallet || !market.resolver) return;
+    const v = Number(reportValue.trim());
+    if (!Number.isFinite(v)) {
+      setError("enter a numeric outcome");
+      return;
+    }
+    setReporting(true);
+    setError(null);
+    try {
+      await kaido.reportDesignatedOutcome(market.resolver, toWad(v), wallet.signer);
+      setReportValue("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "report failed");
+    } finally {
+      setReporting(false);
+    }
+  }, [wallet, market.resolver, reportValue, kaido]);
+
+  const claimFees = useCallback(
+    async (which: "treasury" | "creator") => {
+      if (!wallet) return;
+      setFeeBusy(which);
+      setError(null);
+      try {
+        const out =
+          which === "treasury"
+            ? await kaido.claimTreasuryFees(market.address, wallet.signer)
+            : await kaido.claimCreatorFees(market.address, wallet.signer);
+        setPendingFees((prev) =>
+          prev
+            ? {
+                ...prev,
+                [which]: 0n,
+              }
+            : prev,
+        );
+        return out;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : `${which} fee claim failed`);
+        return null;
+      } finally {
+        setFeeBusy(null);
+      }
+    },
+    [wallet, kaido, market.address],
+  );
 
   const resolveMarket = useCallback(async () => {
     if (!wallet) return;
@@ -249,6 +331,56 @@ export function SettlementPanel({
           </span>
         </p>
       ) : null}
+
+      {pendingFees && (pendingFees.treasury > 0n || pendingFees.creator > 0n) && wallet && (
+        <div className="rounded-md border px-3 py-2 text-sm">
+          <p className="font-medium">Accrued protocol fees</p>
+          <p className="text-xs text-muted-foreground">
+            Treasury: {formatUsdc7dp(pendingFees.treasury / 10_000_000_000n)} USDC · Creator:{" "}
+            {formatUsdc7dp(pendingFees.creator / 10_000_000_000n)} USDC
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {pendingFees.treasury > 0n && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={feeBusy != null}
+                onClick={() => void claimFees("treasury")}
+              >
+                {feeBusy === "treasury" ? "Claiming…" : "Claim treasury fees"}
+              </Button>
+            )}
+            {pendingFees.creator > 0n && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={feeBusy != null}
+                onClick={() => void claimFees("creator")}
+              >
+                {feeBusy === "creator" ? "Claiming…" : "Claim creator fees"}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {canReportT3 && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-dashed px-3 py-2">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">T3 designated report (outcome value)</span>
+            <input
+              type="text"
+              value={reportValue}
+              onChange={(e) => setReportValue(e.target.value)}
+              placeholder="e.g. 65000"
+              className="w-40 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+            />
+          </label>
+          <Button size="sm" onClick={() => void reportT3()} disabled={reporting || !reportValue.trim()}>
+            {reporting ? "Reporting…" : "Report outcome"}
+          </Button>
+        </div>
+      )}
 
       {wallet && canResolve && !isResolved && (
         <Button size="sm" onClick={() => void resolveMarket()} disabled={resolving}>

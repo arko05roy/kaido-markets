@@ -15,15 +15,16 @@ fn boot() -> (Env, MarketFactoryClient<'static>, Address) {
     // A placeholder WASM hash — the validation reverts under test fire before
     // any `deploy_v2`, so the hash is never dereferenced.
     let wasm = BytesN::from_array(&env, &[7u8; 32]);
-    let id = env.register(MarketFactory, (admin, wasm, registry, usdc));
+    let treasury = Address::generate(&env);
+    let id = env.register(MarketFactory, (admin, wasm, registry, usdc, treasury));
     let client = MarketFactoryClient::new(&env, &id);
     let creator = Address::generate(&env);
     (env, client, creator)
 }
 
-fn ok_args() -> (i128, i128, u32, u32, u64, u64, u64, i128, i128) {
-    // k, b, fee_bps, tier, w_open, w_lock, w_resolve, mu0, sigma0
-    (WAD, 100 * WAD, 30, 0, 0, 1_000, 2_000, 50 * WAD, WAD)
+fn ok_args() -> (i128, i128, u32, u32, u64, u64, u64, i128, i128, u32) {
+    // k, b, fee_bps, tier, w_open, w_lock, w_resolve, mu0, sigma0, capped_flag
+    (WAD, 100 * WAD, 30, 0, 0, 1_000, 2_000, 50 * WAD, WAD, 0)
 }
 
 #[test]
@@ -37,7 +38,7 @@ fn views_after_construct() {
 #[should_panic]
 fn rejects_fee_over_cap() {
     let (env, f, c) = boot();
-    let (k, b, _fee, tier, wo, wl, wr, mu0, s0) = ok_args();
+    let (k, b, _fee, tier, wo, wl, wr, mu0, s0, capped) = ok_args();
     let resolver = Address::generate(&env);
     f.create_market(
         &c,
@@ -51,6 +52,7 @@ fn rejects_fee_over_cap() {
         &wr,
         &mu0,
         &s0,
+        &capped,
     );
 }
 
@@ -58,11 +60,11 @@ fn rejects_fee_over_cap() {
 #[should_panic]
 fn rejects_bad_window() {
     let (env, f, c) = boot();
-    let (k, b, fee, tier, _wo, _wl, _wr, mu0, s0) = ok_args();
+    let (k, b, fee, tier, _wo, _wl, _wr, mu0, s0, capped) = ok_args();
     let resolver = Address::generate(&env);
     // resolve before lock
     f.create_market(
-        &c, &k, &b, &fee, &resolver, &tier, &0, &2_000, &1_000, &mu0, &s0,
+        &c, &k, &b, &fee, &resolver, &tier, &0, &2_000, &1_000, &mu0, &s0, &capped,
     );
 }
 
@@ -70,18 +72,18 @@ fn rejects_bad_window() {
 #[should_panic]
 fn rejects_bad_tier() {
     let (env, f, c) = boot();
-    let (k, b, fee, _tier, wo, wl, wr, mu0, s0) = ok_args();
+    let (k, b, fee, _tier, wo, wl, wr, mu0, s0, capped) = ok_args();
     let resolver = Address::generate(&env);
-    f.create_market(&c, &k, &b, &fee, &resolver, &9, &wo, &wl, &wr, &mu0, &s0);
+    f.create_market(&c, &k, &b, &fee, &resolver, &9, &wo, &wl, &wr, &mu0, &s0, &capped);
 }
 
 #[test]
 #[should_panic]
 fn rejects_sigma_below_floor() {
     let (env, f, c) = boot();
-    let (k, b, fee, tier, wo, wl, wr, mu0, _s0) = ok_args();
+    let (k, b, fee, tier, wo, wl, wr, mu0, _s0, capped) = ok_args();
     let resolver = Address::generate(&env);
     f.create_market(
-        &c, &k, &b, &fee, &resolver, &tier, &wo, &wl, &wr, &mu0, &1i128,
+        &c, &k, &b, &fee, &resolver, &tier, &wo, &wl, &wr, &mu0, &1i128, &capped,
     );
 }

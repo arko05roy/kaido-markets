@@ -149,7 +149,12 @@ for c in ${CONTRACTS}; do
     market-factory)
       CTOR_ARGS=(-- --admin "${ADMIN}" \
         --market-wasm "${HASH_distribution_market}" \
-        --registry "${ID_registry}" --usdc "${USDC_SAC_ID}")
+        --registry "${ID_registry}" --usdc "${USDC_SAC_ID}" \
+        --treasury "${ADMIN}")
+      ;;
+    resolver-designated)
+      CTOR_ARGS=(-- --designated "${ADMIN}" \
+        --resolve-time "$(( $(date +%s) + 7200 ))")
       ;;
   esac
   # `${arr[@]+...}` so an empty CTOR_ARGS doesn't trip `set -u` on bash 3.2 (macOS).
@@ -189,7 +194,9 @@ if stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK
         --k "${WAD18}" --b "${B18}" --fee-bps 30 \
         --resolver "${ID_resolver_reflector}" --tier 0 \
         --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
-        --mu0 "${MU0_18}" --sigma0 "${WAD18}" --usdc "${USDC_SAC_ID}"; then
+        --mu0 "${MU0_18}" --sigma0 "${WAD18}" --usdc "${USDC_SAC_ID}" \
+        --capped-flag 0 --treasury "${ADMIN}" --creator "${DEPLOYER_ADDR}" \
+        --fee-lp-bps 7000 --fee-treasury-bps 2000 --fee-creator-bps 1000; then
   echo "   get_params ->"
   stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
     -- get_params || true
@@ -211,7 +218,7 @@ if MKT="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWO
         --k "${WAD18}" --b "${B18}" --fee-bps 30 \
         --resolver "${ID_resolver_reflector}" --tier 0 \
         --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
-        --mu0 "${MU0_18}" --sigma0 "${WAD18}" 2>/dev/null)"; then
+        --mu0 "${MU0_18}" --sigma0 "${WAD18}" --capped-flag 0 2>/dev/null)"; then
   DEMO_MKT="${MKT//\"/}"
   echo "   created market : ${DEMO_MKT}"
   echo "   registry.count ->"

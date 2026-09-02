@@ -13,6 +13,7 @@ import { RecentActivity } from "@/components/market/recent-activity";
 import { type SettlementMarketView } from "@/components/market/settlement-panel";
 
 import { MarketActions } from "./market-actions";
+import { WindowCountdown } from "@/components/market/window-countdown";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { fmtHouseUsdc, getHouseCap, getHouseExposure } from "@/lib/stellar/house";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
@@ -74,6 +75,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
         state: MarketState;
         view: TradeMarketView;
         settlement: SettlementMarketView;
+        lpMarket: { id: string; bWad: string; canAdd: boolean; canRemove: boolean };
         resolved: string[];
       }
     | null = null;
@@ -118,8 +120,17 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       kWad: mp.k.toString(),
       bWad: mp.b.toString(),
       resolvedWad: resolved.length ? resolved : undefined,
+      resolverTier: mp.tier,
+      resolver: mp.resolver,
+      capped: mp.capped,
     };
-    data = { info, params: mp, state, view, settlement, resolved };
+    const lpMarket = {
+      id,
+      bWad: mp.b.toString(),
+      canAdd: state.status.tag === "Open",
+      canRemove: state.status.tag === "Open" || state.status.tag === "Resolved" || state.status.tag === "ResolvedVec",
+    };
+    data = { info, params: mp, state, view, settlement, resolved, lpMarket };
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -175,6 +186,12 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
               </span>
             </div>
             <p className="font-mono text-xs text-muted-foreground">{id}</p>
+            <WindowCountdown
+              windowOpen={Number(data.params.window.open)}
+              windowLock={Number(data.params.window.lock)}
+              windowResolve={Number(data.params.window.resolve)}
+              statusTag={data.state.status.tag}
+            />
           </header>
 
           <section className="space-y-2">
@@ -184,7 +201,12 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
 
           {config ? (
             <section>
-              <MarketActions config={config} tradeMarket={data.view} settlementMarket={data.settlement} />
+              <MarketActions
+                config={config}
+                tradeMarket={data.view}
+                settlementMarket={data.settlement}
+                lpMarket={data.lpMarket}
+              />
             </section>
           ) : (
             <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">

@@ -10,7 +10,8 @@
 
 #![no_std]
 
-use distribution_market::DistributionMarketClient;
+use distribution_market::{DistributionMarketClient, MONEY_SCALE};
+use kaido_math::{mul_div, WAD};
 use kaido_common::KaidoError;
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
@@ -151,16 +152,38 @@ impl HouseVault {
         }
         let key = DataKey::Exposure(market.clone());
         let cur: i128 = env.storage().persistent().get(&key).unwrap_or(0);
-        let next = cur + amount_7dp;
+        let usdc: Address = env.storage().instance().get(&DataKey::Usdc).unwrap();
+        let me = env.current_contract_address();
+        let dm = DistributionMarketClient::new(&env, &market);
+        let free = dm.free_collateral();
+        if free <= 0 {
+            panic_with_error!(&env, KaidoError::InsufficientLiquidity);
+        }
+        let max_7dp = free / MONEY_SCALE;
+        let actual_7dp = amount_7dp.min(max_7dp);
+        if actual_7dp <= 0 {
+            panic_with_error!(&env, KaidoError::InvalidAmount);
+        }
+        let next = cur + actual_7dp;
         if next > cap_7dp {
             panic_with_error!(&env, KaidoError::CapExceeded);
         }
-        let usdc: Address = env.storage().instance().get(&DataKey::Usdc).unwrap();
-        let me = env.current_contract_address();
-        // we call `market.add_liquidity(vault, amt)` which itself calls
-        // `usdc.transfer(vault, market, amt)` — authorize both, on our behalf.
-        env.authorize_as_current_contract(transfer_auth(&env, &usdc, &me, &market, amount_7dp));
-        let shares = DistributionMarketClient::new(&env, &market).add_liquidity(&me, &amount_7dp);
+        let amount_wad = actual_7dp * MONEY_SCALE;
+        let mut scale = mul_div(amount_wad, WAD, free);
+        if scale <= 0 {
+            scale = 1;
+        }
+        if scale > WAD {
+            scale = WAD;
+        }
+        env.authorize_as_current_contract(transfer_auth(
+            &env,
+            &usdc,
+            &me,
+            &market,
+            actual_7dp,
+        ));
+        let shares = dm.add_liquidity(&me, &scale);
         env.storage().persistent().set(&key, &next);
         env.storage()
             .persistent()
@@ -170,7 +193,7 @@ impl HouseVault {
             .extend_ttl(TTL_THRESHOLD, TTL_TARGET);
         Seeded {
             market,
-            amount: amount_7dp,
+            amount: actual_7dp,
             shares,
         }
         .publish(&env);

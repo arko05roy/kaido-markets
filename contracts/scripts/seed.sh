@@ -155,7 +155,7 @@ if [[ -z "${LIFECYCLE_MARKET}" || "${KAIDO_RESEED_LIFECYCLE:-}" == "1" ]]; then
        --k "${WAD18}" --b "${B18}" --fee-bps 30 \
        --resolver "${LIFECYCLE_RESOLVER}" --tier 0 \
        --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
-       --mu0 "${MU0_18}" --sigma0 "${WAD18}")"
+       --mu0 "${MU0_18}" --sigma0 "${WAD18}" --capped-flag 0)"
   LIFECYCLE_MARKET="${LIFECYCLE_MARKET//\"/}"
   echo "   market   : ${LIFECYCLE_MARKET}"
 

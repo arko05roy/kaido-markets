@@ -61,6 +61,8 @@ fn boot() -> World {
 
     let market_id = env.register(distribution_market::DistributionMarket, ());
     let market = DistributionMarketClient::new(&env, &market_id);
+    let treasury = Address::generate(&env);
+    let creator = Address::generate(&env);
     market.init(
         &K,
         &B,
@@ -73,6 +75,12 @@ fn boot() -> World {
         &(50 * WAD),
         &WAD,
         &usdc,
+        &0u32,
+        &treasury,
+        &creator,
+        &7_000u32,
+        &2_000u32,
+        &1_000u32,
     );
     World {
         tok: token::TokenClient::new(&env, &usdc),

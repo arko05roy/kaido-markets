@@ -63,7 +63,7 @@ function Frame({ height, children, empty }: { height: number; children: React.Re
 
 export interface ScalarBeliefChartProps {
   mode: "scalar";
-  market: { kWad: bigint; bWad: bigint };
+  market: { kWad: bigint; bWad: bigint; capped?: boolean };
   /** Outcome-value window to plot over (real units). */
   range: { min: number; max: number };
   consensus: GaussianBelief;

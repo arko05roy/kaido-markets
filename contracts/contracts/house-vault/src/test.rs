@@ -37,6 +37,8 @@ impl MockResolver {
 }
 
 fn make_market(env: &Env, resolver: &Address, usdc: &Address) -> Address {
+    let treasury = Address::generate(env);
+    let creator = Address::generate(env);
     let id = env.register(distribution_market::DistributionMarket, ());
     let c = distribution_market::DistributionMarketClient::new(env, &id);
     c.init(
@@ -51,6 +53,12 @@ fn make_market(env: &Env, resolver: &Address, usdc: &Address) -> Address {
         &(50 * WAD),
         &WAD,
         usdc,
+        &0u32,
+        &treasury,
+        &creator,
+        &7_000u32,
+        &2_000u32,
+        &1_000u32,
     );
     id
 }
@@ -85,11 +93,11 @@ fn deposit_seed_cap_and_withdraw() {
     vault.set_cap(&market, &2_000_000_000i128);
     assert_eq!(vault.cap(&market), 2_000_000_000i128);
 
-    // cap = 200; seeding 150 is fine, then another 100 would exceed → reverts.
+    // cap = 200; seeding 150 is capped to b=100 USDC on an empty market.
     let shares = vault.seed_market(&market, &1_500_000_000i128);
     assert!(shares > 0);
-    assert_eq!(vault.exposure(&market), 1_500_000_000i128);
-    assert_eq!(tok.balance(&market), 1_500_000_000i128);
+    assert_eq!(vault.exposure(&market), 1_000_000_000i128);
+    assert_eq!(tok.balance(&market), 1_000_000_000i128);
     assert!(vault.try_seed_market(&market, &1_000_000_000i128).is_err());
 
     // resolve the market then withdraw proportionally → USDC back to the vault.
@@ -97,7 +105,7 @@ fn deposit_seed_cap_and_withdraw() {
     resolver.set(&ResolverStatus::Resolved(50 * WAD));
     distribution_market::DistributionMarketClient::new(&env, &market).resolve();
     let back = vault.withdraw_proportional(&market, &shares);
-    assert_eq!(back, 1_500_000_000i128);
+    assert_eq!(back, 1_000_000_000i128);
     assert_eq!(vault.exposure(&market), 0);
     assert_eq!(tok.balance(&vault_id), 5_000_000_000i128);
 }
@@ -129,7 +137,7 @@ fn partial_withdrawal_decrements_exposure() {
     vault.set_cap(&market, &2_000_000_000i128);
     let shares = vault.seed_market(&market, &1_500_000_000i128);
     let before = vault.exposure(&market);
-    assert_eq!(before, 1_500_000_000i128);
+    assert_eq!(before, 1_000_000_000i128);
 
     // Resolve, then withdraw half the shares and confirm exposure roughly
     // halves (no slippage: the market's LP ratio is 1:1 at this point).
@@ -149,7 +157,7 @@ fn partial_withdrawal_decrements_exposure() {
     assert_eq!(vault.exposure(&market), 0);
     // Total reclaimed equals total seeded (no fees yet at the LP-pool level
     // for this scenario).
-    assert_eq!(got1 + got2, 1_500_000_000i128);
+    assert_eq!(got1 + got2, 1_000_000_000i128);
 }
 
 /// Non-admin cannot move the cap.

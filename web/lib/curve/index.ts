@@ -222,13 +222,86 @@ export function gridOverRange(min: number, max: number, n: number): number[] {
  */
 export function renderGaussian(
   belief: GaussianBelief,
-  market: { kWad: bigint },
+  market: { kWad: bigint; bWad?: bigint; capped?: boolean },
   xs: readonly number[],
 ): CurvePoint[] {
   const sigma = belief.sigmaWad > 0n ? belief.sigmaWad : 1n;
-  const lam = lambda(market.kWad, sigma);
-  return xs.map((x) => ({
-    x,
-    y: fromWad(gaussianPdfScaled(belief.muWad, sigma, lam, toWad(x))),
-  }));
+  const capped = market.capped === true && market.bWad != null && market.bWad > 0n;
+  const lam = capped ? cappedLambda(market.kWad, sigma, market.bWad!) : lambda(market.kWad, sigma);
+  const bWad = market.bWad ?? 0n;
+  return xs.map((x) => {
+    const xWad = toWad(x);
+    const yWad = capped
+      ? cappedGaussianPdfScaled(belief.muWad, sigma, lam, bWad, xWad)
+      : gaussianPdfScaled(belief.muWad, sigma, lam, xWad);
+    return { x, y: fromWad(yWad) };
+  });
+}
+
+// --- capped Gaussian (mirror contracts/crates/kaido-math/src/capped.rs) ----
+
+/** `min(b, λ·φ_{μ,σ}(x))` — capped payout density (WAD). */
+export function cappedGaussianPdfScaled(
+  muWad: bigint,
+  sigmaWad: bigint,
+  lambdaWad: bigint,
+  bWad: bigint,
+  xWad: bigint,
+): bigint {
+  const raw = gaussianPdfScaled(muWad, sigmaWad, lambdaWad, xWad);
+  return raw < bWad ? raw : bWad;
+}
+
+/** `‖min(b, λ·φ)‖₂²` — squared L² norm (WAD²). */
+export function cappedL2NormSquared(
+  muWad: bigint,
+  sigmaWad: bigint,
+  lambdaWad: bigint,
+  bWad: bigint,
+): bigint {
+  if (sigmaWad <= 0n) throw new Error("capped_l2_norm_squared: sigma must be > 0");
+  if (lambdaWad < 0n) throw new Error("capped_l2_norm_squared: lambda must be >= 0");
+  if (bWad <= 0n) throw new Error("capped_l2_norm_squared: b must be > 0");
+  const span = sigmaWad * 14n;
+  const lo = muWad - span;
+  const hi = muWad + span;
+  const N = 256n;
+  const step = hi > lo ? (hi - lo) / N : 1n;
+  const pdf = (x: bigint) => cappedGaussianPdfScaled(muWad, sigmaWad, lambdaWad, bWad, x);
+  let sum = pdf(lo) * pdf(lo) + pdf(hi) * pdf(hi);
+  let x = lo;
+  let i = 0n;
+  while (i < N - 1n) {
+    x = x + step;
+    if (x > hi) break;
+    const p = pdf(x);
+    sum += 2n * p * p;
+    i += 1n;
+  }
+  return (sum * step) / (2n * WAD);
+}
+
+/** `λ` such that `‖min(b, λ·φ)‖₂ = k`. */
+export function cappedLambda(kWad: bigint, sigmaWad: bigint, bWad: bigint): bigint {
+  if (kWad < 0n) throw new Error("capped_lambda: k must be >= 0");
+  if (sigmaWad <= 0n) throw new Error("capped_lambda: sigma must be > 0");
+  if (bWad <= 0n) throw new Error("capped_lambda: b must be > 0");
+  const mu = 0n;
+  const uncappedLam = lambda(kWad, sigmaWad);
+  const peak = wdiv(uncappedLam, wmul(sigmaWad, SQRT_2PI));
+  if (peak <= bWad) return uncappedLam;
+  const target = wmul(kWad, kWad);
+  let hi = uncappedLam;
+  while (cappedL2NormSquared(mu, sigmaWad, hi, bWad) < target) {
+    hi = hi * 2n;
+    if (hi <= 0n || hi > BigInt(Number.MAX_SAFE_INTEGER)) break;
+  }
+  let lo = 0n;
+  for (let iter = 0; iter < 96; iter++) {
+    const mid = lo + (hi - lo) / 2n;
+    if (mid === lo) break;
+    if (cappedL2NormSquared(mu, sigmaWad, mid, bWad) < target) lo = mid;
+    else hi = mid;
+  }
+  return hi;
 }
