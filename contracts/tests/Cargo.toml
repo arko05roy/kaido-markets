@@ -14,6 +14,7 @@ path = "src/lib.rs"
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+sep-40-oracle = { workspace = true, features = ["testutils"] }
 kaido-common = { workspace = true }
 kaido-math = { workspace = true }
 # Contract crates expose an `rlib` alongside `cdylib`, so lifecycle tests can

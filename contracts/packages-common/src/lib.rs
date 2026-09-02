@@ -17,7 +17,7 @@
 
 #![no_std]
 
-use soroban_sdk::{contracterror, contractevent, contracttype, Address};
+use soroban_sdk::{contractclient, contracterror, contractevent, contracttype, Address, Env};
 
 // --------------------------------------------------------------------------- //
 // Errors
@@ -75,10 +75,62 @@ pub enum KaidoError {
     /// Slippage guard: the required collateral exceeds the caller's `max`.
     SlippageExceeded = 34,
 
+    // --- trading / settlement / LP (35–49) — Sprint 2 ---
+    /// The resolver has no value yet (still `Pending`) — too early to resolve.
+    ResolverNotReady = 35,
+    /// The resolver's underlying oracle is stale / missing — market is paused
+    /// (`Disputable`), never a bad payout.
+    OracleStale = 36,
+    /// `claim` / `remove_liquidity` called when there is nothing to withdraw.
+    NothingToWithdraw = 37,
+    /// Not enough free (unlocked) collateral in the pool for this LP withdrawal.
+    InsufficientLiquidity = 38,
+    /// No position with the given id.
+    PositionNotFound = 39,
+    /// The caller does not own this position.
+    NotPositionOwner = 40,
+    /// The market is not in the `Resolved` state (so claims aren't open yet).
+    MarketNotResolved = 41,
+    /// The submitted belief's peak exceeds the market's collateral `b` even
+    /// though `σ ≥ σ_min` — a rounding-edge solvency reject.
+    PeakExceedsB = 42,
+    /// A non-positive amount was passed where a strictly-positive one is needed.
+    InvalidAmount = 43,
+
     // --- arithmetic (50+) ---
     /// A fixed-point computation overflowed `i128` (a bug / out-of-envelope
     /// input — see `kaido_math::fp`).
     MathOverflow = 50,
+}
+
+// --------------------------------------------------------------------------- //
+// Resolver interface (ADR-5) — a generated client, since Soroban has no
+// dynamic-dispatch traits. A market only knows its resolver's `Address` + tier.
+// --------------------------------------------------------------------------- //
+
+/// Status a resolver reports for its market's outcome.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ResolverStatus {
+    /// Not available yet (e.g. before `resolve_time`).
+    Pending,
+    /// Available — carries the realised outcome `x₀` (WAD).
+    Resolved(i128),
+    /// The underlying source is stale/garbage; the market should pause
+    /// (`Disputable`), not pay out.
+    Stale,
+}
+
+/// The `Resolver` interface (ADR-5). Implemented by `resolver-reflector` (T0)
+/// and, in later sprints, the T1/T2/T3 resolvers. `#[contractclient]` generates
+/// `ResolverClient` which `DistributionMarket` uses to cross-call.
+#[contractclient(name = "ResolverClient")]
+pub trait Resolver {
+    /// The realised outcome `x₀` in WAD. Panics/errors if not yet available or
+    /// stale — callers should check [`Resolver::status`] first.
+    fn resolve(env: Env) -> i128;
+    /// Non-trapping status query.
+    fn status(env: Env) -> ResolverStatus;
 }
 
 // --------------------------------------------------------------------------- //
@@ -256,5 +308,52 @@ pub struct MarketCreated {
     pub sigma_min: i128,
 }
 
-// Trade / LiquidityAdded / LiquidityRemoved / Resolved events land in Sprint 2,
-// MarketRegistered (Registry) in Sprint 3 — all as further `#[contractevent]`s.
+/// Emitted by `DistributionMarket::trade` (topic `"trade"`).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Trade {
+    /// Position id minted.
+    pub id: u64,
+    /// The trader.
+    pub trader: Address,
+    /// Collateral locked (WAD).
+    pub collateral: i128,
+    /// Fee paid (WAD).
+    pub fee: i128,
+    /// The new aggregate belief after the trade.
+    pub belief: Belief,
+}
+
+/// Emitted by `DistributionMarket::add_liquidity` (topic `"liquidity_added"`).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiquidityAdded {
+    /// The LP.
+    pub lp: Address,
+    /// USDC added (7-dp).
+    pub amount: i128,
+    /// Shares minted.
+    pub shares: i128,
+}
+
+/// Emitted by `DistributionMarket::remove_liquidity` (topic `"liquidity_removed"`).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiquidityRemoved {
+    /// The LP.
+    pub lp: Address,
+    /// Shares burned.
+    pub shares: i128,
+    /// USDC returned (7-dp).
+    pub amount: i128,
+}
+
+/// Emitted by `DistributionMarket::resolve` (topic `"resolved"`).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Resolved {
+    /// Realised outcome `x₀` (WAD).
+    pub x0: i128,
+}
+
+// MarketRegistered (Registry) lands in Sprint 3.

@@ -12,6 +12,9 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 soroban-sdk = { workspace = true }
 kaido-common = { workspace = true }
+kaido-math = { workspace = true }
+sep-40-oracle = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+sep-40-oracle = { workspace = true, features = ["testutils"] }

@@ -33,17 +33,10 @@ fn scaffold_contracts_link() {
         market_factory::MarketFactory,
         market_factory::MarketFactoryClient
     );
-    check_scaffold!(
-        "house-vault",
-        house_vault::HouseVault,
-        house_vault::HouseVaultClient
-    );
     check_scaffold!("registry", registry::Registry, registry::RegistryClient);
-    check_scaffold!(
-        "resolver-reflector",
-        resolver_reflector::ResolverReflector,
-        resolver_reflector::ResolverReflectorClient
-    );
+    // house-vault and resolver-reflector now have real Sprint-2 logic (no
+    // `scaffold_version`) — they're exercised by their own crates' tests and
+    // by `lifecycle.rs`.
     check_scaffold!(
         "resolver-attested",
         resolver_attested::ResolverAttested,
@@ -67,6 +60,9 @@ fn distribution_market_init_and_reads() {
     let id = env.register(distribution_market::DistributionMarket, ());
     let client = distribution_market::DistributionMarketClient::new(&env, &id);
     let resolver = Address::generate(&env);
+    let usdc = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
 
     // demo scalar Gaussian market: k=1, b=100, μ₀=50, σ₀=1 (all WAD-scaled),
     // 0.30% fee, Reflector (T0) resolver, window now+0 / +10k / +100k.
@@ -83,7 +79,7 @@ fn distribution_market_init_and_reads() {
     );
 
     client.init(
-        &k, &b, &fee, &resolver, &tier, &w_open, &w_lock, &w_resolve, &mu0, &sigma0,
+        &k, &b, &fee, &resolver, &tier, &w_open, &w_lock, &w_resolve, &mu0, &sigma0, &usdc,
     );
     // `init` emitted exactly one event (`MarketCreated`). Check immediately —
     // the test env's event buffer reflects the most recent invocation.
@@ -116,6 +112,8 @@ fn distribution_market_init_and_reads() {
 
     // init is one-shot.
     assert!(client
-        .try_init(&k, &b, &fee, &resolver, &tier, &w_open, &w_lock, &w_resolve, &mu0, &sigma0)
+        .try_init(
+            &k, &b, &fee, &resolver, &tier, &w_open, &w_lock, &w_resolve, &mu0, &sigma0, &usdc
+        )
         .is_err());
 }

@@ -45,7 +45,14 @@ FRIENDBOT="${FRIENDBOT_URL:-$(read_cfg friendbotUrl)}"
 [[ -n "${RPC}" ]] || { echo "no RPC url for '${NETWORK}'. Set RPC_URL in .env (mainnet needs a third-party provider)." >&2; exit 2; }
 
 # --- per-network values that must be resolved (never hardcoded) ----------
-: "${USDC_SAC_ID:=}"
+# Sprint 2: the USDC SAC id is now load-bearing (the distribution-market and
+# house-vault take it as a constructor/init arg — never hardcoded). Require it
+# from the environment with no default; fail loudly if unset.
+: "${USDC_SAC_ID:?set USDC_SAC_ID (the USDC Stellar Asset Contract id for ${STELLAR_NETWORK:-this network}); see .env.example}"
+# Optional Reflector feed + asset for the T0 resolver constructor; if unset we
+# point the demo resolver at a placeholder so the deploy still completes.
+: "${REFLECTOR_FEED_ID:=${USDC_SAC_ID}}"
+: "${REFLECTOR_ASSET_SYMBOL:=BTC}"
 : "${REFLECTOR_FEED_ID:=}"
 : "${ADMIN_ADDRESS:=}"
 
@@ -110,9 +117,22 @@ for c in ${CONTRACTS}; do
   echo "-- ${c} --------------------------------"
   hash="$(stellar contract upload --wasm "${wasm}" --network "${NETWORK}" "${SOURCE_ARG[@]}")"
   echo "   wasm hash : ${hash}"
-  # All contracts deploy with no constructor args; `distribution-market` has an
-  # explicit `init(params, mu0, sigma0)` invoked below.
-  id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}")"
+  # Most contracts deploy with no constructor args; `house-vault` and
+  # `resolver-reflector` have `__constructor`s (Sprint 2). `distribution-market`
+  # uses an explicit `init(...)` invoked below (incl. the USDC SAC id).
+  CTOR_ARGS=()
+  case "${c}" in
+    house-vault)
+      CTOR_ARGS=(-- --admin "${ADMIN_MULTISIG:-${SOURCE_PUBKEY:-}}" --usdc "${USDC_SAC_ID}")
+      ;;
+    resolver-reflector)
+      # demo resolver: resolve_time = now+2h, 12-record TWAP.
+      CTOR_ARGS=(-- --oracle "${REFLECTOR_FEED_ID}" \
+        --asset "{\"Other\":\"${REFLECTOR_ASSET_SYMBOL}\"}" \
+        --resolve-time "$(( $(date +%s) + 7200 ))" --twap-records 12)
+      ;;
+  esac
+  id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}" "${CTOR_ARGS[@]}")"
   echo "   contract  : ${id}"
   key="$(to_camel "${c}")"
   [[ -n "${CONTRACTS_JSON}" ]] && CONTRACTS_JSON="${CONTRACTS_JSON},"
@@ -142,7 +162,7 @@ if stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK
         --k "${WAD18}" --b "${B18}" --fee-bps 30 \
         --resolver "${ID_resolver_reflector}" --tier 0 \
         --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
-        --mu0 "${MU0_18}" --sigma0 "${WAD18}"; then
+        --mu0 "${MU0_18}" --sigma0 "${WAD18}" --usdc "${USDC_SAC_ID}"; then
   echo "   get_params ->"
   stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
     -- get_params || true

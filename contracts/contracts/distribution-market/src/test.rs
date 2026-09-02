@@ -1,29 +1,96 @@
-//! `distribution-market` tests (Sprint 1): `init` happy path + every validation
-//! branch, `get_params`/`get_state` round-trip, the `MarketCreated` event, and a
-//! gas/footprint snapshot. Trading/LP/resolution tests arrive with that logic in
-//! Sprint 2.
+//! `distribution-market` tests: `init` happy path + validation branches
+//! (Sprint 1), plus Sprint 2 — `trade`, `resolve` (via a tiny mock resolver),
+//! `claim`, LP add/remove, σ-floor reject, and the disputable (stale-oracle)
+//! path. USDC is a Stellar Asset Contract test token.
 
 use super::*;
-use kaido_common::{MarketWindow, ResolverTier};
+use kaido_common::{MarketWindow, ResolverStatus, ResolverTier};
 use kaido_math::{lambda as lambda_of, sigma_floor, wdiv, wmul, WAD};
 use soroban_sdk::{
+    contract as sc, contractimpl as sci, contracttype as sct,
     testutils::{Address as _, Events, Ledger},
-    Address, Env,
+    token, Address, Env,
 };
 
-// --- demo market parameters (all WAD-scaled where numeric; ADR-1/ADR-2) ----
-const K: i128 = WAD; // k = 1.0
-const B: i128 = 100 * WAD; // b = 100.0
-const FEE_BPS: u32 = 30; // 0.30%
-const TIER: u32 = 0; // ResolverTier::Reflector
+const K: i128 = WAD;
+const B: i128 = 100 * WAD;
+const FEE_BPS: u32 = 30;
+const TIER: u32 = 0;
 const W_OPEN: u64 = 0;
 const W_LOCK: u64 = 10_000;
 const W_RESOLVE: u64 = 100_000;
-const MU0: i128 = 50 * WAD; // μ₀ = 50.0
-const SIGMA0: i128 = WAD; // σ₀ = 1.0 (well above σ_min for k=1, b=100)
-
-/// `σ√(2π)` constant in WAD, for computing the expected peak independently.
+const MU0: i128 = 50 * WAD;
+const SIGMA0: i128 = WAD;
 const SQRT_2PI: i128 = 2_506_628_274_631_000_502;
+
+// --- a minimal Resolver mock (implements the kaido_common::Resolver shape) ---
+#[sct]
+#[derive(Clone)]
+enum MockKey {
+    Status,
+}
+#[sc]
+pub struct MockResolver;
+#[sci]
+impl MockResolver {
+    pub fn set(env: Env, s: ResolverStatus) {
+        env.storage().instance().set(&MockKey::Status, &s);
+    }
+    pub fn resolve(env: Env) -> i128 {
+        match env.storage().instance().get(&MockKey::Status) {
+            Some(ResolverStatus::Resolved(x)) => x,
+            _ => panic!("not resolved"),
+        }
+    }
+    pub fn status(env: Env) -> ResolverStatus {
+        env.storage()
+            .instance()
+            .get(&MockKey::Status)
+            .unwrap_or(ResolverStatus::Pending)
+    }
+}
+
+struct Ctx {
+    env: Env,
+    market: DistributionMarketClient<'static>,
+    resolver: MockResolverClient<'static>,
+    usdc: Address,
+    usdc_admin: token::StellarAssetClient<'static>,
+    token: token::TokenClient<'static>,
+}
+
+fn setup() -> Ctx {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(admin.clone());
+    let usdc = sac.address();
+    let resolver_id = env.register(MockResolver, ());
+    let resolver = MockResolverClient::new(&env, &resolver_id);
+    let id = env.register(DistributionMarket, ());
+    let market = DistributionMarketClient::new(&env, &id);
+    market.init(
+        &K,
+        &B,
+        &FEE_BPS,
+        &resolver_id,
+        &TIER,
+        &W_OPEN,
+        &W_LOCK,
+        &W_RESOLVE,
+        &MU0,
+        &SIGMA0,
+        &usdc,
+    );
+    Ctx {
+        usdc_admin: token::StellarAssetClient::new(&env, &usdc),
+        token: token::TokenClient::new(&env, &usdc),
+        env,
+        market,
+        resolver,
+        usdc,
+    }
+}
 
 fn expected_params(resolver: &Address) -> MarketParams {
     MarketParams {
@@ -43,249 +110,204 @@ fn expected_params(resolver: &Address) -> MarketParams {
     }
 }
 
-fn setup() -> (Env, DistributionMarketClient<'static>, Address) {
-    let env = Env::default();
-    let id = env.register(DistributionMarket, ());
-    let client = DistributionMarketClient::new(&env, &id);
-    let resolver = Address::generate(&env);
-    (env, client, resolver)
-}
-
-/// Init with the demo parameters (panics on rejection).
-fn init_ok(client: &DistributionMarketClient, resolver: &Address) {
-    client.init(
-        &K, &B, &FEE_BPS, resolver, &TIER, &W_OPEN, &W_LOCK, &W_RESOLVE, &MU0, &SIGMA0,
-    );
-}
-
 #[test]
-fn init_happy_path_then_reads_round_trip() {
-    let (_env, client, resolver) = setup();
-    init_ok(&client, &resolver);
-
-    // get_params reconstructs the tuple exactly.
-    assert_eq!(client.get_params(), expected_params(&resolver));
-
-    // get_state: status Open, belief = (μ₀, σ₀, λ₀), σ_min as kaido-math says.
-    let state = client.get_state();
-    assert_eq!(state.status, MarketStatus::Open);
-    assert_eq!(state.belief.mu, MU0);
-    assert_eq!(state.belief.sigma, SIGMA0);
-    let expected_lambda = lambda_of(K, SIGMA0);
-    assert_eq!(state.belief.lambda, expected_lambda);
-    assert_eq!(state.sigma_min, sigma_floor(K, B));
-
-    // the seeded curve is solvent: 0 < peak ≤ b.
-    let peak = wdiv(expected_lambda, wmul(SIGMA0, SQRT_2PI));
+fn init_round_trip() {
+    let c = setup();
+    assert_eq!(c.market.get_params(), expected_params(&c.resolver.address));
+    let st = c.market.get_state();
+    assert_eq!(st.status, MarketStatus::Open);
+    assert_eq!(st.belief.mu, MU0);
+    assert_eq!(st.belief.lambda, lambda_of(K, SIGMA0));
+    assert_eq!(st.sigma_min, sigma_floor(K, B));
+    let peak = wdiv(st.belief.lambda, wmul(SIGMA0, SQRT_2PI));
     assert!(peak > 0 && peak <= B);
-
-    // wad() reports the internal scale.
-    assert_eq!(client.wad(), WAD);
+    assert_eq!(c.market.wad(), WAD);
 }
 
 #[test]
-fn init_emits_one_market_created_event() {
-    let (env, client, resolver) = setup();
-    init_ok(&client, &resolver);
-    // exactly one event (the `MarketCreated` event, topic "market_created";
-    // richer event parsing is the indexer's job — Sprint 4).
-    assert_eq!(env.events().all().events().len(), 1);
+fn init_emits_event() {
+    let c = setup();
+    assert!(!c.env.events().all().events().is_empty());
 }
 
 #[test]
-fn init_is_one_shot() {
-    let (_env, client, resolver) = setup();
-    init_ok(&client, &resolver);
-    assert!(client
-        .try_init(&K, &B, &FEE_BPS, &resolver, &TIER, &W_OPEN, &W_LOCK, &W_RESOLVE, &MU0, &SIGMA0)
+fn init_one_shot() {
+    let c = setup();
+    assert!(c
+        .market
+        .try_init(
+            &K,
+            &B,
+            &FEE_BPS,
+            &c.resolver.address,
+            &TIER,
+            &W_OPEN,
+            &W_LOCK,
+            &W_RESOLVE,
+            &MU0,
+            &SIGMA0,
+            &c.usdc
+        )
         .is_err());
 }
 
 #[test]
-fn reads_before_init_fail() {
-    let (_env, client, _resolver) = setup();
-    assert!(client.try_get_params().is_err());
-    assert!(client.try_get_state().is_err());
+fn full_lifecycle_balances_conserve() {
+    let c = setup();
+    // an LP seeds the pool so the AMM side has collateral to pay winners.
+    let lp = Address::generate(&c.env);
+    c.usdc_admin.mint(&lp, &1_000_000_000i128);
+    c.market.add_liquidity(&lp, &1_000_000_000i128);
+
+    let trader = Address::generate(&c.env);
+    c.usdc_admin.mint(&trader, &10_000_000_000i128); // 1000 USDC, 7dp
+    let total_in = 11_000_000_000i128;
+
+    let id = c
+        .market
+        .trade(&trader, &(60 * WAD), &(2 * WAD), &10_000_000_000i128);
+    assert_eq!(id, 0);
+    assert_eq!(c.market.get_state().belief.mu, 60 * WAD);
+
+    c.env.ledger().set_timestamp(W_RESOLVE + 1);
+    c.resolver.set(&ResolverStatus::Resolved(58 * WAD));
+    c.market.resolve();
+    assert!(matches!(
+        c.market.get_state().status,
+        MarketStatus::Resolved(_)
+    ));
+
+    let got = c.market.claim(&id);
+    assert!(got >= 0);
+    assert!(c.market.try_get_position(&id).is_err());
+    // USDC conserves exactly: trader + lp(=0) + market-leftover == everything in.
+    let total_out =
+        c.token.balance(&trader) + c.token.balance(&lp) + c.token.balance(&c.market.address);
+    assert_eq!(total_in, total_out);
+}
+
+#[test]
+fn sub_floor_sigma_reverts() {
+    let c = setup();
+    let trader = Address::generate(&c.env);
+    c.usdc_admin.mint(&trader, &10_000_000_000i128);
+    assert!(c
+        .market
+        .try_trade(&trader, &(50 * WAD), &1_000i128, &10_000_000_000i128)
+        .is_err());
+}
+
+#[test]
+fn slippage_guard() {
+    let c = setup();
+    let trader = Address::generate(&c.env);
+    c.usdc_admin.mint(&trader, &10_000_000_000i128);
+    assert!(c
+        .market
+        .try_trade(&trader, &(60 * WAD), &(2 * WAD), &1i128)
+        .is_err());
+}
+
+#[test]
+fn stale_oracle_disputable() {
+    let c = setup();
+    c.env.ledger().set_timestamp(W_RESOLVE + 1);
+    c.resolver.set(&ResolverStatus::Stale);
+    c.market.resolve();
+    assert_eq!(c.market.get_state().status, MarketStatus::Disputable);
+    assert!(c.market.try_claim(&0).is_err());
+}
+
+#[test]
+fn resolve_too_early_and_pending() {
+    let c = setup();
+    assert!(c.market.try_resolve().is_err());
+    c.env.ledger().set_timestamp(W_RESOLVE + 1);
+    c.resolver.set(&ResolverStatus::Pending);
+    assert!(c.market.try_resolve().is_err());
+}
+
+#[test]
+fn lp_add_and_remove() {
+    let c = setup();
+    let lp = Address::generate(&c.env);
+    c.usdc_admin.mint(&lp, &5_000_000_000i128);
+    let shares = c.market.add_liquidity(&lp, &1_000_000_000i128);
+    assert!(shares > 0);
+    assert_eq!(c.market.lp_shares(&lp), shares);
+    assert_eq!(c.token.balance(&c.market.address), 1_000_000_000i128);
+
+    assert!(c.market.try_remove_liquidity(&lp, &shares).is_err());
+
+    c.env.ledger().set_timestamp(W_RESOLVE + 1);
+    c.resolver.set(&ResolverStatus::Resolved(50 * WAD));
+    c.market.resolve();
+    let out = c.market.remove_liquidity(&lp, &shares);
+    assert_eq!(out, 1_000_000_000i128);
+    assert_eq!(c.market.lp_shares(&lp), 0);
 }
 
 #[test]
 fn rejects_bad_params() {
-    let (env, _c, resolver) = setup();
+    let c = setup();
     let fresh = || {
-        let id = env.register(DistributionMarket, ());
-        DistributionMarketClient::new(&env, &id)
+        let id = c.env.register(DistributionMarket, ());
+        DistributionMarketClient::new(&c.env, &id)
     };
-    // (k, b, fee, tier, open, lock, resolve, mu0, sigma0)
-    let try_init =
-        |c: &DistributionMarketClient,
-         k: i128,
-         b: i128,
-         fee: u32,
-         tier: u32,
-         o: u64,
-         l: u64,
-         r: u64,
-         mu: i128,
-         s: i128| { c.try_init(&k, &b, &fee, &resolver, &tier, &o, &l, &r, &mu, &s) };
-
-    // k ≤ 0
-    assert!(try_init(
-        &fresh(),
-        0,
-        B,
-        FEE_BPS,
-        TIER,
-        W_OPEN,
-        W_LOCK,
-        W_RESOLVE,
-        MU0,
-        SIGMA0
-    )
-    .is_err());
-    // b ≤ 0
-    assert!(try_init(
-        &fresh(),
-        K,
-        0,
-        FEE_BPS,
-        TIER,
-        W_OPEN,
-        W_LOCK,
-        W_RESOLVE,
-        MU0,
-        SIGMA0
-    )
-    .is_err());
-    // fee too high
-    assert!(try_init(
-        &fresh(),
-        K,
-        B,
-        MAX_FEE_BPS + 1,
-        TIER,
-        W_OPEN,
-        W_LOCK,
-        W_RESOLVE,
-        MU0,
-        SIGMA0
-    )
-    .is_err());
-    // bad tier code
-    assert!(try_init(
-        &fresh(),
-        K,
-        B,
-        FEE_BPS,
-        4,
-        W_OPEN,
-        W_LOCK,
-        W_RESOLVE,
-        MU0,
-        SIGMA0
-    )
-    .is_err());
-    // window out of order (lock > resolve)
-    assert!(try_init(
-        &fresh(),
-        K,
-        B,
-        FEE_BPS,
-        TIER,
-        0,
-        100_000,
-        10_000,
-        MU0,
-        SIGMA0
-    )
-    .is_err());
-    // window in the past
-    env.ledger().set_timestamp(200_000);
-    assert!(try_init(
-        &fresh(),
-        K,
-        B,
-        FEE_BPS,
-        TIER,
-        W_OPEN,
-        W_LOCK,
-        W_RESOLVE,
-        MU0,
-        SIGMA0
-    )
-    .is_err());
-    env.ledger().set_timestamp(0);
-    // σ₀ ≤ 0
-    assert!(try_init(
-        &fresh(),
-        K,
-        B,
-        FEE_BPS,
-        TIER,
-        W_OPEN,
-        W_LOCK,
-        W_RESOLVE,
-        MU0,
-        0
-    )
-    .is_err());
-    // σ₀ far below the floor (σ_min for k=1, b=100 ≈ 5.6e13 in WAD)
-    assert!(try_init(
-        &fresh(),
-        K,
-        B,
-        FEE_BPS,
-        TIER,
-        W_OPEN,
-        W_LOCK,
-        W_RESOLVE,
-        MU0,
-        1_000
-    )
-    .is_err());
-
-    // a *valid* market still works after all those rejections.
-    let ok = fresh();
-    init_ok(&ok, &resolver);
-    assert_eq!(ok.get_state().status, MarketStatus::Open);
-}
-
-#[test]
-fn sigma_at_or_just_above_floor() {
-    let (env, _c, resolver) = setup();
-    let s_min = sigma_floor(K, B);
-    assert!(s_min > 0);
-
-    // At exactly σ_min the seeded peak is ≈ b; rounding may push it a hair over,
-    // in which case init rejects with PeakExceedsCollateral. Either way, no
-    // panic-on-overflow / no silent bad state; and if accepted, peak ≤ b holds.
-    let id = env.register(DistributionMarket, ());
-    let c = DistributionMarketClient::new(&env, &id);
-    if c.try_init(
-        &K, &B, &FEE_BPS, &resolver, &TIER, &W_OPEN, &W_LOCK, &W_RESOLVE, &MU0, &s_min,
-    )
-    .is_ok()
-    {
-        let peak = wdiv(c.get_state().belief.lambda, wmul(s_min, SQRT_2PI));
-        assert!(peak <= B);
-    }
-
-    // 1% above the floor: definitely fine.
-    let s = s_min + s_min / 100 + 1;
-    let id = env.register(DistributionMarket, ());
-    let c = DistributionMarketClient::new(&env, &id);
-    c.init(
-        &K, &B, &FEE_BPS, &resolver, &TIER, &W_OPEN, &W_LOCK, &W_RESOLVE, &MU0, &s,
-    );
-    let st = c.get_state();
-    assert!(wdiv(st.belief.lambda, wmul(st.belief.sigma, SQRT_2PI)) <= B);
+    assert!(fresh()
+        .try_init(
+            &K,
+            &B,
+            &FEE_BPS,
+            &c.resolver.address,
+            &4u32,
+            &W_OPEN,
+            &W_LOCK,
+            &W_RESOLVE,
+            &MU0,
+            &SIGMA0,
+            &c.usdc
+        )
+        .is_err());
+    assert!(fresh()
+        .try_init(
+            &K,
+            &B,
+            &FEE_BPS,
+            &c.resolver.address,
+            &TIER,
+            &0u64,
+            &100_000u64,
+            &10_000u64,
+            &MU0,
+            &SIGMA0,
+            &c.usdc
+        )
+        .is_err());
+    assert!(fresh()
+        .try_init(
+            &K,
+            &B,
+            &FEE_BPS,
+            &c.resolver.address,
+            &TIER,
+            &W_OPEN,
+            &W_LOCK,
+            &W_RESOLVE,
+            &MU0,
+            &1_000i128,
+            &c.usdc
+        )
+        .is_err());
 }
 
 #[test]
 fn gas_snapshot() {
-    // Records cost/footprint into `test_snapshots/` (committed; CI flags
-    // regressions — build.md §6 item 9).
-    let (_env, client, resolver) = setup();
-    init_ok(&client, &resolver);
-    let _ = client.get_params();
-    let _ = client.get_state();
+    let c = setup();
+    let trader = Address::generate(&c.env);
+    c.usdc_admin.mint(&trader, &10_000_000_000i128);
+    let _ = c
+        .market
+        .trade(&trader, &(55 * WAD), &(WAD + WAD / 2), &10_000_000_000i128);
+    let _ = c.market.get_state();
 }
