@@ -50,6 +50,8 @@
 }
 
 @theme inline {
+  --font-serif: var(--font-instrument-serif);
+  --font-mono: var(--font-jetbrains-mono);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -81,4 +83,31 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Kaido landing — entrance + marquee */
+@keyframes kaido-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes kaido-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.kaido-fade {
+  opacity: 0;
+  animation: kaido-fade-up 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.kaido-marquee {
+  animation: kaido-marquee 60s linear infinite;
+}
+.kaido-landing ::selection {
+  background: #d8c69a;
+  color: #0b0b0c;
 }

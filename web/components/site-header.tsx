@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { ConnectButton } from "@/components/wallet/connect-button";
 
 const NAV = [
-  { href: "/chartguessr", label: "ChartGuessr" },
   { href: "/markets", label: "Markets" },
   { href: "/create", label: "Create" },
   { href: "/leaderboard", label: "Leaderboard" },
