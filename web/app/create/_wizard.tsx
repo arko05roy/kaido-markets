@@ -30,11 +30,15 @@ import {
   defaultKaidoConfig,
   defaultOpeningCall,
   defaultOpeningWidth,
-  evenDivisions,
+  defaultTickLabels,
   formatXTick,
+  parseTickLabels,
+  resizeTickLabels,
+  tickLabelsFromConfig,
   type MarketStyle,
   type OutcomeConfig,
 } from "@/lib/outcome-scale";
+import { TickLabelsEditor } from "@/components/market/tick-labels-editor";
 import { RangeSlider } from "@/components/forecast/range-slider";
 
 const { ResolverTier } = distributionMarket;
@@ -87,8 +91,6 @@ const TIERS = [
 
 const STEPS = ["Question", "Market type", "Schedule", "Outcomes", "Opening curve", "Settlement"];
 
-const DIVISION_PRESETS = [3, 4, 5, 6, 8, 10] as const;
-
 function toUnix(dtLocal: string): bigint {
   const ms = new Date(dtLocal).getTime();
   if (!Number.isFinite(ms)) throw new Error(`invalid date: ${dtLocal}`);
@@ -118,10 +120,8 @@ export function CreateMarketWizard({
   const [optionHigh, setOptionHigh] = useState("Yes");
   const [rangeMin, setRangeMin] = useState("0");
   const [rangeMax, setRangeMax] = useState("100");
-  const [divisionCount, setDivisionCount] = useState("5");
-  const [divisionValues, setDivisionValues] = useState<string[]>(() =>
-    evenDivisions(0, 100, 5).map(String),
-  );
+  const [divisionCount, setDivisionCount] = useState(5);
+  const [tickLabels, setTickLabels] = useState<string[]>(() => defaultTickLabels(0, 100, 5));
   const [k, setK] = useState("1");
   const [b, setB] = useState("1");
   const [feeBps, setFeeBps] = useState("30");
@@ -156,12 +156,10 @@ export function CreateMarketWizard({
     const min = Number(rangeMin);
     const max = Number(rangeMax);
     if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) return null;
-    const divisions = divisionValues
-      .map((s) => Number(s.trim()))
-      .filter((n) => Number.isFinite(n));
-    if (divisions.length < 2) return null;
-    return { style: "kaido", min, max, divisions };
-  }, [mode, marketStyle, optionLow, optionHigh, rangeMin, rangeMax, divisionValues]);
+    const parsed = parseTickLabels(tickLabels, min, max);
+    if (!parsed) return null;
+    return { style: "kaido", min, max, ...parsed };
+  }, [mode, marketStyle, optionLow, optionHigh, rangeMin, rangeMax, tickLabels]);
 
   const pickMarketStyle = (style: MarketStyle) => {
     setMarketStyle(style);
@@ -179,8 +177,8 @@ export function CreateMarketWizard({
     const cfg = defaultKaidoConfig();
     setRangeMin(String(cfg.min));
     setRangeMax(String(cfg.max));
-    setDivisionCount("5");
-    setDivisionValues(cfg.divisions.map(String));
+    setDivisionCount(5);
+    setTickLabels(defaultTickLabels(cfg.min, cfg.max, 5));
     setMu0(defaultOpeningCall(cfg));
     setSigma0(defaultOpeningWidth(cfg));
     setTierIdx(0);
@@ -191,10 +189,9 @@ export function CreateMarketWizard({
     if (marketStyle !== "kaido" || mode !== "scalar") return;
     const min = Number(rangeMin);
     const max = Number(rangeMax);
-    const n = Number(divisionCount);
-    if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min) || !Number.isFinite(n)) return;
-    setDivisionValues(evenDivisions(min, max, n).map(String));
-  }, [marketStyle, mode, rangeMin, rangeMax, divisionCount]);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) return;
+    setTickLabels((prev) => resizeTickLabels(prev, divisionCount, min, max));
+  }, [marketStyle, mode, divisionCount, rangeMin, rangeMax]);
 
   useEffect(() => {
     if (mode !== "scalar" || !outcomeConfig) return;
@@ -339,6 +336,7 @@ export function CreateMarketWizard({
                 outcomeMin: outcomeConfig.min,
                 outcomeMax: outcomeConfig.max,
                 divisions: outcomeConfig.divisions,
+                ...(outcomeConfig.divisionLabels ? { divisionLabels: outcomeConfig.divisionLabels } : {}),
                 ...(outcomeConfig.style === "binary"
                   ? { optionLow: outcomeConfig.optionLow, optionHigh: outcomeConfig.optionHigh }
                   : {}),
@@ -504,44 +502,27 @@ export function CreateMarketWizard({
         ) : (
           <>
             <p className="text-sm leading-relaxed text-white/55">
-              Pick the lower and upper limits, then how many x-values appear on the chart. Traders
-              place beliefs anywhere on the line — the ticks are guides.
+              Set the line ends, then name the ticks between them — words, prices, or plain numbers.
             </p>
             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Lower limit" hint="Left edge of the chart">
+              <Field label="Lower limit" hint="Left end of the chart">
                 <Input value={rangeMin} onChange={setRangeMin} placeholder="60000" />
               </Field>
-              <Field label="Upper limit" hint="Right edge of the chart">
+              <Field label="Upper limit" hint="Right end of the chart">
                 <Input value={rangeMax} onChange={setRangeMax} placeholder="80000" />
               </Field>
             </div>
-            <div className="mt-4 space-y-2">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
-                Divisions
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {DIVISION_PRESETS.map((n) => (
-                  <ChoiceButton
-                    key={n}
-                    active={divisionCount === String(n)}
-                    onClick={() => setDivisionCount(String(n))}
-                  >
-                    {n} ticks
-                  </ChoiceButton>
-                ))}
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-              {divisionValues.map((val, i) => (
-                <Field key={i} label={`x${i + 1}`}>
-                  <Input
-                    value={val}
-                    onChange={(v) =>
-                      setDivisionValues((rows) => rows.map((x, j) => (j === i ? v : x)))
-                    }
-                  />
-                </Field>
-              ))}
+            <div className="mt-5">
+              <TickLabelsEditor
+                count={divisionCount}
+                onCountChange={setDivisionCount}
+                labels={tickLabels}
+                onLabelChange={(i, v) =>
+                  setTickLabels((rows) => rows.map((x, j) => (j === i ? v : x)))
+                }
+                rangeMin={Number(rangeMin)}
+                rangeMax={Number(rangeMax)}
+              />
             </div>
           </>
         )}

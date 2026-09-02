@@ -25,6 +25,7 @@ import type { LiveCrowdSnapshot } from "@/lib/use-live-crowd";
 import { cn } from "@/lib/utils";
 
 import { MarketActions } from "@/app/markets/[id]/market-actions";
+import { OutcomeAxisPanel } from "@/components/market/outcome-axis-panel";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -144,6 +145,26 @@ export function MarketDetailClient({
       </Tabs>
 
       <AdvancedBlock title="On-chain details">
+        {view.kind === "scalar" &&
+          view.marketStyle === "kaido" &&
+          view.outcomeMin != null &&
+          view.outcomeMax != null &&
+          view.divisions &&
+          view.divisions.length >= 2 && (
+            <div className="mb-5">
+              <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
+                Chart axis
+              </p>
+              <OutcomeAxisPanel
+                marketId={marketId}
+                question={marketTitle}
+                outcomeMin={view.outcomeMin}
+                outcomeMax={view.outcomeMax}
+                divisions={view.divisions}
+                divisionLabels={view.divisionLabels}
+              />
+            </div>
+          )}
         <Panel className="border-0 bg-transparent p-0 shadow-none">
           <dl>
             {detailRows.map((r) => (

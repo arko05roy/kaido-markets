@@ -129,6 +129,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       ...(savedMeta?.outcomeMin != null ? { outcomeMin: savedMeta.outcomeMin } : {}),
       ...(savedMeta?.outcomeMax != null ? { outcomeMax: savedMeta.outcomeMax } : {}),
       ...(savedMeta?.divisions ? { divisions: savedMeta.divisions } : {}),
+      ...(savedMeta?.divisionLabels ? { divisionLabels: savedMeta.divisionLabels } : {}),
       ...(savedMeta?.optionLow ? { optionLow: savedMeta.optionLow } : {}),
       ...(savedMeta?.optionHigh ? { optionHigh: savedMeta.optionHigh } : {}),
     };

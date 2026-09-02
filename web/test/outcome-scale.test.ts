@@ -3,9 +3,12 @@ import { describe, it, expect } from "vitest";
 import {
   chartRangeForConfig,
   defaultOpeningCall,
+  defaultTickLabels,
   evenDivisions,
   formatXTick,
+  interiorTicks,
   parseOutcomeConfig,
+  parseTickLabels,
 } from "@/lib/outcome-scale";
 
 describe("outcome-scale", () => {
@@ -16,8 +19,35 @@ describe("outcome-scale", () => {
     });
   });
 
-  it("spaces kaido divisions evenly", () => {
+  it("spaces legacy even divisions across endpoints", () => {
     expect(evenDivisions(0, 100, 5)).toEqual([0, 25, 50, 75, 100]);
+  });
+
+  it("keeps interior ticks off the chart edges", () => {
+    expect(interiorTicks(0, 100, 5)).toEqual([16.67, 33.33, 50, 66.67, 83.33]);
+    expect(interiorTicks(0, 100, 5)[0]).toBeGreaterThan(0);
+  });
+
+  it("maps text tick labels to interior positions", () => {
+    const parsed = parseTickLabels(["Dry", "Storm"], 0, 100)!;
+    expect(parsed.divisions).toEqual([33.33, 66.67]);
+    expect(parsed.divisionLabels).toEqual(["Dry", "Storm"]);
+  });
+
+  it("auto-places empty tick slots on the interior", () => {
+    const parsed = parseTickLabels(["", ""], 0, 100)!;
+    expect(parsed.divisions).toEqual([33.33, 66.67]);
+    expect(parsed.divisionLabels).toBeUndefined();
+  });
+
+  it("maps numeric tick labels to explicit positions", () => {
+    const parsed = parseTickLabels(["25000", "75000"], 0, 100000)!;
+    expect(parsed.divisions).toEqual([25000, 75000]);
+    expect(parsed.divisionLabels).toBeUndefined();
+  });
+
+  it("starts with empty tick labels", () => {
+    expect(defaultTickLabels(0, 100, 5)).toEqual(["", "", "", "", ""]);
   });
 
   it("labels binary ticks", () => {
@@ -29,6 +59,18 @@ describe("outcome-scale", () => {
     expect(formatXTick(cfg, 0)).toBe("Nope");
     expect(formatXTick(cfg, 100)).toBe("Yep");
     expect(formatXTick(cfg, 40)).toBe("40%");
+  });
+
+  it("labels kaido division ticks when labels are set", () => {
+    const cfg = parseOutcomeConfig({
+      marketStyle: "kaido",
+      outcomeMin: 0,
+      outcomeMax: 10,
+      divisions: [3.33, 6.67],
+      divisionLabels: ["Dry", "Storm"],
+    })!;
+    expect(formatXTick(cfg, 3.33)).toBe("Dry");
+    expect(formatXTick(cfg, 5)).toBe("5");
   });
 
   it("defaults opening call to midpoint", () => {

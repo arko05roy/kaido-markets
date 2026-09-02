@@ -20,6 +20,7 @@ function payloadFromInput(meta: MarketMetadataInput): MetadataPayload {
     ...(meta.outcomeMin != null ? { outcomeMin: meta.outcomeMin } : {}),
     ...(meta.outcomeMax != null ? { outcomeMax: meta.outcomeMax } : {}),
     ...(meta.divisions != null ? { divisions: meta.divisions } : {}),
+    ...(meta.divisionLabels != null ? { divisionLabels: meta.divisionLabels } : {}),
     ...(meta.optionLow != null ? { optionLow: meta.optionLow } : {}),
     ...(meta.optionHigh != null ? { optionHigh: meta.optionHigh } : {}),
   };

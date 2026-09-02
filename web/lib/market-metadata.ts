@@ -13,6 +13,7 @@ export interface SavedMarketMetadata {
   readonly outcomeMin?: number;
   readonly outcomeMax?: number;
   readonly divisions?: number[];
+  readonly divisionLabels?: string[];
   readonly optionLow?: string;
   readonly optionHigh?: string;
 }

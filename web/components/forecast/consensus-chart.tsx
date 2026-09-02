@@ -31,6 +31,7 @@ export function ConsensusChart({
       outcomeMin: view.outcomeMin,
       outcomeMax: view.outcomeMax,
       divisions: view.divisions,
+      divisionLabels: view.divisionLabels,
       optionLow: view.optionLow,
       optionHigh: view.optionHigh,
     });

@@ -16,6 +16,7 @@ export async function POST(
     outcomeMin?: number;
     outcomeMax?: number;
     divisions?: number[];
+    divisionLabels?: string[];
     optionLow?: string;
     optionHigh?: string;
   };
@@ -42,6 +43,9 @@ export async function POST(
       ...(typeof body.outcomeMin === "number" ? { outcomeMin: body.outcomeMin } : {}),
       ...(typeof body.outcomeMax === "number" ? { outcomeMax: body.outcomeMax } : {}),
       ...(Array.isArray(body.divisions) ? { divisions: body.divisions } : {}),
+      ...(Array.isArray(body.divisionLabels)
+        ? { divisionLabels: body.divisionLabels.map((s) => String(s).trim()) }
+        : {}),
       ...(typeof body.optionLow === "string" ? { optionLow: body.optionLow.trim() } : {}),
       ...(typeof body.optionHigh === "string" ? { optionHigh: body.optionHigh.trim() } : {}),
     });

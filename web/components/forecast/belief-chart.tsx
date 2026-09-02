@@ -202,6 +202,7 @@ export function BeliefChart(props: BeliefChartProps) {
             type="number"
             domain={[props.range.min, props.range.max]}
             ticks={props.xTicks}
+            padding={{ left: 16, right: 16 }}
             tickFormatter={(v) => (props.formatXTick ? props.formatXTick(Number(v)) : fmtNum(Number(v)))}
             tick={AXIS_TICK}
             stroke="rgba(255,255,255,0.15)"

@@ -67,6 +67,7 @@ export interface TradeMarketView {
   outcomeMin?: number;
   outcomeMax?: number;
   divisions?: number[];
+  divisionLabels?: string[];
   optionLow?: string;
   optionHigh?: string;
 }
@@ -260,6 +261,7 @@ export function TradePanel({
         outcomeMin: market.outcomeMin,
         outcomeMax: market.outcomeMax,
         divisions: market.divisions,
+        divisionLabels: market.divisionLabels,
         optionLow: market.optionLow,
         optionHigh: market.optionHigh,
       }),
@@ -268,6 +270,7 @@ export function TradePanel({
       market.outcomeMin,
       market.outcomeMax,
       market.divisions,
+      market.divisionLabels,
       market.optionLow,
       market.optionHigh,
     ],
