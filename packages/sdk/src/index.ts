@@ -275,18 +275,26 @@ export class Kaido {
 
   // --- reads --------------------------------------------------------------
 
-  /** Live params + state for a market (simulate-only, no signer needed). */
+  /**
+   * Live params + state for a market (simulate-only, no signer needed).
+   * `beliefs` is the per-checkpoint consensus for a trajectory market, or
+   * `[state.belief]` for a scalar market (so callers always get an array).
+   */
   async getMarket(marketId: string): Promise<{
     params: distributionMarket.MarketParams;
     state: distributionMarket.MarketState;
     beliefs: distributionMarket.Belief[];
   }> {
     const c = this.market(marketId);
-    const [params, state, beliefs] = await Promise.all([
+    const [params, state] = await Promise.all([
       c.get_params().then((t) => t.result),
       c.get_state().then((t) => t.result),
-      c.get_beliefs().then((t) => t.result as distributionMarket.Belief[]),
     ]);
+    let beliefs: distributionMarket.Belief[] = [state.belief];
+    if (params.outcome_space.tag === "Trajectory") {
+      const raw = (await c.get_beliefs()).result;
+      if (Array.isArray(raw) && raw.length > 0) beliefs = raw as distributionMarket.Belief[];
+    }
     return { params, state, beliefs };
   }
 
