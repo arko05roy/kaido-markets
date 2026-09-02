@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/provider";
 import { fromWad, type GaussianBelief } from "@/lib/curve";
+import { savePosition } from "@/lib/positions";
 
 /** Serialisable view of the market the panel trades against (built server-side). */
 export interface TradeMarketView {
@@ -38,7 +39,16 @@ export interface TradeMarketView {
 
 const USDC_DECIMALS = 7;
 
-export function TradePanel({ config, market }: { config: KaidoConfig; market: TradeMarketView }) {
+export function TradePanel({
+  config,
+  market,
+  onPositionOpened,
+}: {
+  config: KaidoConfig;
+  market: TradeMarketView;
+  /** Called after a position is opened (for settlement panel refresh). */
+  onPositionOpened?: (positionId: bigint) => void;
+}) {
   const { wallet, connecting } = useWallet();
   const kaido = useMemo(() => new Kaido(config), [config]);
 
@@ -85,6 +95,10 @@ export function TradePanel({ config, market }: { config: KaidoConfig; market: Tr
         );
       }
       setPositionId(id);
+      if (wallet) {
+        savePosition(config.network, wallet.signer.accountId, market.address, id);
+        onPositionOpened?.(id);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "trade failed");
     } finally {

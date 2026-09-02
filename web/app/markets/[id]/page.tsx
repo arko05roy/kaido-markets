@@ -8,8 +8,11 @@ import { type KaidoConfig } from "@kaido/sdk";
 import Link from "next/link";
 
 import { ConsensusChart } from "@/components/forecast/consensus-chart";
-import { TradePanel, type TradeMarketView } from "@/components/forecast/trade-panel";
+import { type TradeMarketView } from "@/components/forecast/trade-panel";
 import { RecentActivity } from "@/components/market/recent-activity";
+import { type SettlementMarketView } from "@/components/market/settlement-panel";
+
+import { MarketActions } from "./market-actions";
 import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 import {
@@ -69,6 +72,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
         params: MarketParams;
         state: MarketState;
         view: TradeMarketView;
+        settlement: SettlementMarketView;
         resolved: string[];
       }
     | null = null;
@@ -103,7 +107,16 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       checkpoints: checkpoints.map((c) => Number(c)),
       tradingOpen: state.status.tag === "Open",
     };
-    data = { info, params: mp, state, view, resolved };
+    const settlement: SettlementMarketView = {
+      address: id,
+      kind: isTraj ? "trajectory" : "scalar",
+      statusTag: state.status.tag,
+      windowOpen: Number(mp.window.open),
+      windowLock: Number(mp.window.lock),
+      windowResolve: Number(mp.window.resolve),
+      resolvedWad: resolved.length ? resolved : undefined,
+    };
+    data = { info, params: mp, state, view, settlement, resolved };
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -154,7 +167,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
 
           {config ? (
             <section>
-              <TradePanel config={config} market={data.view} />
+              <MarketActions config={config} tradeMarket={data.view} settlementMarket={data.settlement} />
             </section>
           ) : (
             <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">

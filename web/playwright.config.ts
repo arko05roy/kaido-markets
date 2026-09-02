@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // E2E runs against a locally-built app in Sprint 0 (build.md §6 item 8 / §5
-// Sprint 0). Later sprints add the passkey journey, ChartGuessr round, the
+// Sprint 0). Later sprints add the passkey journey, market trade/settle round, the
 // create-a-market wizard, etc., against testnet with seeded markets.
 const PORT = 3100;
 

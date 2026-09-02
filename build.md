@@ -6,6 +6,8 @@
 >
 > **Methodology:** 2‑week sprints, trunk-based-ish with short-lived feature branches, Definition of Done enforced by CI. Each sprint below lists *Goal → User stories → Engineering tasks → Tests/acceptance → Deliverable*.
 
+> **Pivot (2026-06):** ChartGuessr game layer removed. Product focus is a **simple distribution market** on `/markets` + `/create` (trade → resolve → claim). Trajectory markets stay on-chain; simplified trajectory UX is deferred. Uniswap-style LP is a future epic — minimal on-chain LP remains; HouseVault seeds liquidity for now.
+
 ---
 
 ## 0. Reference docs (read these before starting)
@@ -436,9 +438,11 @@ Engineering tasks:
 
 ---
 
-### Sprint 4 — ChartGuessr polish, HouseVault hardening, passkey onboarding, math hardening
+### Sprint 4 — Distribution market polish, settlement UI, HouseVault hardening, passkey onboarding, math hardening
 
-**Goal:** the wedge feels good; onboarding is ~10s; HouseVault risk-capped and dogfooded; math edge cases nailed. **End of this sprint ≈ Milestone 1 fully done + Milestone 2 well underway.**
+**Goal:** the core market loop feels complete on `/markets` (trade → resolve → claim); onboarding is ~10s; HouseVault risk-capped and dogfooded; math edge cases nailed. **End of this sprint ≈ Milestone 1 fully done + Milestone 2 well underway.**
+
+> **Pivot note:** ChartGuessr removed (2026-06). M1 deliverable reframed as **distribution market on testnet**, not a game wedge. Settlement panel + position persistence on `/markets/[id]` are in scope; ChartGuessr UX polish is out.
 
 User stories:
 - *As a new user, I log in with a passkey in ~10 seconds (no seed phrase) and play.*

@@ -32,7 +32,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Kaido",
   description:
-    "Kaido — a market for every number. Draw what you think happens; settle on-chain. Built on Stellar.",
+    "Kaido — permissionless distribution markets for any number. Trade beliefs; settle on-chain. Built on Stellar.",
 };
 
 export default function RootLayout({

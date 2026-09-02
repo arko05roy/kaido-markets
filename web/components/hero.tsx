@@ -475,7 +475,7 @@ function BellCurveChart() {
         transition={{ delay: 2.4, duration: 0.5 }}
         className="absolute right-8 top-8 hidden border border-[#d8c69a]/40 bg-[#0b0b0c]/85 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] backdrop-blur sm:block"
       >
-        <div className="text-[#d8c69a]">Your forecast</div>
+        <div className="text-[#d8c69a]">Your position</div>
         <div className="mt-1 text-white/55">μ 68.2k · σ 1.4k</div>
       </motion.div>
     </div>
@@ -610,8 +610,8 @@ function BetLifecycle() {
     },
     {
       title: "Position is a shape.",
-      label: "Forecast",
-      body: "You set where you think the number lands and how confident you are. The AMM prices your whole curve against the crowd — one position, one trade, one click.",
+      label: "Belief",
+      body: "You set where you think the number lands and how confident you are. The AMM prices your curve against the crowd — one position, one trade.",
     },
     {
       title: "Closer pays more.",

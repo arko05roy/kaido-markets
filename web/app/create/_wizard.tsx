@@ -71,6 +71,7 @@ export function CreateMarketWizard({
   const kaido = useMemo(() => new Kaido(config), [config]);
 
   const [mode, setMode] = useState<Mode>("scalar");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [k, setK] = useState("1");
   const [b, setB] = useState("1");
   const [feeBps, setFeeBps] = useState("30");
@@ -176,13 +177,41 @@ export function CreateMarketWizard({
       </header>
 
       <Field label="Outcome space">
-        <div className="flex gap-2">
-          {(["scalar", "trajectory"] as Mode[]).map((m) => (
-            <Button key={m} type="button" size="sm" variant={mode === m ? "default" : "outline"} onClick={() => setMode(m)}>
-              {m === "scalar" ? "Scalar (one value)" : "Trajectory (path)"}
+        <p className="text-sm text-muted-foreground">
+          Scalar — one resolved value (e.g. a price at a time, an election margin).
+        </p>
+        <details
+          className="mt-2 rounded-md border px-3 py-2"
+          open={showAdvanced}
+          onToggle={(e) => {
+            const open = (e.target as HTMLDetailsElement).open;
+            setShowAdvanced(open);
+            if (!open) setMode("scalar");
+          }}
+        >
+          <summary className="cursor-pointer text-sm font-medium">Advanced — trajectory markets</summary>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Multiple checkpoints sharing one collateral pool. Technical μ/σ per checkpoint — simplified UX later.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "scalar" ? "default" : "outline"}
+              onClick={() => setMode("scalar")}
+            >
+              Scalar
             </Button>
-          ))}
-        </div>
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "trajectory" ? "default" : "outline"}
+              onClick={() => setMode("trajectory")}
+            >
+              Trajectory
+            </Button>
+          </div>
+        </details>
       </Field>
 
       <div className="grid grid-cols-3 gap-3">

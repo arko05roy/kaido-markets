@@ -154,7 +154,7 @@ pub trait Resolver {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ResolverTier {
     /// **T0** — reads a robust on-chain price feed (Reflector SEP-40). The
-    /// launch tier (ChartGuessr-on-BTC).
+    /// default tier for on-chain price feeds (e.g. Reflector BTC/USD).
     Reflector = 0,
     /// **T1** — a signed report from a permissioned poster, with a challenge
     /// window.

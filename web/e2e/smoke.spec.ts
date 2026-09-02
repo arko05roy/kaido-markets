@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 test("landing page renders", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Kaido" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "ChartGuessr" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Markets" })).toBeVisible();
 });
 
 test("health route reports ok", async ({ request }) => {

@@ -136,7 +136,7 @@ for c in ${CONTRACTS}; do
     resolver-reflector)
       # demo resolver (scalar mode): resolve_time = now+2h, 12-record TWAP,
       # no checkpoints. A second, trajectory-mode resolver is deployed below
-      # for the ChartGuessr demo market.
+      # for trajectory markets created via the factory.
       CTOR_ARGS=(-- --oracle "${REFLECTOR_FEED_ID}" \
         --asset "{\"Other\":\"${REFLECTOR_ASSET_SYMBOL}\"}" \
         --resolve-time "$(( $(date +%s) + 7200 ))" --twap-records 12 \
@@ -221,60 +221,6 @@ else
   echo "   (factory create_market failed — re-run manually)" >&2
 fi
 
-# --- demo: a trajectory ChartGuessr-on-BTC market (Sprint 3) -------------
-# Deploys a *second* resolver-reflector in trajectory mode (3 checkpoints on
-# the BTC feed), then `factory.create_trajectory_market` against it. The
-# resulting market id is what the web app's `NEXT_PUBLIC_CHARTGUESSR_MARKET`
-# points at; we also record it in the live-ids file under `demo`. A fresh
-# market every run (testnet resets — build.md §0a).
-echo "-- ChartGuessr trajectory demo ------------"
-T_NOW="$(date +%s)"
-CP1="$(( T_NOW + 600 ))"; CP2="$(( T_NOW + 1200 ))"; CP3="$(( T_NOW + 1800 ))"
-TJ_RESOLVE="$(( CP3 + 60 ))"
-TJ_OPEN="${T_NOW}"; TJ_LOCK="$(( CP3 - 60 ))"
-CHECKPOINTS_JSON="[${CP1},${CP2},${CP3}]"
-# Initial consensus: seed flat at ~the *live* BTC price (read off the same
-# Reflector feed the resolver uses), σ ≈ 0.1% of price — so the ChartGuessr
-# chart's y-axis sits around the real price instead of a meaningless μ=50.
-# Falls back to μ=50, σ=1 if the feed read fails (still a valid non-degenerate
-# seed; traders move the curve anyway).
-CG_BTC_DEC="$(stellar contract invoke --id "${REFLECTOR_FEED_ID}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- decimals 2>/dev/null | tr -dc 0-9 || true)"
-CG_BTC_RAW="$(stellar contract invoke --id "${REFLECTOR_FEED_ID}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
-  -- lastprice --asset "{\"Other\":\"${REFLECTOR_ASSET_SYMBOL}\"}" 2>/dev/null \
-  | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{try{const o=JSON.parse(s);process.stdout.write(o&&o.price?String(o.price):"")}catch{process.stdout.write("")}})' 2>/dev/null || true)"
-CG_MU="$(node -e "const r=BigInt('${CG_BTC_RAW:-0}'||'0'),d=parseInt('${CG_BTC_DEC:-14}',10)||14;const w=r<=0n?0n:(d<18?r*(10n**BigInt(18-d)):r/(10n**BigInt(d-18)));process.stdout.write(w>0n?w.toString():'${MU0_18}')" 2>/dev/null || echo "${MU0_18}")"
-CG_SIG="$(node -e "const m=BigInt('${CG_MU}'||'0');const s=m/1000n;const fl=${WAD18}n;process.stdout.write((s>fl?s:fl).toString())" 2>/dev/null || echo "${WAD18}")"
-if [[ "${CG_MU}" == "${MU0_18}" ]]; then
-  echo "   (live BTC price unavailable — seeding consensus at μ=50)" >&2
-else
-  echo "   seeding ChartGuessr consensus at μ ≈ ${CG_MU} WAD (≈ live BTC), σ ≈ ${CG_SIG} WAD"
-fi
-MUS0_JSON="[\"${CG_MU}\",\"${CG_MU}\",\"${CG_MU}\"]"
-SIGMAS0_JSON="[\"${CG_SIG}\",\"${CG_SIG}\",\"${CG_SIG}\"]"
-CHARTGUESSR_RESOLVER=""
-CHARTGUESSR_MARKET=""
-if CHARTGUESSR_RESOLVER="$(stellar contract deploy --wasm-hash "${HASH_resolver_reflector}" \
-     --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-     -- --oracle "${REFLECTOR_FEED_ID}" --asset "{\"Other\":\"${REFLECTOR_ASSET_SYMBOL}\"}" \
-        --resolve-time "${TJ_RESOLVE}" --twap-records 1 --checkpoints "${CHECKPOINTS_JSON}" 2>/dev/null)"; then
-  echo "   trajectory resolver : ${CHARTGUESSR_RESOLVER}"
-  if CHARTGUESSR_MARKET="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-       -- create_trajectory_market \
-          --creator "${DEPLOYER_ADDR}" \
-          --k "${WAD18}" --b "${B18}" --fee-bps 30 \
-          --resolver "${CHARTGUESSR_RESOLVER}" --tier 0 \
-          --checkpoints "${CHECKPOINTS_JSON}" \
-          --window-open "${TJ_OPEN}" --window-lock "${TJ_LOCK}" --window-resolve "${TJ_RESOLVE}" \
-          --mus0 "${MUS0_JSON}" --sigmas0 "${SIGMAS0_JSON}" 2>/dev/null)"; then
-    CHARTGUESSR_MARKET="${CHARTGUESSR_MARKET//\"/}"
-    echo "   chartguessr market  : ${CHARTGUESSR_MARKET}"
-  else
-    echo "   (create_trajectory_market failed — re-run manually)" >&2
-  fi
-else
-  echo "   (trajectory resolver deploy failed — re-run manually)" >&2
-fi
-
 json_or_null() { [[ -n "$1" ]] && printf '"%s"' "$1" || printf 'null'; }
 
 # --- write the live-ids file --------------------------------------------
@@ -293,10 +239,6 @@ cat > "${OUT}" <<EOF
     "reflectorFeedId": $(json_or_null "${REFLECTOR_FEED_ID}"),
     "adminAddress": $(json_or_null "${ADMIN_ADDRESS}")
   },
-  "demo": {
-    "chartGuessrMarket": $(json_or_null "${CHARTGUESSR_MARKET}"),
-    "chartGuessrResolver": $(json_or_null "${CHARTGUESSR_RESOLVER}")
-  },
   "contracts": {${CONTRACTS_JSON}
   }
 }
@@ -304,10 +246,3 @@ EOF
 
 echo
 echo "OK: deployed ${N} contracts to ${NETWORK}; wrote ${OUT#${ROOT}/}"
-if [[ -n "${CHARTGUESSR_MARKET}" ]]; then
-  echo
-  echo "ChartGuessr demo market: ${CHARTGUESSR_MARKET}"
-  echo "  point the web app at it with:"
-  echo "    export NEXT_PUBLIC_CHARTGUESSR_MARKET=${CHARTGUESSR_MARKET}"
-  echo "  (or it's picked up automatically from ${OUT#${ROOT}/} \"demo.chartGuessrMarket\")"
-fi

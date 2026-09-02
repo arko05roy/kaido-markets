@@ -32,11 +32,6 @@ export interface DeployedConfig {
     readonly reflectorFeedId: string | null;
     readonly adminAddress: string | null;
   };
-  /** Demo artifacts written by the deploy script (a fresh ChartGuessr market each run). */
-  readonly demo: {
-    readonly chartGuessrMarket: string | null;
-    readonly chartGuessrResolver: string | null;
-  };
 }
 
 const ENV_KEYS: Record<keyof DeployedContracts, string> = {
@@ -68,12 +63,10 @@ export function deployedConfig(): DeployedConfig {
     reflectorFeedId: null,
     adminAddress: null,
   };
-  let demo: DeployedConfig["demo"] = { chartGuessrMarket: null, chartGuessrResolver: null };
   try {
     const raw = JSON.parse(readFileSync(file, "utf8")) as {
       contracts?: Record<string, { id?: string }>;
       external?: Partial<DeployedConfig["external"]>;
-      demo?: Partial<DeployedConfig["demo"]>;
     };
     if (raw.contracts) {
       for (const key of Object.keys(ENV_KEYS) as (keyof DeployedContracts)[]) {
@@ -86,12 +79,6 @@ export function deployedConfig(): DeployedConfig {
         usdcSacId: raw.external.usdcSacId ?? null,
         reflectorFeedId: raw.external.reflectorFeedId ?? null,
         adminAddress: raw.external.adminAddress ?? null,
-      };
-    }
-    if (raw.demo) {
-      demo = {
-        chartGuessrMarket: raw.demo.chartGuessrMarket ?? null,
-        chartGuessrResolver: raw.demo.chartGuessrResolver ?? null,
       };
     }
   } catch {
@@ -114,5 +101,5 @@ export function deployedConfig(): DeployedConfig {
     );
   }
 
-  return { network, contracts: contracts as DeployedContracts, external, demo };
+  return { network, contracts: contracts as DeployedContracts, external };
 }

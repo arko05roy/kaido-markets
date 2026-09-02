@@ -2,7 +2,7 @@
   "name": "kaido",
   "private": true,
   "version": "0.0.0",
-  "description": "Kaido — permissionless distribution markets on Stellar/Soroban, with ChartGuessr-on-BTC as the launch wedge.",
+  "description": "Kaido — permissionless distribution markets on Stellar/Soroban.",
   "engines": {
     "node": ">=22"
   },
