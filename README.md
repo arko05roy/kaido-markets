@@ -23,6 +23,14 @@ Bet on where a number lands — not whether it crosses a line.
 
 ---
 
+## Live Links
+
+- Production app: https://kaido-cyan.vercel.app/
+- X / launch profile: https://x.com/kaidomarkets
+- X / launch post: https://x.com/kaidomarkets/status/2068592591051071557?s=20
+
+---
+
 ## Demo Video
 
 - [Product walkthrough — voiceover](https://youtu.be/OgPWWf3nyto)
@@ -34,6 +42,53 @@ Bet on where a number lands — not whether it crosses a line.
 
 Sheet - https://docs.google.com/spreadsheets/d/1YQnSM6HBn1tFuu6D_6AYoWhP4ogM74c3DbehD4FayIg/edit?usp=sharing
 Summary - https://docs.google.com/document/d/1B0UL2CXzapLUw3I7YVD1kcKL8YDNTikY_bHcfkiMxyk/edit?usp=sharing
+
+## User Feedback Summary
+
+Kaido collected 64 user signups and feedback responses from early interested users.
+
+### What users want most
+
+1. Simple and easy-to-use prediction markets.
+2. Crypto, sports, and live-event markets.
+3. Early-access rewards such as whitelist spots, airdrops, and community incentives.
+4. Real-time insights including market analytics, sentiment, and better decision support.
+5. A fast, smooth, secure, and cheap product experience.
+
+### Main user groups
+
+- The degen user: wants rewards, profits, and high-volatility markets.
+- The crypto trader: wants token-price, DeFi, and ecosystem-event markets.
+- The casual explorer: wants a simple way to try prediction markets without deep prior knowledge.
+- The power user: wants live markets, advanced strategies, and better analytics.
+- The community promoter: wants early access and is willing to share Kaido on X.
+
+### Feature demand seen in the feedback
+
+- Crypto price prediction markets
+- Sports and live-event prediction markets
+- Real-time market analytics
+- DeFi-focused markets
+- Cross-chain market ideas
+- Simple market discovery
+- Reward and referral systems
+- Secure wallet integration
+- Fast settlement
+
+### Problems visible in the feedback
+
+Many responses are high intent but low detail, including short entries such as "bullish", "gib WL", or reward-focused replies. That suggests strong curiosity and speculative interest, but also a product-education gap. Some responses should be treated as low-quality feedback when prioritizing roadmap work.
+
+### Overall conclusion
+
+The strongest product direction is clear: Kaido should position itself as a simple, fast, degen-friendly prediction-market app for crypto, sports, and live events, while improving onboarding so reward-seeking early users convert into real active traders.
+
+## Next Phase Improvements Based on Feedback
+
+- Improve onboarding and first-trade clarity so new users understand the belief-curve model faster. Related commits: [47a06a2](https://github.com/aarambhlabs/kaido/commit/47a06a2), [c2d0058](https://github.com/aarambhlabs/kaido/commit/c2d0058), [46ee295](https://github.com/aarambhlabs/kaido/commit/46ee295)
+- Expand high-interest market categories, especially crypto and live-event flows. Related commits: [6372500](https://github.com/aarambhlabs/kaido/commit/6372500), [7a75fed](https://github.com/aarambhlabs/kaido/commit/7a75fed)
+- Strengthen wallet, position-tracking, and smoother trading UX for repeat users. Related commits: [a0094b6](https://github.com/aarambhlabs/kaido/commit/a0094b6), [7ae9d61](https://github.com/aarambhlabs/kaido/commit/7ae9d61)
+- Keep hardening contract safety before broader mainnet exposure. Related commits: [32144e2](https://github.com/aarambhlabs/kaido/commit/32144e2), [0f1dff1](https://github.com/aarambhlabs/kaido/commit/0f1dff1)
 
 ## Description
 
@@ -81,6 +136,19 @@ A tight prediction can produce a larger payout when accurate. A wider prediction
 > **Network:** Stellar Public Mainnet
 
 This is Kaido's mainnet pilot deployment of the core distribution-market contract.
+
+## Security Review and Audit Documentation
+
+Kaido's repository includes an internal contract audit findings and remediation
+plan covering collateral sizing, settlement accounting, LP withdrawals,
+trajectory markets, resolver disputes, oracle reads, numeric bounds, and release
+hygiene:
+
+- [Contract audit findings and fix plan](docs/contract-audit-fixes.md)
+- [Audit regression tests](contracts/crates/kaido-math/src/tests_oracle.rs)
+
+This documentation represents an internal security review and remediation
+record. It is not presented as a completed independent third-party audit.
 
 ---
 
@@ -240,5 +308,3 @@ Anyone can create a market and anyone can take a position. The protocol earns a 
 11. After the resolver submits the final number, the contract calculates and settles your payout.
 
 ---
-
-
