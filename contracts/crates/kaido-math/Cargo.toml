@@ -1,0 +1,15 @@
+[package]
+name = "kaido-math"
+description = "Deterministic fixed-point math for Kaido: exp, erf, Gaussian L²-norm, λ-scaling, worst-case collateral. no_std, no f64 anywhere."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# Plain Rust library — linked into the contract crates, not a contract itself.
+crate-type = ["rlib"]
+
+[dependencies]
+# Fixed-point primitives land here in Sprint 1 (soroban-fixed-point-math).
+# Kept dependency-free in Sprint 0 so the empty crate stays trivially no_std.

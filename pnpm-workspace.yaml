@@ -1,0 +1,11 @@
+packages:
+  - "web"
+  - "packages/*"
+
+# Allow these packages to run install scripts (native binaries / postinstall).
+# esbuild backs Vitest; sharp is Next's image optimiser; unrs-resolver backs
+# the ESLint import resolver.
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - unrs-resolver

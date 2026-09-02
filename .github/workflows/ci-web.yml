@@ -1,0 +1,75 @@
+name: ci-web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "packages/**"
+      - "config/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "turbo.json"
+      - ".github/workflows/ci-web.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "packages/**"
+      - "config/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "turbo.json"
+      - ".github/workflows/ci-web.yml"
+
+concurrency:
+  group: ci-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck-build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm turbo run lint
+
+      - name: Typecheck
+        run: pnpm turbo run typecheck
+
+      - name: Build
+        run: pnpm turbo run build
+
+      - name: Unit tests (Vitest)
+        run: pnpm turbo run test
+
+      - name: pnpm audit
+        run: pnpm audit --audit-level high || true
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Playwright smoke
+        run: pnpm --filter web e2e

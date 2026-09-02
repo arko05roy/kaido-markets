@@ -1,0 +1,23 @@
+{
+  "name": "kaido",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Kaido — permissionless distribution markets on Stellar/Soroban, with ChartGuessr-on-BTC as the launch wedge.",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "dev": "turbo run dev",
+    "contracts:build": "cargo make --cwd contracts build-wasm",
+    "contracts:test": "cargo make --cwd contracts test",
+    "localnet": "make localnet"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.8"
+  }
+}

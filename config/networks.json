@@ -1,0 +1,30 @@
+{
+  "$comment": "Static, public network parameters. Source of truth: https://developers.stellar.org/docs/networks — keep web/lib/stellar/networks.ts and contracts/network.toml in sync with this file. Per-network contract ids (USDC SAC, Reflector feed, deployed Kaido contracts, admin multisig, Launchtube) are NOT stored here; they are resolved at deploy time and written by the deploy scripts. Testnet resets ~2-4x/year (next: 2026-06-17, 2026-12-16) — nothing off-chain may treat a testnet contract id as permanent.",
+  "networks": {
+    "local": {
+      "networkPassphrase": "Standalone Network ; February 2017",
+      "rpcUrl": "http://localhost:8000/rpc",
+      "horizonUrl": "http://localhost:8000",
+      "friendbotUrl": "http://localhost:8000/friendbot"
+    },
+    "testnet": {
+      "networkPassphrase": "Test SDF Network ; September 2015",
+      "rpcUrl": "https://soroban-testnet.stellar.org",
+      "horizonUrl": "https://horizon-testnet.stellar.org",
+      "friendbotUrl": "https://friendbot.stellar.org"
+    },
+    "futurenet": {
+      "networkPassphrase": "Test SDF Future Network ; October 2022",
+      "rpcUrl": "https://rpc-futurenet.stellar.org",
+      "horizonUrl": "https://horizon-futurenet.stellar.org",
+      "friendbotUrl": "https://friendbot-futurenet.stellar.org"
+    },
+    "mainnet": {
+      "networkPassphrase": "Public Global Stellar Network ; September 2015",
+      "rpcUrl": null,
+      "horizonUrl": null,
+      "friendbotUrl": null,
+      "$comment": "Mainnet has no canonical public RPC/Horizon — use a third-party provider (https://developers.stellar.org/docs/data/apis/rpc/providers) and set RPC_URL/HORIZON_URL via .env. Mainnet does not reset."
+    }
+  }
+}

@@ -1,0 +1,7 @@
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+# Soroban contracts build to the bare-metal wasm target. (cargo-fuzz in fuzz/
+# pulls its own nightly toolchain on demand and is outside this workspace.)
+targets = ["wasm32v1-none"]
+profile = "minimal"

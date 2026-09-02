@@ -1,0 +1,33 @@
+# Network parameters for the Stellar CLI / deploy scripts.
+# Source of truth: https://developers.stellar.org/docs/networks
+# Mirrors ../config/networks.json — keep the two (and web/lib/stellar/networks.ts) in sync.
+# Per-network contract ids (USDC SAC, Reflector feed, deployed Kaido contracts,
+# admin multisig, Launchtube) are NOT here — they are resolved at deploy time
+# and written to ../config/networks.<network>.json by scripts/deploy.sh.
+
+[local]
+network_passphrase = "Standalone Network ; February 2017"
+rpc_url = "http://localhost:8000/rpc"
+horizon_url = "http://localhost:8000"
+friendbot_url = "http://localhost:8000/friendbot"
+
+[testnet]
+network_passphrase = "Test SDF Network ; September 2015"
+rpc_url = "https://soroban-testnet.stellar.org"
+horizon_url = "https://horizon-testnet.stellar.org"
+friendbot_url = "https://friendbot.stellar.org"
+# Testnet resets ~2-4x/year at 17:00 UTC, announced ≥2 weeks ahead.
+# Scheduled 2026 resets: 2026-06-17, 2026-12-16. A reset wipes all state.
+
+[futurenet]
+network_passphrase = "Test SDF Future Network ; October 2022"
+rpc_url = "https://rpc-futurenet.stellar.org"
+horizon_url = "https://horizon-futurenet.stellar.org"
+friendbot_url = "https://friendbot-futurenet.stellar.org"
+
+[mainnet]
+network_passphrase = "Public Global Stellar Network ; September 2015"
+# Mainnet has no canonical public RPC/Horizon — use a third-party provider
+# (https://developers.stellar.org/docs/data/apis/rpc/providers) via RPC_URL.
+rpc_url = ""
+horizon_url = ""

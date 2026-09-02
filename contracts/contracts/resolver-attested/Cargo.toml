@@ -1,0 +1,17 @@
+[package]
+name = "resolver-attested"
+description = "Resolver T1 — verifies a signed report from a permissioned poster, with a challenge window."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+kaido-common = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

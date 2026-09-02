@@ -1,0 +1,66 @@
+name: deploy-testnet
+
+# Manual, scripted, idempotent deploy of the whole contract suite to Stellar
+# Testnet. Re-running re-deploys everything and rewrites config/networks.testnet.json
+# (build.md §0a) — nothing off-chain may treat a testnet contract id as
+# permanent (testnet resets ~2-4×/year; next: 2026-06-17, 2026-12-16).
+#
+# Sprint 0: the deploy script (contracts/scripts/deploy.sh) is a scaffold; this
+# workflow wires the secrets/runner so it's ready when the real deploy lands in
+# Sprints 2–3.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reseed:
+        description: "Also re-seed demo/test fixtures after deploy"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-testnet
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: testnet
+    env:
+      STELLAR_NETWORK: testnet
+      RPC_URL: ${{ vars.TESTNET_RPC_URL }}
+      USDC_SAC_ID: ${{ vars.TESTNET_USDC_SAC_ID }}
+      REFLECTOR_FEED_ID: ${{ vars.TESTNET_REFLECTOR_FEED_ID }}
+      ADMIN_ADDRESS: ${{ vars.TESTNET_ADMIN_ADDRESS }}
+      LAUNCHTUBE_URL: ${{ vars.TESTNET_LAUNCHTUBE_URL }}
+      LAUNCHTUBE_JWT: ${{ secrets.TESTNET_LAUNCHTUBE_JWT }}
+      DEPLOYER_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+      - name: Install Stellar CLI + cargo-make
+        run: |
+          curl -sSfL https://github.com/stellar/stellar-cli/releases/latest/download/stellar-cli-installer.sh | sh -s -- -y \
+            || cargo install --locked stellar-cli
+          cargo install --locked cargo-make
+
+      - name: Build wasm
+        run: cargo make --cwd contracts build-wasm
+
+      - name: Deploy suite to testnet
+        run: make deploy:testnet
+
+      - name: Re-seed fixtures
+        if: ${{ inputs.reseed }}
+        run: make seed:testnet
+
+      - name: Upload live network config
+        uses: actions/upload-artifact@v4
+        with:
+          name: networks.testnet.json
+          path: config/networks.testnet.json
+          if-no-files-found: warn

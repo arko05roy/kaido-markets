@@ -1,0 +1,19 @@
+/* Shared Tailwind v4 theme tokens for Kaido.
+ * Tailwind v4 is CSS-first — there is no JS "preset"; consumers `@import` this
+ * file after `@import "tailwindcss"`. Brand palette is provisional (Sprint 0);
+ * the canvas/result-card components will tighten it in later sprints.
+ */
+@theme {
+  /* Brand */
+  --color-kaido-50: oklch(0.97 0.02 250);
+  --color-kaido-500: oklch(0.62 0.18 255);
+  --color-kaido-600: oklch(0.55 0.19 255);
+  --color-kaido-900: oklch(0.28 0.09 258);
+
+  /* Semantic accents used by market UI */
+  --color-up: oklch(0.72 0.17 150);
+  --color-down: oklch(0.63 0.21 25);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}

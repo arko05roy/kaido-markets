@@ -1,0 +1,25 @@
+{
+  "name": "@kaido/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared ESLint / TypeScript / Tailwind configuration for the Kaido monorepo.",
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint.config.mjs",
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tailwind-theme.css": "./tailwind-theme.css"
+  },
+  "files": [
+    "eslint.config.mjs",
+    "tsconfig.base.json",
+    "tailwind-theme.css"
+  ],
+  "dependencies": {
+    "@eslint/js": "^9",
+    "typescript-eslint": "^8"
+  },
+  "peerDependencies": {
+    "eslint": "^9",
+    "typescript": "^5"
+  }
+}

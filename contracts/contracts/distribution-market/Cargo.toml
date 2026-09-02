@@ -1,0 +1,18 @@
+[package]
+name = "distribution-market"
+description = "DistributionMarket — the per-market AMM holding an aggregate Gaussian belief (μ, σ, λ); trading, collateralisation, settlement."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+kaido-common = { workspace = true }
+kaido-math = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

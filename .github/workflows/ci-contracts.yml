@@ -1,0 +1,66 @@
+name: ci-contracts
+
+on:
+  push:
+    branches: [main]
+    paths: ["contracts/**", ".github/workflows/ci-contracts.yml"]
+  pull_request:
+    paths: ["contracts/**", ".github/workflows/ci-contracts.yml"]
+
+concurrency:
+  group: ci-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: contracts
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # contracts/rust-toolchain.toml pins the channel + the wasm32v1-none target.
+      - name: Install Rust (from rust-toolchain.toml)
+        run: |
+          rustup show
+          rustup component add rustfmt clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      - name: Install Stellar CLI
+        run: |
+          curl -sSfL https://github.com/stellar/stellar-cli/releases/latest/download/stellar-cli-installer.sh | sh -s -- -y \
+            || cargo install --locked stellar-cli
+          stellar --version
+
+      - name: Install cargo-make
+        run: cargo install --locked cargo-make
+
+      - name: fmt
+        run: cargo make fmt
+
+      - name: clippy (-D warnings)
+        run: cargo make clippy
+
+      - name: test
+        run: cargo make test
+
+      - name: build wasm
+        run: cargo make build-wasm
+
+      - name: stellar contract build (sanity)
+        working-directory: .
+        run: stellar contract build
+
+      - name: cargo audit
+        run: cargo install --locked cargo-audit && cargo audit || true
+
+      # Time-boxed fuzz smoke + the TS-bindings staleness check land in Sprint 2
+      # and Sprint 3 respectively (build.md §5/§6). The infrastructure
+      # (contracts/fuzz/, `cargo make bindings`) is already in place.
+      - name: fuzz smoke (placeholder until Sprint 2)
+        run: echo "no fuzz targets yet — see contracts/fuzz/README.md"

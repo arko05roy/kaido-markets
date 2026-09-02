@@ -1,0 +1,112 @@
+# cargo-make tasks for the Kaido Soroban workspace.
+#   cargo make build-wasm     -> build every contract crate to wasm32v1-none
+#   cargo make optimize       -> stellar-CLI-optimise every built .wasm
+#   cargo make test           -> native cargo test across the workspace
+#   cargo make fmt / clippy   -> formatting + lint gates (clippy is -D warnings)
+#   cargo make bindings       -> generate TS bindings into ../packages/contract-bindings
+#   cargo make deploy         -> run the deploy script for $STELLAR_NETWORK
+# Run from the `contracts/` directory (or `cargo make --cwd contracts <task>`).
+
+[config]
+default_to_workspace = false
+skip_core_tasks = true
+
+[env]
+WASM_TARGET = "wasm32v1-none"
+# All contract crates that emit a cdylib .wasm. Keep in sync with contracts/*.
+CONTRACT_CRATES = "market-factory distribution-market house-vault registry resolver-reflector resolver-attested resolver-optimistic resolver-designated"
+WASM_OUT_DIR = "target/${WASM_TARGET}/release"
+
+[tasks.default]
+alias = "ci"
+
+# --- build ----------------------------------------------------------------
+
+[tasks.build-wasm]
+description = "Build all contract crates to WASM (release)."
+command = "cargo"
+args = ["build", "--release", "--target", "${WASM_TARGET}",
+        "-p", "market-factory",
+        "-p", "distribution-market",
+        "-p", "house-vault",
+        "-p", "registry",
+        "-p", "resolver-reflector",
+        "-p", "resolver-attested",
+        "-p", "resolver-optimistic",
+        "-p", "resolver-designated"]
+
+[tasks.optimize]
+description = "Optimise every built .wasm with the Stellar CLI."
+dependencies = ["build-wasm"]
+script_runner = "@shell"
+script = '''
+set -e
+for c in ${CONTRACT_CRATES}; do
+  f="${WASM_OUT_DIR}/$(echo "$c" | tr '-' '_').wasm"
+  echo "optimize $f"
+  stellar contract optimize --wasm "$f"
+done
+'''
+
+# --- quality gates --------------------------------------------------------
+
+[tasks.fmt]
+description = "Check formatting."
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+
+[tasks.fmt-fix]
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.clippy]
+description = "Clippy with warnings denied."
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+
+[tasks.test]
+description = "Native unit + integration tests across the workspace."
+command = "cargo"
+args = ["test", "--workspace"]
+
+[tasks.ci]
+description = "Everything CI runs: fmt + clippy + test + wasm build."
+dependencies = ["fmt", "clippy", "test", "build-wasm"]
+
+# --- bindings -------------------------------------------------------------
+# Regenerates the committed TS bindings. CI runs this and fails if the tree
+# is dirty afterwards (bindings-staleness check). Requires the contracts to be
+# built and (for now) takes the crate list; once deployed, prefer --network.
+
+[tasks.bindings]
+description = "Generate TS contract bindings into ../packages/contract-bindings."
+dependencies = ["build-wasm"]
+script_runner = "@shell"
+script = '''
+set -e
+out="../packages/contract-bindings/src"
+mkdir -p "$out"
+for c in ${CONTRACT_CRATES}; do
+  wasm="${WASM_OUT_DIR}/$(echo "$c" | tr '-' '_').wasm"
+  echo "bindings: $c"
+  stellar contract bindings typescript \
+    --wasm "$wasm" \
+    --output-dir "$out/$c" \
+    --overwrite
+done
+'''
+
+# --- deploy ---------------------------------------------------------------
+
+[tasks.deploy]
+description = "Deploy the contract suite to $STELLAR_NETWORK (scripted, idempotent)."
+script_runner = "@shell"
+script = '''
+set -e
+: "${STELLAR_NETWORK:?set STELLAR_NETWORK (local|testnet|futurenet|mainnet)}"
+exec ./scripts/deploy.sh "$STELLAR_NETWORK"
+'''
+
+[tasks.clean]
+command = "cargo"
+args = ["clean"]

@@ -1,0 +1,51 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/*",
+    "packages-common",
+    "contracts/*",
+    "tests",
+]
+# The fuzz crate uses the nightly toolchain and cargo-fuzz's own workspace
+# handling; it is excluded from the default workspace build.
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aarambhlabs/kaido"
+
+[workspace.dependencies]
+# Pinned for reproducible builds. soroban-sdk tracks the stellar-cli major
+# version (CLI 25.x ↔ soroban-sdk 25.x). Re-check the advisory list before
+# bumping (see build.md §0: CVE-2026-26267 re: #[contractimpl] name collisions).
+soroban-sdk = "=25.3.1"
+# script3 fixed-point math — i128/u128/I256/U256 mul_floor/mul_ceil/div_floor.
+soroban-fixed-point-math = "=1.5.0"
+# SEP-40 price oracle trait + mock (used by resolver-reflector).
+sep-40-oracle = "=1.4.0"
+# Internal crates.
+kaido-math = { path = "crates/kaido-math" }
+kaido-common = { path = "packages-common" }
+
+# NOTE: no workspace-level `unsafe_code = "forbid"` — the soroban-sdk
+# `#[contractimpl]` macro emits an `#[allow(unsafe_code)]` for its ctor entry,
+# which a `forbid` would reject (E0453). CI enforces lint cleanliness via
+# `cargo clippy -- -D warnings` instead. `kaido-math` (a pure crate) still
+# forbids unsafe at the crate level.
+
+# Release profile for WASM contracts — size-optimised, overflow-checked.
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true

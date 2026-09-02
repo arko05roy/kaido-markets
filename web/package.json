@@ -1,0 +1,48 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps"
+  },
+  "dependencies": {
+    "@kaido/contract-bindings": "workspace:*",
+    "@kaido/sdk": "workspace:*",
+    "@radix-ui/react-slot": "^1.1.2",
+    "@stellar/stellar-sdk": "^14.1.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.469.0",
+    "next": "16.2.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@kaido/config": "workspace:*",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.3.4",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "jsdom": "^25.0.1",
+    "tailwindcss": "^4",
+    "tw-animate-css": "^1.2.5",
+    "typescript": "^5",
+    "vitest": "^3.0.5",
+    "@playwright/test": "^1.50.1"
+  }
+}
