@@ -138,7 +138,7 @@ pub fn worst_case_collateral(g: (i128, i128, i128), f: (i128, i128, i128)) -> i1
     consider!(hi);
 
     // (a) global grid — captures crossover critical points.
-    const GLOBAL_GRID: i128 = 512;
+    const GLOBAL_GRID: i128 = 128;
     if hi > lo {
         let step = ((hi - lo) / GLOBAL_GRID).max(1);
         let mut x = lo;
@@ -180,7 +180,7 @@ pub fn worst_case_collateral(g: (i128, i128, i128), f: (i128, i128, i128)) -> i1
     let mut fc = d(c);
     let mut fe = d(e);
     let mut iter = 0;
-    while b - a > 1 && iter < 96 {
+    while b - a > 1 && iter < 64 {
         if fc < fe {
             b = e;
             e = c;

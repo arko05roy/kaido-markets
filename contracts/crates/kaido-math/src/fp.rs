@@ -69,9 +69,20 @@ fn div_u256_u128(hi: u128, lo: u128, d: u128) -> u128 {
     assert!(d != 0, "division by zero");
     assert!(hi < d, "fp::mul_div quotient overflows i128");
 
+    // Fast path: when the numerator already fits `u128`, this is just `lo / d`
+    // (the long division below would compute the same thing, 256 iterations the
+    // slow way). Most WAD-scale `mul_div` calls land here — and on Soroban the
+    // CPU-instruction budget makes the difference between an `add_liquidity` /
+    // `trade` simulation fitting or not.
+    if hi == 0 {
+        return lo / d;
+    }
+
+    // General case: start the bit scan at the numerator's true MSB rather than
+    // bit 255 — for ~1e38-scale numerators that's ~127 iterations, not 256.
     let mut rem: u128 = 0;
     let mut quo: u128 = 0;
-    let mut i: i32 = 255;
+    let mut i: i32 = (255 - hi.leading_zeros()) as i32;
     while i >= 0 {
         let bit = if i >= 128 {
             (hi >> (i - 128)) & 1
