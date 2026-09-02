@@ -21,6 +21,11 @@ Bet on where a number lands — not whether it crosses a line.
 
 [Whitepaper](./kaido-whitepaper.md) · [Build plan](./build.md) · [ADRs](./docs/adr/)
 
+## Demo videos
+
+- [Product walkthrough — no voice](https://youtu.be/ILiez9hhDGY)
+- [Product walkthrough — voiceover](https://youtu.be/OgPWWf3nyto)
+
 ---
 
 ## What is Kaido
@@ -268,6 +273,7 @@ written by `contracts/scripts/deploy.sh` into `config/networks.<network>.json`.
 ```bash
 make deploy:testnet      # scripted, idempotent — writes config/networks.testnet.json + fixtures.demoMarket
 make seed:testnet        # BlendTap authorize + optional lifecycle fixture (KAIDO_RESEED_LIFECYCLE=1)
+./contracts/scripts/generate-demo-wallets.sh 15  # writes wallet + activity reports with testnet tx links
 ```
 
 After seeding, optional env hints are printed (`NEXT_PUBLIC_KAIDO_DEMO_MARKET`, `NEXT_PUBLIC_KAIDO_LIFECYCLE_MARKET`).
@@ -290,6 +296,13 @@ Mainnet pilot deployment:
 This mainnet address was deployed as a minimal pilot contract only. Testnet
 remains unchanged, and the larger helper-suite / oracle wiring stays gated
 until you explicitly want it enabled.
+
+### wallet activity
+
+For wallet activity, see:
+
+- `docs/wallets.testnet.md` for wallet addresses
+- `docs/wallet-activity.testnet.md` for testnet transaction links
 
 ---
 
