@@ -3,8 +3,7 @@ resolver = "2"
 members = [
     "crates/*",
     "packages-common",
-    "contracts/*",
-    "tests",
+    "contracts/distribution-market",
 ]
 # The fuzz crate uses the nightly toolchain and cargo-fuzz's own workspace
 # handling; it is excluded from the default workspace build.
@@ -28,8 +27,6 @@ sep-40-oracle = "=1.4.0"
 # Internal crates.
 kaido-math = { path = "crates/kaido-math" }
 kaido-common = { path = "packages-common" }
-# Blend Protocol — pool clients + testutils (protocol 25 / soroban-sdk 25).
-blend-contract-sdk = "=2.25.0"
 
 # NOTE: no workspace-level `unsafe_code = "forbid"` — the soroban-sdk
 # `#[contractimpl]` macro emits an `#[allow(unsafe_code)]` for its ctor entry,

@@ -213,25 +213,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
 
 [[package]]
-name = "blend-adapter"
-version = "0.1.0"
-dependencies = [
- "blend-contract-sdk",
- "kaido-common",
- "sep-40-oracle",
- "soroban-sdk",
-]
-
-[[package]]
-name = "blend-contract-sdk"
-version = "2.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdf0e34a9219e894aa1f14b212bdad5111e7e695743b447e0290d744f083601e"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -980,25 +961,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kaido-integration-tests"
-version = "0.1.0"
-dependencies = [
- "blend-adapter",
- "blend-contract-sdk",
- "distribution-market",
- "kaido-common",
- "kaido-math",
- "market-factory",
- "registry",
- "resolver-attested",
- "resolver-designated",
- "resolver-optimistic",
- "resolver-reflector",
- "sep-40-oracle",
- "soroban-sdk",
-]
-
-[[package]]
 name = "kaido-math"
 version = "0.1.0"
 dependencies = [
@@ -1054,15 +1016,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "market-factory"
-version = "0.1.0"
-dependencies = [
- "kaido-common",
- "kaido-math",
- "soroban-sdk",
 ]
 
 [[package]]
@@ -1340,49 +1293,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
-name = "registry"
-version = "0.1.0"
-dependencies = [
- "kaido-common",
- "soroban-sdk",
-]
-
-[[package]]
-name = "resolver-attested"
-version = "0.1.0"
-dependencies = [
- "ed25519-dalek",
- "kaido-common",
- "soroban-sdk",
-]
-
-[[package]]
-name = "resolver-designated"
-version = "0.1.0"
-dependencies = [
- "kaido-common",
- "soroban-sdk",
-]
-
-[[package]]
-name = "resolver-optimistic"
-version = "0.1.0"
-dependencies = [
- "kaido-common",
- "soroban-sdk",
-]
-
-[[package]]
-name = "resolver-reflector"
-version = "0.1.0"
-dependencies = [
- "kaido-common",
- "kaido-math",
- "sep-40-oracle",
- "soroban-sdk",
-]
-
-[[package]]
 name = "rfc6979"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1485,15 +1395,6 @@ name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
-
-[[package]]
-name = "sep-40-oracle"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e93431de4795bf920a17467d3f76c538d53807c11628a9fb584b360ad834829"
-dependencies = [
- "soroban-sdk",
-]
 
 [[package]]
 name = "serde"

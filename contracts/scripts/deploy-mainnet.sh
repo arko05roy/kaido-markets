@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Production entry point for deploying the Kaido Soroban suite to Stellar mainnet.
+# Production entry point for deploying Kaido's DistributionMarket to Stellar mainnet.
 #
 # This intentionally delegates to deploy.sh so mainnet and testnet use the same
-# build, upload, deploy, wiring, smoke-check, and config-recording path.
+# build, upload, and deploy path.
 # Never put a secret key in this file or commit it to the repository.
 set -euo pipefail
 

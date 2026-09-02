@@ -17,7 +17,11 @@ The latest submission is stored in the browser under `kaido-latest-feedback` wit
 
 The form uses a labeled textarea, button labels, keyboard-focusable controls, and a toast announcement for the submission result.
 
-## Representative feedback
+## Illustrative early-feedback examples
+
+The entries below are product-research examples. They are not verified user
+testimonials, not mainnet-user evidence, and must not be used in Level 6
+onboarding or feedback-implementation tables.
 
 ### Idea — Kaido User 1
 

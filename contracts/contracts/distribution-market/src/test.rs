@@ -41,7 +41,7 @@ fn init_tail(env: &Env, _usdc: &Address) -> (u32, Address, Address, u32, u32, u3
 /// LP scale `y` (WAD) to deposit `amount_7dp` USDC when free collateral is `B`.
 fn lp_scale_for_amount(amount_7dp: i128) -> i128 {
     let amount_wad = amount_7dp * MONEY_SCALE;
-    kaido_math::mul_div(amount_wad, WAD, B).min(WAD).max(1)
+    kaido_math::mul_div(amount_wad, WAD, B).clamp(1, WAD)
 }
 
 // --- a minimal Resolver mock (implements the kaido_common::Resolver shape) ---

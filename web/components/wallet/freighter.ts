@@ -29,9 +29,21 @@ function buildWallet(accountId: string, networkPassphrase: string): ConnectedWal
         if (res && "error" in res && res.error) {
           throw new Error(`Freighter sign: ${res.error}`);
         }
-        if (typeof res === "string") return { signedTxXdr: res, signerAddress: accountId };
+        const signedTxXdr = typeof res === "string" ? res : res.signedTxXdr;
+        if (process.env.NEXT_PUBLIC_KAIDO_FEE_SPONSOR_ENABLED !== "true") {
+          return { signedTxXdr, signerAddress: accountId };
+        }
+        const response = await fetch("/api/fee-sponsor", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ signedInnerTxXdr: signedTxXdr }),
+        });
+        const sponsored = (await response.json()) as { sponsoredTxXdr?: string; error?: string };
+        if (!response.ok || !sponsored.sponsoredTxXdr) {
+          throw new Error(`Fee sponsorship: ${sponsored.error ?? "unavailable"}`);
+        }
         return {
-          signedTxXdr: res.signedTxXdr,
+          signedTxXdr: sponsored.sponsoredTxXdr,
           signerAddress: res.signerAddress ?? accountId,
         };
       },

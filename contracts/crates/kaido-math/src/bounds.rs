@@ -12,20 +12,20 @@ pub const MAX_SIGMA_MU_WAD: i128 = 1_000_000_000_000_000_000_000_000;
 
 #[inline]
 pub fn k_in_envelope(k: i128) -> bool {
-    k >= MIN_POSITIVE_WAD && k <= MAX_K_B_WAD
+    (MIN_POSITIVE_WAD..=MAX_K_B_WAD).contains(&k)
 }
 
 #[inline]
 pub fn b_in_envelope(b: i128) -> bool {
-    b >= MIN_POSITIVE_WAD && b <= MAX_K_B_WAD
+    (MIN_POSITIVE_WAD..=MAX_K_B_WAD).contains(&b)
 }
 
 #[inline]
 pub fn sigma_in_envelope(sigma: i128) -> bool {
-    sigma >= MIN_POSITIVE_WAD && sigma <= MAX_SIGMA_MU_WAD
+    (MIN_POSITIVE_WAD..=MAX_SIGMA_MU_WAD).contains(&sigma)
 }
 
 #[inline]
 pub fn mu_in_envelope(mu: i128) -> bool {
-    mu >= -MAX_SIGMA_MU_WAD && mu <= MAX_SIGMA_MU_WAD
+    (-MAX_SIGMA_MU_WAD..=MAX_SIGMA_MU_WAD).contains(&mu)
 }

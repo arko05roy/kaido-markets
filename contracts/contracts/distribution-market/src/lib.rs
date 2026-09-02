@@ -1139,7 +1139,6 @@ fn accrue_fee_split(env: &Env, fee_wad: i128) {
     let lp_bps: u32 = storage.get(&DataKey::FeeLpBps).unwrap_or(10_000);
     let treasury_bps: u32 = storage.get(&DataKey::FeeTreasuryBps).unwrap_or(0);
     let creator_bps: u32 = storage.get(&DataKey::FeeCreatorBps).unwrap_or(0);
-    let creator_bps: u32 = storage.get(&DataKey::FeeCreatorBps).unwrap_or(0);
     let creator_part = mul_div_floor(fee_wad, creator_bps as i128, 10_000);
     let lp_part = mul_div_floor(fee_wad, lp_bps as i128, 10_000);
     let treasury_part = mul_div_floor(fee_wad, treasury_bps as i128, 10_000);
