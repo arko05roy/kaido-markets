@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { activeNetworkId } from "@/lib/stellar/networks";
 import {
+  checkpointsFromOutcomeSpace,
   listMarkets,
   statusLabel,
   tierLabel,
@@ -29,9 +30,10 @@ function StatusPill({ label }: { label: string }) {
 
 function MarketRow({ card }: { card: MarketCard }) {
   const { address, info, status } = card;
+  const cpCount = checkpointsFromOutcomeSpace(info.outcome_space);
   const kind =
     info.outcome_space.tag === "Trajectory"
-      ? `Trajectory · ${info.outcome_space.values[0].length} checkpoints`
+      ? `Trajectory · ${cpCount.length} checkpoints`
       : "Scalar";
   return (
     <Link

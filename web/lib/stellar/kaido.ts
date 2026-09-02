@@ -70,18 +70,36 @@ export async function getMarketState(
 
 export type Belief = distributionMarket.Belief;
 
-/** Per-checkpoint consensus beliefs for a trajectory market (one for a scalar market). */
+/** Per-checkpoint consensus beliefs for a trajectory market. */
 export async function getBeliefs(market: string): Promise<Belief[]> {
-  return (await marketClient(market).get_beliefs()).result as Belief[];
+  try {
+    const raw = (await marketClient(market).get_beliefs()).result;
+    if (!Array.isArray(raw)) return [];
+    return raw as Belief[];
+  } catch {
+    return [];
+  }
 }
 
 /** Checkpoint timestamps (unix seconds) for a trajectory market; empty for a scalar market. */
 export async function getCheckpoints(market: string): Promise<bigint[]> {
   try {
-    return (await marketClient(market).get_checkpoints()).result as bigint[];
+    const raw = (await marketClient(market).get_checkpoints()).result;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((x) => (typeof x === "bigint" ? x : BigInt(String(x))));
   } catch {
     return [];
   }
+}
+
+/** Normalize on-chain `OutcomeSpace` checkpoint list (trajectory only). */
+export function checkpointsFromOutcomeSpace(
+  outcomeSpace: MarketParams["outcome_space"],
+): number[] {
+  if (outcomeSpace.tag !== "Trajectory") return [];
+  const raw = outcomeSpace.values[0];
+  if (!Array.isArray(raw)) return [];
+  return raw.map((c) => Number(c));
 }
 
 /** Realised per-checkpoint outcomes for a resolved trajectory market; empty otherwise. */

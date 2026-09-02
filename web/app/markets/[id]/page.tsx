@@ -20,7 +20,7 @@ import {
   WAD,
   formatWad,
   getBeliefs,
-  getCheckpoints,
+  checkpointsFromOutcomeSpace,
   getMarketInfo,
   getMarketState,
   getResolvedOutcomes,
@@ -79,13 +79,13 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
     | null = null;
   let error: string | null = null;
   try {
-    const [info, { params: mp, state }, checkpoints] = await Promise.all([
+    const [info, { params: mp, state }] = await Promise.all([
       getMarketInfo(id),
       getMarketState(id),
-      getCheckpoints(id),
     ]);
     const isTraj = mp.outcome_space.tag === "Trajectory";
     const beliefs = isTraj ? await getBeliefs(id) : [];
+    const checkpoints = checkpointsFromOutcomeSpace(mp.outcome_space);
     const consensusMusWad = isTraj
       ? beliefs.map((b) => b.mu.toString())
       : [state.belief.mu.toString()];
@@ -105,7 +105,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       bWad: mp.b.toString(),
       consensusMusWad,
       consensusSigmasWad,
-      checkpoints: checkpoints.map((c) => Number(c)),
+      checkpoints,
       tradingOpen: state.status.tag === "Open",
     };
     const settlement: SettlementMarketView = {
