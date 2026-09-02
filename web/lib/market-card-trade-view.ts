@@ -21,5 +21,8 @@ export function tradeViewFromMarketCard(card: MarketCard, nowSec?: number): Trad
     windowOpen: Number(card.info.window.open),
     windowLock: Number(card.info.window.lock),
     capped: card.info.capped,
+    ...(card.blendBackedDepth7dp != null
+      ? { blendBackedDepth7dp: card.blendBackedDepth7dp }
+      : {}),
   };
 }

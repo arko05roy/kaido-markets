@@ -132,6 +132,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       ...(savedMeta?.divisionLabels ? { divisionLabels: savedMeta.divisionLabels } : {}),
       ...(savedMeta?.optionLow ? { optionLow: savedMeta.optionLow } : {}),
       ...(savedMeta?.optionHigh ? { optionHigh: savedMeta.optionHigh } : {}),
+      blendBackedDepth7dp,
     };
     const settlement: SettlementMarketView = {
       address: id,

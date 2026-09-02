@@ -251,3 +251,34 @@
   background-size: 2px 2px;
   mix-blend-mode: overlay;
 }
+
+/* BlendTap flow rail — pulse along borrow path */
+@keyframes blend-flow-pulse {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+.blend-flow-dot {
+  left: 0;
+  animation: blend-flow-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blend-flow-dot {
+    animation: none;
+    left: 50%;
+    opacity: 0.6;
+  }
+}

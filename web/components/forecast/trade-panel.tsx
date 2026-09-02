@@ -16,6 +16,7 @@ import {
   type TrajectoryBelief,
 } from "@/components/forecast/trajectory-belief-input";
 import { ShareCurveModal } from "@/components/modals/first-visit-modal";
+import { BlendBorrowModal } from "@/components/modals/blend-borrow-modal";
 import {
   TradeReceiptModal,
   TradeSubmittingModal,
@@ -70,6 +71,8 @@ export interface TradeMarketView {
   divisionLabels?: string[];
   optionLow?: string;
   optionHigh?: string;
+  /** BlendTap headroom (7-dp USDC); omit when unreadable. */
+  blendBackedDepth7dp?: bigint;
 }
 
 const RISK_PRESETS = [10, 25, 50, 100];
@@ -233,6 +236,9 @@ export function TradePanel({
   const [maxUsdc, setMaxUsdc] = useState("25");
 
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [blendOpen, setBlendOpen] = useState(false);
+  const [blendDepth7dp, setBlendDepth7dp] = useState<bigint>(0n);
+  const [blendDepthLoading, setBlendDepthLoading] = useState(false);
   const [walletGate, setWalletGate] = useState<"connect" | "no-funds" | null>(null);
   const [errorOpen, setErrorOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -360,6 +366,32 @@ export function TradePanel({
     }
   };
 
+  const blendTapEnabled = !settlement.isDemo;
+
+  const openBlendStep = async () => {
+    setReceiptOpen(false);
+    setBlendOpen(true);
+    setBlendDepthLoading(true);
+    const seed = market.blendBackedDepth7dp ?? 0n;
+    setBlendDepth7dp(seed);
+    try {
+      const live = await kaido.blendBackedDepth(market.address);
+      setBlendDepth7dp(live);
+    } catch {
+      if (seed > 0n) setBlendDepth7dp(seed);
+    } finally {
+      setBlendDepthLoading(false);
+    }
+  };
+
+  const handleReceiptConfirm = () => {
+    if (blendTapEnabled) {
+      void openBlendStep();
+      return;
+    }
+    void confirmTrade();
+  };
+
   const confirmTrade = async () => {
     if (!wallet) return;
     setSubmitting(true);
@@ -382,6 +414,7 @@ export function TradePanel({
       }
       setPositionId(id);
       setReceiptOpen(false);
+      setBlendOpen(false);
       savePosition(config.network, wallet.signer.accountId, market.address, id, {
         ...(market.kind === "scalar"
           ? { muWad: scalarBelief.muWad, sigmaWad: scalarBelief.sigmaWad, collateral7dp: maxCollateral7dp }
@@ -405,6 +438,7 @@ export function TradePanel({
       });
     } catch (e) {
       setReceiptOpen(false);
+      setBlendOpen(false);
       const raw = e instanceof Error ? e.message : "Trade failed";
       setErrorMsg(formatContractTradeError(raw));
       setErrorOpen(true);
@@ -580,8 +614,24 @@ export function TradePanel({
         quote={quote}
         quoting={quoting}
         symbol={sym}
-        onConfirm={() => void confirmTrade()}
+        onConfirm={handleReceiptConfirm}
         onBack={() => setReceiptOpen(false)}
+      />
+      <BlendBorrowModal
+        open={blendOpen}
+        onOpenChange={(v) => {
+          if (!v && !submitting) {
+            setBlendOpen(false);
+            setReceiptOpen(true);
+          }
+        }}
+        symbol={sym}
+        feeBps={market.feeBps ?? 0}
+        riskUsdc={riskUsdc}
+        availableDepth7dp={blendDepth7dp}
+        loadingDepth={blendDepthLoading}
+        onContinue={() => void confirmTrade()}
+        continuing={submitting}
       />
       <TradeSubmittingModal open={submitting} />
       <TradeErrorModal
