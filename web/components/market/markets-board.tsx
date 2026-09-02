@@ -13,9 +13,10 @@ import {
 } from "@/components/app/kaido-ui";
 import {
   crowdTargetLabel,
-  marketQuestion,
   statusLabel,
 } from "@/lib/market-display";
+import { displayMarketQuestion } from "@/lib/market-metadata";
+import type { SavedMarketMetadata } from "@/lib/market-metadata";
 import type { MarketCard } from "@/lib/market-types";
 import Link from "next/link";
 
@@ -58,12 +59,18 @@ const FILTERS: { id: MarketFilter; label: string }[] = [
   { id: "new", label: "New" },
 ];
 
-function MarketCardItem({ card }: { card: MarketCard }) {
+function MarketCardItem({
+  card,
+  metadata,
+}: {
+  card: MarketCard;
+  metadata?: SavedMarketMetadata;
+}) {
   const { address, info, status, crowdMuWad, crowdSigmaWad, kWad, bWad } = card;
   const statusText = statusLabel(status);
   const closesAt =
     Number(info.window.lock);
-  const title = marketQuestion(info, crowdMuWad);
+  const title = displayMarketQuestion(info, crowdMuWad, metadata?.question);
   const crowd =
     crowdMuWad != null ? crowdTargetLabel(crowdMuWad) : null;
 
@@ -118,9 +125,11 @@ function MarketCardItem({ card }: { card: MarketCard }) {
 export function MarketsBoard({
   markets,
   openCount,
+  metadataByMarket = {},
 }: {
   markets: MarketCard[];
   openCount: number;
+  metadataByMarket?: Record<string, SavedMarketMetadata>;
 }) {
   const [filter, setFilter] = useState<MarketFilter>("all");
   const filtered = useMemo(() => sortMarkets(markets, filter), [markets, filter]);
@@ -163,7 +172,7 @@ export function MarketsBoard({
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {filtered.map((card) => (
-            <MarketCardItem key={card.address} card={card} />
+            <MarketCardItem key={card.address} card={card} metadata={metadataByMarket[card.address]} />
           ))}
         </div>
       )}

@@ -15,8 +15,8 @@ function ConfigNotice({ children }: { children: React.ReactNode }) {
   return (
     <AppShell>
       <div className="space-y-5">
-        <PageEyebrow>Market factory</PageEyebrow>
-        <PageTitle title="Create a market" />
+        <PageEyebrow>Launch</PageEyebrow>
+        <PageTitle title="Set up a market" />
         <ErrorState title="Configuration required" body={children} />
       </div>
     </AppShell>
@@ -68,14 +68,14 @@ export default function CreateMarketPage() {
     <AppShell>
       <div className="space-y-10">
         <div className="space-y-5">
-          <PageEyebrow>Permissionless · {networkId}</PageEyebrow>
+          <PageEyebrow>Launch · {networkId}</PageEyebrow>
           <PageTitle
             title={
               <>
-                Create a <span className="text-white/40">market</span>
+                Set the <span className="text-white/40">question</span>
               </>
             }
-            subtitle="Deploy a distribution market via MarketFactory. Set the outcome space, resolver tier, trading window, and initial consensus belief."
+            subtitle="Pick what traders will call, seed where the crowd starts, and choose when trading opens and settles. No probability homework — just the market setup."
           />
         </div>
         <CreateMarketWizard config={config} resolvers={resolvers} />

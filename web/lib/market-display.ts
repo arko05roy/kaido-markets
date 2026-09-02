@@ -9,6 +9,7 @@ type MarketInfo = registry.MarketInfo;
 type MarketStatus = registry.MarketStatus;
 
 type MarketCopyInput = Pick<MarketInfo, "outcome_space" | "tier" | "window">;
+export type { MarketCopyInput };
 const { ResolverTier } = registry;
 
 function tierLabel(tier: registry.ResolverTier): string {

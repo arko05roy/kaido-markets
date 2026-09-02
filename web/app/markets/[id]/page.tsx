@@ -20,9 +20,10 @@ import { type SettlementMarketView } from "@/components/market/settlement-panel"
 import {
   crowdTargetLabel,
   isTradingWindowOpen,
-  marketQuestion,
   marketSubtitle,
 } from "@/lib/market-display";
+import { displayMarketQuestion } from "@/lib/market-metadata";
+import { getSavedMarketQuestion } from "@/lib/market-metadata-store";
 
 import { MarketActions } from "./market-actions";
 import { deployedConfig } from "@/lib/stellar/contracts";
@@ -153,6 +154,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
   }
 
   const config = kaidoConfig();
+  const savedQuestion = getSavedMarketQuestion(activeNetworkId(), id);
 
   return (
     <AppShell>
@@ -170,7 +172,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
               <header className="space-y-3">
                 <div className="flex flex-wrap items-start gap-3">
                   <h1 className="min-w-0 flex-1 font-serif text-[clamp(1.5rem,4vw,2.25rem)] leading-tight tracking-tight text-[#f3efe6]">
-                    {marketQuestion(data.params, data.crowdMuWad)}
+                    {displayMarketQuestion(data.params, data.crowdMuWad, savedQuestion)}
                   </h1>
                   <StatusPill label={statusLabel(data.state.status)} />
                 </div>

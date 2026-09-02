@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { BeliefChart } from "@/components/forecast/belief-chart";
 import { RangeSlider } from "@/components/forecast/range-slider";
+import { SnappySlider } from "@/components/ui/snappy-slider";
 import {
   convictionFromSigma,
   convictionHint,
@@ -18,6 +19,7 @@ import {
   toWad,
   type GaussianBelief,
 } from "@/lib/curve";
+import { cn } from "@/lib/utils";
 
 export interface ScalarBeliefInputProps {
   market: { kWad: bigint; bWad: bigint; capped?: boolean };
@@ -78,6 +80,18 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
   // UI maps wide (left) ↔ tight/sniper (right); σ increases toward wide.
   const convictionUi = sigmaMax - sigmaReal + sigmaMin;
 
+  const convictionSnapValues = useMemo(() => {
+    const span = sigmaMax - sigmaMin;
+    const toUi = (sigma: number) => sigmaMax - sigma + sigmaMin;
+    return [
+      toUi(sigmaMax),
+      toUi(sigmaMin + 0.75 * span),
+      toUi(sigmaMin + 0.5 * span),
+      toUi(sigmaMin + 0.25 * span),
+      toUi(sigmaMin),
+    ];
+  }, [sigmaMin, sigmaMax]);
+
   return (
     <div className="flex flex-col gap-5">
       <BeliefChart
@@ -109,19 +123,29 @@ export function ScalarBeliefInput({ market, consensus, range, disabled, onChange
       </div>
 
       <div className="space-y-1">
-        <RangeSlider
+        <SnappySlider
           label="Conviction"
-          hint={convictionHint(conviction)}
+          tone="kaido"
+          values={convictionSnapValues}
+          defaultValue={convictionUi}
           value={convictionUi}
           onChange={(v) => setSigmaReal(sigmaMax - v + sigmaMin)}
           min={sigmaMin}
           max={sigmaMax}
           step={sigmaStep || 1}
-          disabled={disabled}
-          format={() => convictionLabel(conviction)}
-          endpoints={["Wide", "Tight"]}
-          ariaLabel="Conviction — wide to tight"
+          snapping
+          config={{
+            snappingThreshold: (sigmaMax - sigmaMin) * 0.04,
+            labelFormatter: (ui) =>
+              convictionLabel(convictionFromSigma(sigmaMax - ui + sigmaMin, sigmaMin, sigmaMax)),
+          }}
+          className={cn(disabled && "pointer-events-none opacity-50")}
         />
+        <div className="flex justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
+          <span>Wide</span>
+          <span>Tight</span>
+        </div>
+        <p className="text-[11px] text-white/40">{convictionHint(conviction)}</p>
         <p className="text-[11px] text-white/35">
           Tighter = more upside, less room to miss. Wider = safer range, lower upside.
         </p>

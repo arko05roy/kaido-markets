@@ -10,6 +10,7 @@ import {
 } from "@/components/app/kaido-ui";
 import { MarketsBoard } from "@/components/market/markets-board";
 import { activeNetworkId } from "@/lib/stellar/networks";
+import { loadMarketMetadataStore } from "@/lib/market-metadata-store";
 import { isTradingWindowOpen } from "@/lib/market-display";
 import { listMarkets } from "@/lib/stellar/kaido";
 
@@ -27,6 +28,7 @@ export default async function MarketsPage() {
 
   const openCount =
     markets?.filter((m) => isTradingWindowOpen(m.status?.tag, m.info.window)).length ?? 0;
+  const metadataByMarket = loadMarketMetadataStore()[network] ?? {};
 
   return (
     <AppShell>
@@ -51,7 +53,7 @@ export default async function MarketsPage() {
             action={<PrimaryLink href="/create">Create a market</PrimaryLink>}
           />
         ) : markets ? (
-          <MarketsBoard markets={markets} openCount={openCount} />
+          <MarketsBoard markets={markets} openCount={openCount} metadataByMarket={metadataByMarket} />
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-8">
