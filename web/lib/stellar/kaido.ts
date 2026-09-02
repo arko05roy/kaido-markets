@@ -68,6 +68,15 @@ export async function getMarketState(
   return { params, state };
 }
 
+/** BlendTap: remaining borrow depth from the Blend adapter (7dp USDC); 0 if unset or read fails. */
+export async function getBlendBackedDepth(market: string): Promise<bigint> {
+  try {
+    return BigInt((await marketClient(market).blend_backed_depth()).result);
+  } catch {
+    return 0n;
+  }
+}
+
 export type Belief = distributionMarket.Belief;
 
 /** Per-checkpoint consensus beliefs for a trajectory market. */
@@ -125,11 +134,13 @@ export async function listMarkets(): Promise<MarketCard[]> {
       let crowdSigmaWad: bigint | undefined;
       let kWad: bigint | undefined;
       let bWad: bigint | undefined;
+      let blendBackedDepth7dp: bigint | undefined;
       try {
         const { params, state } = await getMarketState(address);
         status = state.status;
         kWad = params.k;
         bWad = params.b;
+        blendBackedDepth7dp = await getBlendBackedDepth(address);
         if (info.outcome_space.tag === "Trajectory") {
           const beliefs = await getBeliefs(address);
           if (beliefs[0]) {
@@ -143,7 +154,7 @@ export async function listMarkets(): Promise<MarketCard[]> {
       } catch {
         status = null;
       }
-      return { address, info, status, crowdMuWad, crowdSigmaWad, kWad, bWad };
+      return { address, info, status, crowdMuWad, crowdSigmaWad, kWad, bWad, blendBackedDepth7dp };
     }),
   );
 }

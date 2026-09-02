@@ -57,7 +57,7 @@ clip. A market cannot switch modes after creation.
   sharpening it is what costs collateral and is what the floor caps.
 - Markets that need the capped path are explicitly flagged in the registry and
   the UI; users always know which regime they are in.
-- HouseVault per-market exposure caps (ADR-6, Sprint 2) compose on top of this:
+- BlendTap per-market borrow caps (ADR-6) compose on top of this:
   the σ-floor bounds *per-trade* payout obligation; the vault cap bounds
   *aggregate* protocol exposure.
 

@@ -14,7 +14,7 @@ skip_core_tasks = true
 [env]
 WASM_TARGET = "wasm32v1-none"
 # All contract crates that emit a cdylib .wasm. Keep in sync with contracts/*.
-CONTRACT_CRATES = "market-factory distribution-market blend-adapter house-vault registry resolver-reflector resolver-attested resolver-optimistic resolver-designated"
+CONTRACT_CRATES = "market-factory distribution-market blend-adapter registry resolver-reflector resolver-attested resolver-optimistic resolver-designated"
 WASM_OUT_DIR = "target/${WASM_TARGET}/release"
 
 [tasks.default]
@@ -31,7 +31,6 @@ cargo build --release --target "${WASM_TARGET}" \
   -p market-factory \
   -p distribution-market \
   -p blend-adapter \
-  -p house-vault \
   -p registry \
   -p resolver-reflector \
   -p resolver-attested \

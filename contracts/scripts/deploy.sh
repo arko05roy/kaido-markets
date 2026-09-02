@@ -16,8 +16,7 @@
 # Status: Sprint 1 — `distribution-market` has real logic (storage, `init`,
 # `get_params`/`get_state`, `MarketCreated`), and is deployed *and* seeded with a
 # demo scalar Gaussian market here; the other 7 crates are still scaffolds.
-# Factory WASM-hash install, registry wiring and house-vault seeding land in
-# Sprints 2–3.
+# Factory WASM-hash install and registry wiring land in Sprints 2–3.
 set -euo pipefail
 
 NETWORK="${1:-${STELLAR_NETWORK:-}}"
@@ -46,8 +45,8 @@ FRIENDBOT="${FRIENDBOT_URL:-$(read_cfg friendbotUrl)}"
 [[ -n "${RPC}" ]] || { echo "no RPC url for '${NETWORK}'. Set RPC_URL in .env (mainnet needs a third-party provider)." >&2; exit 2; }
 
 # --- per-network values that must be resolved (never hardcoded) ----------
-# Sprint 2: the USDC SAC id is now load-bearing (the distribution-market and
-# house-vault take it as a constructor/init arg — never hardcoded). Require it
+# Sprint 2: the USDC SAC id is load-bearing (distribution-market init and
+# blend-adapter take it as a constructor/init arg — never hardcoded). Require it
 # from the environment with no default; fail loudly if unset.
 : "${USDC_SAC_ID:?set USDC_SAC_ID (the USDC Stellar Asset Contract id for ${STELLAR_NETWORK:-this network}); see .env.example}"
 # BlendTap spine (liquidity-plan §5.3). Optional — when unset, markets deploy without JIT borrow.
@@ -105,7 +104,7 @@ echo "reflector feed : ${REFLECTOR_FEED_ID:-<unset — see Reflector /oracles ta
 echo "admin          : ${ADMIN_ADDRESS:-<unset>}"
 echo
 
-# Admin for the registry / factory / house-vault (a multisig on mainnet —
+# Admin for the registry / factory / blend-adapter (a multisig on mainnet —
 # resolved from .env, never hardcoded; falls back to the deployer on non-mainnet).
 ADMIN="${ADMIN_ADDRESS:-${DEPLOYER_ADDR}}"
 
@@ -113,16 +112,9 @@ ADMIN="${ADMIN_ADDRESS:-${DEPLOYER_ADDR}}"
 ( cd "${CONTRACTS_DIR}" && cargo make build-wasm )
 WASM_DIR="${CONTRACTS_DIR}/target/wasm32v1-none/release"
 
-# Deploy order matters: `distribution-market` (its WASM hash feeds the factory),
-# the resolvers and `house-vault` (no inter-deps), then `registry` (constructed
-# with a placeholder factory = admin), then `market-factory` (needs the registry
-# id + the dm WASM hash), and finally `registry.set_factory(<factory id>)`.
-CONTRACTS="distribution-market blend-adapter resolver-reflector resolver-attested resolver-optimistic resolver-designated house-vault registry market-factory"
-if [[ -n "${BLEND_POOL_ID}" && "${SKIP_HOUSE_VAULT:-1}" == "1" ]]; then
-  # house-vault WASM (~105KB) simulates >u32::MAX resource fee on current CLI; BlendTap replaces it.
-  CONTRACTS="distribution-market blend-adapter resolver-reflector resolver-attested resolver-optimistic resolver-designated registry market-factory"
-  echo "note: skipping house-vault (BlendTap mode; set SKIP_HOUSE_VAULT=0 to force deploy)" >&2
-fi
+# Deploy order: distribution-market WASM hash → blend-adapter + resolvers →
+# registry (placeholder factory) → market-factory → registry.set_factory.
+CONTRACTS="distribution-market blend-adapter resolver-reflector resolver-attested resolver-optimistic resolver-designated registry market-factory"
 
 # kebab-case -> camelCase, portably (no GNU sed).
 to_camel() { awk 'BEGIN{FS="-"}{out=$1;for(i=2;i<=NF;i++)out=out toupper(substr($i,1,1)) substr($i,2);print out}' <<<"$1"; }
@@ -149,14 +141,9 @@ for c in ${CONTRACTS}; do
   [[ -n "${hash}" ]] || { echo "   upload failed after retries (${c})" >&2; exit 1; }
   echo "   wasm hash : ${hash}"
   eval "HASH_$(echo "${c}" | tr '-' '_')=${hash}"
-  # `distribution-market` uses an explicit `init(...)` (invoked below);
-  # `house-vault` / `resolver-reflector` / `registry` / `market-factory` have
-  # `__constructor`s. None hardcode per-network ids — they take them as args.
+  # `resolver-reflector` / `registry` / `market-factory` have `__constructor`s.
   CTOR_ARGS=()
   case "${c}" in
-    house-vault)
-      CTOR_ARGS=(-- --admin "${ADMIN}" --usdc "${USDC_SAC_ID}")
-      ;;
     resolver-reflector)
       # demo resolver (scalar mode): resolve_time = now+2h, 12-record TWAP,
       # no checkpoints. A second, trajectory-mode resolver is deployed below
@@ -237,9 +224,15 @@ done
 
 # --- wire the registry to the real factory -------------------------------
 echo "-- registry.set_factory(${ID_market_factory}) --"
-stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-  -- set_factory --new-factory "${ID_market_factory}" || \
-  echo "   (set_factory failed — re-run manually)" >&2
+sleep 2
+for attempt in 1 2 3 4 5 6; do
+  if stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+    -- set_factory --new-factory "${ID_market_factory}" 2>/dev/null; then
+    break
+  fi
+  [[ "${attempt}" -eq 6 ]] && echo "   (set_factory failed — re-run manually)" >&2
+  sleep 3
+done
 
 # --- seed + verify the distribution-market (Sprint 1 deliverable) ---------
 # Initialise the just-deployed scalar Gaussian market with a small demo curve:
@@ -254,28 +247,32 @@ B18="100000000000000000000"            # 100 * 1e18
 MU0_18="50000000000000000000"          # 50 * 1e18
 NOW="$(date +%s)"
 W_OPEN="${NOW}"; W_LOCK="$(( NOW + 3600 ))"; W_RESOLVE="$(( NOW + 7200 ))"
-echo "-- distribution-market: init + verify ----"
-BLEND_INIT=()
-if [[ -n "${ID_blend_adapter:-}" ]]; then
-  BLEND_INIT=(--blend-adapter "\"${ID_blend_adapter}\"")
-fi
-if stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-     -- init \
-        --k "${WAD18}" --b "${B18}" --fee-bps 30 \
-        --resolver "${ID_resolver_reflector}" --tier 0 \
-        --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
-        --mu0 "${MU0_18}" --sigma0 "${WAD18}" --usdc "${USDC_SAC_ID}" \
-        --capped-flag 0 --treasury "${ADMIN}" --creator "${DEPLOYER_ADDR}" \
-        --fee-lp-bps 7000 --fee-treasury-bps 2000 --fee-creator-bps 1000 \
-        ${BLEND_INIT[@]+"${BLEND_INIT[@]}"}; then
-  echo "   get_params ->"
-  stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
-    -- get_params || true
-  echo "   get_state  ->"
-  stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
-    -- get_state || true
+if [[ -z "${BLEND_POOL_ID:-}" ]]; then
+  echo "-- distribution-market: init + verify (non-BlendTap) ----"
+  BLEND_INIT=()
+  if [[ -n "${ID_blend_adapter:-}" ]]; then
+    BLEND_INIT=(--blend-adapter "\"${ID_blend_adapter}\"")
+  fi
+  if stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+       -- init \
+          --k "${WAD18}" --b "${B18}" --fee-bps 30 \
+          --resolver "${ID_resolver_reflector}" --tier 0 \
+          --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
+          --mu0 "${MU0_18}" --sigma0 "${WAD18}" --usdc "${USDC_SAC_ID}" \
+          --capped-flag 0 --treasury "${ADMIN}" --creator "${DEPLOYER_ADDR}" \
+          --fee-lp-bps 7000 --fee-treasury-bps 2000 --fee-creator-bps 1000 \
+          ${BLEND_INIT[@]+"${BLEND_INIT[@]}"}; then
+    echo "   get_params ->"
+    stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
+      -- get_params || true
+    echo "   get_state  ->"
+    stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
+      -- get_state || true
+  else
+    echo "   (init invoke failed — factory create_market is the primary path)" >&2
+  fi
 else
-  echo "   (init invoke failed — the contract is deployed; re-run init manually with the same args)" >&2
+  echo "-- distribution-market: skip standalone init (BlendTap uses factory.create_market) --"
 fi
 
 # --- demo: create a market through the factory (Sprint 3) ----------------
@@ -283,20 +280,33 @@ fi
 # inits it, and registers it. Same demo curve as above; a *new* market every run.
 DEMO_MKT=""
 echo "-- market-factory.create_market (demo) ----"
-if MKT="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-     -- create_market \
-        --creator "${DEPLOYER_ADDR}" \
-        --k "${WAD18}" --b "${B18}" --fee-bps 30 \
-        --resolver "${ID_resolver_reflector}" --tier 0 \
-        --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
-        --mu0 "${MU0_18}" --sigma0 "${WAD18}" --capped-flag 0 2>/dev/null)"; then
-  DEMO_MKT="${MKT//\"/}"
+sleep 2
+DEMO_MKT=""
+for attempt in 1 2 3 4 5 6; do
+  if MKT="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+       -- create_market \
+          --creator "${DEPLOYER_ADDR}" \
+          --k "${WAD18}" --b "${B18}" --fee-bps 30 \
+          --resolver "${ID_resolver_reflector}" --tier 0 \
+          --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
+          --mu0 "${MU0_18}" --sigma0 "${WAD18}" --capped-flag 0 2>/dev/null)"; then
+    DEMO_MKT="${MKT//\"/}"
+    break
+  fi
+  sleep 3
+done
+if [[ -n "${DEMO_MKT}" ]]; then
   echo "   created market : ${DEMO_MKT}"
   if [[ -n "${ID_blend_adapter:-}" ]]; then
     echo "-- blend-adapter.authorize_market (${DEMO_MKT}) --"
-    stellar contract invoke --id "${ID_blend_adapter}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-      -- authorize_market --market "${DEMO_MKT}" --cap-7dp 100000000000 || \
-      echo "   (authorize_market failed — re-run manually)" >&2
+    sleep 3
+    for attempt in 1 2 3 4 5; do
+      if stellar contract invoke --id "${ID_blend_adapter}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+        -- authorize_market --market "${DEMO_MKT}" --cap-7dp 100000000000 2>/dev/null; then
+        break
+      fi
+      sleep 3
+    done || echo "   (authorize_market failed — re-run manually)" >&2
   fi
   echo "   registry.count ->"
   stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- count || true
@@ -313,8 +323,7 @@ if [[ -n "${DEMO_MKT}" ]]; then
   FIXTURES_JSON="
   \"fixtures\": {
     \"demoMarket\": \"${DEMO_MKT}\",
-    \"demoResolver\": \"${ID_resolver_reflector}\",
-    \"houseVault\": $(json_or_null "${ID_house_vault:-}")
+    \"demoResolver\": \"${ID_resolver_reflector}\"
   },"
 fi
 
@@ -346,5 +355,10 @@ if [[ -n "${DEMO_MKT}" ]]; then
   echo
   echo "Demo market (factory-registered): ${DEMO_MKT}"
   echo "  export NEXT_PUBLIC_KAIDO_DEMO_MARKET=${DEMO_MKT}"
-  echo "Next: make seed:${NETWORK}  # HouseVault liquidity + lifecycle fixture"
+  if [[ -n "${ID_blend_adapter:-}" ]]; then
+    echo "Next: trade on ${DEMO_MKT} — BlendTap JIT borrow fires on first trade"
+    echo "       or: ./contracts/scripts/blend-lifecycle-e2e.sh ${NETWORK}"
+  else
+    echo "Next: make seed:${NETWORK}  # lifecycle fixture for integration tests"
+  fi
 fi

@@ -869,16 +869,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "house-vault"
-version = "0.1.0"
-dependencies = [
- "distribution-market",
- "kaido-common",
- "kaido-math",
- "soroban-sdk",
-]
-
-[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -996,7 +986,6 @@ dependencies = [
  "blend-adapter",
  "blend-contract-sdk",
  "distribution-market",
- "house-vault",
  "kaido-common",
  "kaido-math",
  "market-factory",

@@ -424,6 +424,11 @@ export class Kaido {
     return { params, state, beliefs };
   }
 
+  /** Remaining Blend borrow depth for this market (7dp USDC). */
+  async blendBackedDepth(marketId: string): Promise<bigint> {
+    return this.market(marketId).blend_backed_depth().then((t) => t.result);
+  }
+
   /** Every registered market address, oldest first. */
   async listMarkets(): Promise<string[]> {
     return (await this.registry().all()).result;

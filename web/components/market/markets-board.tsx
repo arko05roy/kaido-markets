@@ -13,6 +13,7 @@ import {
 } from "@/components/app/kaido-ui";
 import {
   crowdTargetLabel,
+  formatUsdc7dp,
   statusLabel,
 } from "@/lib/market-display";
 import { displayMarketQuestion } from "@/lib/market-metadata";
@@ -66,7 +67,7 @@ function MarketCardItem({
   card: MarketCard;
   metadata?: SavedMarketMetadata;
 }) {
-  const { address, info, status, crowdMuWad, crowdSigmaWad, kWad, bWad } = card;
+  const { address, info, status, crowdMuWad, crowdSigmaWad, kWad, bWad, blendBackedDepth7dp } = card;
   const statusText = statusLabel(status);
   const closesAt =
     Number(info.window.lock);
@@ -84,6 +85,11 @@ function MarketCardItem({
               {info.capped && (
                 <span className="border border-[#d8c69a]/25 bg-[#d8c69a]/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#d8c69a]">
                   Capped
+                </span>
+              )}
+              {blendBackedDepth7dp != null && blendBackedDepth7dp > 0n && (
+                <span className="border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
+                  Blend · {formatUsdc7dp(blendBackedDepth7dp)} USDC
                 </span>
               )}
             </div>

@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from "react";
 
-import { formatCountdown } from "@/lib/market-display";
+import { formatCountdown, formatUsdc7dp } from "@/lib/market-display";
 
 export function MarketVitals({
   crowdTarget,
   closesAt,
   statusTag,
+  blendBackedDepth7dp,
 }: {
   crowdTarget?: string;
   closesAt: number;
   statusTag: string;
+  blendBackedDepth7dp?: bigint;
 }) {
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
 
@@ -35,6 +37,12 @@ export function MarketVitals({
         <span className="text-white/35">{resolved ? "Resolved" : "Closes in"} </span>
         <span className="text-[#f3efe6]">{resolved ? "—" : countdown}</span>
       </div>
+      {blendBackedDepth7dp != null && blendBackedDepth7dp > 0n && (
+        <div>
+          <span className="text-white/35">Blend depth </span>
+          <span className="text-emerald-300/90">{formatUsdc7dp(blendBackedDepth7dp)} USDC</span>
+        </div>
+      )}
     </div>
   );
 }

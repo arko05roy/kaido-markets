@@ -174,7 +174,7 @@ kaido/
 │  ├─ contracts/
 │  │   ├─ market-factory/         create_market entry point
 │  │   ├─ distribution-market/    per-market AMM
-│  │   ├─ house-vault/            protocol LP / underwriter of last resort
+│  │   ├─ blend-adapter/          BlendTap JIT borrow spine
 │  │   ├─ registry/               indexes markets + resolvers
 │  │   └─ resolver-{reflector,attested,optimistic,designated}/
 │  ├─ tests/                      multi-contract integration tests
@@ -267,7 +267,7 @@ written by `contracts/scripts/deploy.sh` into `config/networks.<network>.json`.
 
 ```bash
 make deploy:testnet      # scripted, idempotent — writes config/networks.testnet.json + fixtures.demoMarket
-make seed:testnet        # HouseVault liquidity + fixtures.lifecycleMarket (10-min integration window)
+make seed:testnet        # BlendTap authorize + optional lifecycle fixture (KAIDO_RESEED_LIFECYCLE=1)
 ```
 
 After seeding, optional env hints are printed (`NEXT_PUBLIC_KAIDO_DEMO_MARKET`, `NEXT_PUBLIC_KAIDO_LIFECYCLE_MARKET`).

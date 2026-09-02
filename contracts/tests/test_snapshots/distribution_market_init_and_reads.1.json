@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 4,
+    "address": 6,
     "nonce": 0,
     "mux_id": 0
   },
@@ -138,6 +138,16 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "BlendAdapter"
+                          }
+                        ]
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "CollateralPool"
                           }
                         ]
@@ -150,7 +160,79 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "Creator"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "CreatorFees"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "FeeCreatorBps"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 1000
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "FeeLpBps"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 7000
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "FeePool"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "FeeTreasuryBps"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 2000
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "LockedCollateral"
                           }
                         ]
                       },
@@ -326,6 +408,30 @@
                             "symbol": "Open"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Treasury"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "TreasuryFees"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
                       }
                     },
                     {

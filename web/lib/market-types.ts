@@ -11,4 +11,6 @@ export type MarketCard = {
   crowdSigmaWad?: bigint;
   kWad?: bigint;
   bWad?: bigint;
+  /** BlendTap borrow depth remaining (7dp USDC); undefined when unreadable. */
+  blendBackedDepth7dp?: bigint;
 };

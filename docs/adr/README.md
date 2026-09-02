@@ -14,7 +14,7 @@ are actually made:
 | 3  | [σ-floor by default; capped-Gaussian opt-in](0003-sigma-floor-default-capped-opt-in.md) | Accepted |
 | 4  | Trajectory market = product of per-checkpoint markets | TODO (Sprint 2) |
 | 5  | [Resolver is an interface, not a contract](0005-resolver-interface.md) | Accepted |
-| 6  | HouseVault is a Layer-1 participant | TODO (Sprint 2) |
+| 6  | BlendTap (Blend JIT borrow) replaces HouseVault bootstrap | Done (2026-06) |
 | 7  | No protocol token; settlement in USDC | TODO (Sprint 2) |
 | 8  | Frontend never trusts itself; shared conformance vectors | TODO (Sprint 3) |
 | 9  | Commit-reveal for short-window games | TODO (Sprint 4) |

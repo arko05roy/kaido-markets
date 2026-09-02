@@ -365,17 +365,16 @@ fn outstanding_debt(env, market: Address) -> i128;
 
 | Area | Action |
 |---|---|
-| `contracts/contracts/house-vault/` | Delete crate |
-| `contracts/scripts/seed.sh` | Remove `seed_house_vault`; tests use trader-funded trades only |
-| `contracts/tests/tests/lifecycle.rs` | Remove house seed step |
-| `config/networks.*.json` | Remove `houseVault` contract + fixture |
-| `deploy.sh` | Stop deploying house-vault |
-| `web/lib/stellar/house.ts` | Remove |
-| `web/components/hero.tsx`, market UI | Remove house exposure / seed copy |
-| `packages/contract-bindings/src/house-vault/` | Remove after redeploy |
-| `kaido-whitepaper.md` §18, §20 | Rewrite: BlendTap bootstrap, “trade vs market curve” |
-| `build.md` | Update pivot note (HouseVault → BlendTap) |
-| `KaidoError::CapExceeded`, `CapNotSet` | Remove or repurpose when house-vault deleted |
+| `contracts/contracts/house-vault/` | ~~Delete crate~~ **done** |
+| `contracts/scripts/seed.sh` | ~~Remove `seed_house_vault`~~ **done** — BlendTap authorize only |
+| `contracts/tests/tests/lifecycle.rs` | ~~Remove house seed step~~ **done** |
+| `config/networks.*.json` | ~~Remove `houseVault`~~ **done** |
+| `deploy.sh` | ~~Stop deploying house-vault~~ **done** |
+| `web/lib/stellar/house.ts` | ~~Remove~~ **done** |
+| `packages/contract-bindings/src/house-vault/` | ~~Remove~~ **done** |
+| `kaido-whitepaper.md` §18, §20 | **done** — BlendTap bootstrap |
+| `build.md` | Pivot note at top **done** (historical sprint notes retain context) |
+| `KaidoError::CapExceeded`, `CapNotSet` | **done** — reserved slots 44/45 |
 
 **Regulatory narrative (was HouseVault-as-LP):** Kaido is a **Blend borrower** using existing DeFi infrastructure; optional third-party LPs earn fees; no protocol house book.
 
@@ -435,7 +434,7 @@ fn outstanding_debt(env, market: Address) -> i128;
 
 - [`contracts/contracts/distribution-market/src/lib.rs`](contracts/contracts/distribution-market/src/lib.rs)
 - [`contracts/contracts/market-factory/src/lib.rs`](contracts/contracts/market-factory/src/lib.rs)
-- [`contracts/contracts/house-vault/src/lib.rs`](contracts/contracts/house-vault/src/lib.rs) — **to be deleted**
+- [`contracts/contracts/blend-adapter/src/lib.rs`](contracts/contracts/blend-adapter/src/lib.rs) — BlendTap spine
 - [`contracts/crates/kaido-math/src/gaussian.rs`](contracts/crates/kaido-math/src/gaussian.rs)
 - [`contracts/scripts/seed.sh`](contracts/scripts/seed.sh)
 - [`kaido-whitepaper.md`](kaido-whitepaper.md)

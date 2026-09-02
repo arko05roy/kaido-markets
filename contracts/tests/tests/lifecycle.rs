@@ -1,7 +1,7 @@
 //! Sprint-2 multi-contract lifecycle (build.md §5):
 //!
 //! USDC SAC → mock SEP-40 oracle → `resolver-reflector` → `distribution-market`
-//! → a trader trades (no HouseVault seed) → advance time → `resolve()` →
+//! → a trader trades (BlendTap JIT borrow, no seed tx) → advance time → `resolve()` →
 //! `claim()`. BlendTap path: `blend-adapter` JIT-borrows on first trade.
 //! Asserts USDC conserves exactly and the market never pays out more than it holds.
 

@@ -89,7 +89,7 @@ export function tradingClosedReason(
     return `Trading opens ${fmtResolveDateLong(open)}.`;
   }
   if (nowSec >= lock) {
-    return `Trading locked ${fmtResolveDateLong(lock)} — re-seed testnet fixtures or create a new market.`;
+    return `Trading locked ${fmtResolveDateLong(lock)} — create a new market or wait for the next deploy.`;
   }
   return "Trading is closed for this market.";
 }
@@ -97,7 +97,13 @@ export function tradingClosedReason(
 /** Map Soroban contract error codes from failed simulations to readable copy. */
 export function formatContractTradeError(message: string): string {
   if (message.includes("Error(Contract, #30)") || message.includes("MarketNotOpen")) {
-    return "Trading window is not open — the market may have locked or testnet fixtures expired. Run `KAIDO_RESEED_LIFECYCLE=1 make seed:testnet` or create a new market.";
+    return "Trading window is not open — the market may have locked or the window expired. Create a new market via /create.";
+  }
+  if (message.includes("Error(Contract, #46)") || message.includes("BlendDepthExceeded")) {
+    return "Blend borrow depth exhausted — reduce trade size or wait for positions to unwind at claim.";
+  }
+  if (message.includes("Error(Contract, #47)") || message.includes("BlendMarketNotAuthorized")) {
+    return "This market is not authorized for BlendTap — run authorize_market on the adapter after deploy.";
   }
   if (message.includes("Error(Contract, #34)") || message.includes("SlippageExceeded")) {
     return "Slippage guard tripped — raise your max USDC risk amount.";
@@ -125,6 +131,15 @@ export function formatOutcome(v: number): string {
     return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
   return v.toPrecision(3);
+}
+
+/** Format on-chain USDC amounts (7 decimal places). */
+export function formatUsdc7dp(amount7dp: bigint): string {
+  const n = Number(amount7dp) / 1e7;
+  if (!Number.isFinite(n)) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 10_000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 export function formatOutcomeDelta(delta: number): string {

@@ -372,7 +372,7 @@
                   "string": "kaido-lifecycle"
                 },
                 {
-                  "bytes": "80c25bd9b83dcbc0af2d9a81e2c69cdc4423020c9d2714a6e59c57a8ae94cdcd"
+                  "bytes": "df8c9779b50f4be507b24a9ddabad8bec8de2d5b4a582973c6eea2addbafba0d"
                 },
                 {
                   "address": "CC6YSLPYSKOZZFQSYO3UWY6VG5ZFKBXYOVDLAO7CVS26QZAFFR6AWO5K"
@@ -393,7 +393,7 @@
             {
               "function": {
                 "contract_fn": {
-                  "contract_address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+                  "contract_address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
                   "function_name": "__constructor",
                   "args": [
                     {
@@ -435,7 +435,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract_address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "function_name": "queue_set_reserve",
               "args": [
                 {
@@ -570,7 +570,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G"
+                  "address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA"
                 },
                 {
                   "i128": "500000000000"
@@ -609,7 +609,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract_address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "function_name": "set_status",
               "args": [
                 {
@@ -651,7 +651,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract_address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "function_name": "submit",
               "args": [
                 {
@@ -709,7 +709,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
                     },
                     {
-                      "address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G"
+                      "address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA"
                     },
                     {
                       "i128": "200000000000"
@@ -1297,7 +1297,7 @@
                     "symbol": "PoolBalance"
                   },
                   {
-                    "address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G"
+                    "address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA"
                   }
                 ]
               },
@@ -1355,7 +1355,7 @@
                           "symbol": "pool"
                         },
                         "val": {
-                          "address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G"
+                          "address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA"
                         }
                       },
                       {
@@ -1474,7 +1474,7 @@
                     "symbol": "Contracts"
                   },
                   {
-                    "address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G"
+                    "address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA"
                   }
                 ]
               },
@@ -1749,7 +1749,7 @@
                         ]
                       },
                       "val": {
-                        "address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G"
+                        "address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA"
                       }
                     },
                     {
@@ -3082,7 +3082,7 @@
                     "symbol": "Balance"
                   },
                   {
-                    "address": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G"
+                    "address": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA"
                   }
                 ]
               },
@@ -3282,7 +3282,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "key": {
                 "symbol": "ResList"
               },
@@ -3306,7 +3306,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "key": {
                 "vec": [
                   {
@@ -3367,7 +3367,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "key": {
                 "vec": [
                   {
@@ -3437,7 +3437,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "key": {
                 "vec": [
                   {
@@ -3569,7 +3569,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "key": {
                 "vec": [
                   {
@@ -3653,7 +3653,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3IRZJHLZTFTO2YHDINOHDHMIH3HBMGVYREX342BSELWG2KTFIU4B6G",
+              "contract": "CBYTDLLWIJA7KZHV6A4MHKJZRCONN4LFXQDOZGGULJQHJFQVLZY4RUHA",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {

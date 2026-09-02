@@ -6,7 +6,7 @@
 >
 > **Methodology:** 2‑week sprints, trunk-based-ish with short-lived feature branches, Definition of Done enforced by CI. Each sprint below lists *Goal → User stories → Engineering tasks → Tests/acceptance → Deliverable*.
 
-> **Pivot (2026-06):** ChartGuessr game layer **removed** from the product and repo. Product focus is a **simple distribution market** on `/markets` + `/create` (trade → resolve → claim). Trajectory markets stay on-chain; trajectory UX in the web app is deferred. Uniswap-style LP is a future epic — minimal on-chain LP remains; HouseVault seeds liquidity for now. Wallet: **Freighter only** (passkey deferred post-M1).
+> **Pivot (2026-06):** ChartGuessr game layer **removed**. Product focus is distribution markets on `/markets` + `/create`. **Liquidity bootstrap is BlendTap** (JIT borrow from Blend on `trade()` — see `liquidity-plan.md`); **HouseVault removed**. Wallet: **Freighter only** (passkey deferred post-M1).
 
 ### Current status (2026-06-21)
 
@@ -17,13 +17,13 @@
 | **Milestone** | **M1 complete** — tag `v0.1.0-m1`; **M2 in progress** (target: end of S6, tag `v0.2.0-m2`) |
 | **Testnet ops** | Single-wallet deploy via `kaido-wallet` (`GBKVUN…`); last deploy **2026-06-20**; testnet reset **2026-06-17** (re-deployed after); next reset **2026-12-16** |
 
-**Working today (testnet):** all prior S5 flows plus **T1 attested** + **T2 optimistic** resolver contracts (deployed, unit-tested), settlement UI for T1/T2, `/api/attested/sign` poster (reads `stellar keys secret` via `DEPLOYER_KEY_NAME` / `ATTESTED_POSTER_KEY_NAME`), `/leaderboard` (live RPC calibration scores — empty until resolved markets with trades), `@kaido/sdk` T1/T2 write helpers + `attested.ts` signing utils. Demo market HouseVault seeded **20 USDC** (manual; default `seed.sh` deposits 50 USDC).
+**Working today (testnet):** BlendTap JIT borrow on `trade()`; T1/T2 settlement UI; `/leaderboard`; `@kaido/sdk` + `blend_backed_depth` in UI. Deploy with `make deploy:testnet` (requires **stellar-cli ≥ 27** for fee-bump). No HouseVault seed step.
 
 **S6 still outstanding:** SDK **1.0** publish + `examples/`; first real T1 data adapter (sports/box-office API); audit scope doc + auditor kickoff; geofencing + ToS draft; Playwright T1/T2/LP E2E; leaderboard reference vectors + result-card rank link; T1 API integration test; T2 lazy-watcher scenario test; end-to-end T1/T2 market demo on testnet; `cargo-fuzz`; capped-Gaussian conformance vectors (`docs/test-vectors/`); passkey wallet.
 
 **Dev wallet / deployer:** import recovery phrase once with `stellar keys add kaido-wallet --seed-phrase`; set `DEPLOYER_KEY_NAME=kaido-wallet` and `ADMIN_ADDRESS=GBKVUNMQ534SFSPQXYDNK2F4LFLL2534NYOBXVPDC3JFYLFA7YRBLWBI` in `.env`. Fund USDC (Circle testnet faucet) before `make seed:testnet` (needs ≥50 USDC per market for default seed, or seed manually with a lower amount).
 
-**Testnet contract ids** (from `config/networks.testnet.json`, redeployed 2026-06-20): factory `CBGIKGF6D522NW7KBFCWL5S6JG3A2UPJ6AGFPM6KWRGRZ22HAWXTTQ5A`, registry `CCOTMBVO7IGZNTB4Q2RRSWNQN2AIRNQF2C3YGE5KD744WS2HFIESEVNA`, T0 reflector `CA52NJO74EHXCTZDFPMZLG3CJ57TFFW74UOV4NVGMT6BDUZ3FIY7EY2V`, **T1 attested** `CAAKVVC6YZVRHCHCNSE7OOWDM4KD3SGPGEHIACXODKORRVMFMPI2UGGP`, **T2 optimistic** `CCEVTHDTVHWZG2E6HFDUQXY35KHKP2M3MF7X27MWMQMMCWNXASASX623`, T3 designated `CDSU7AULNUKK6HG4LUSJIW2XHEUNZGRL4TWGWEM3QHYUQ4LNDGBPNIWF`, house-vault `CCHABSAKYR2Y56DBIF5JST7PIBBXBNLELFQG23ZMPJ7UUA7KW7GYN5NY`, demo market `CDFZPVBQWUVIXVASW5YJON5UKD4PHU44H2XXDWYMJR354VKMEYHLWOCV`, lifecycle market `CC7GHZLLIUSQ4GA4PW3WEGQV3657UZCYYTWYCUCDEW6ZCGZZGB5JE72Q` (5 min lock / 10 min resolve).
+**Testnet contract ids** (from `config/networks.testnet.json` — redeploy with `make deploy:testnet` for current ids): see live file; includes `blendAdapter`, `marketFactory`, `registry`, resolvers, `fixtures.demoMarket`.
 
 **WASM build note:** unset `CARGO_TARGET_DIR` before `cargo make bindings` or `make deploy:testnet` — Cursor's sandbox cache can leave stale May-era WASM in `contracts/target/` and regenerate bindings against the old ABI (`amount_7dp` instead of `scale_y`).
 
@@ -113,7 +113,7 @@ Network config (source of truth: https://developers.stellar.org/docs/networks �
 
 **Per-network, never hardcode in contract logic** — resolve at deploy time and store in the contract's config: the **USDC SAC contract id**, the **Reflector feed contract id** (testnet ≠ mainnet; see Reflector `/oracles` tab), the **admin multisig**, and the **Launchtube** endpoint/JWT for passkey tx submission. All of this lives in `.env` + a checked-in `config/networks.json` consumed by both `web` and the deploy scripts.
 
-**⚠️ Testnet resets ~2–4×/year at 17:00 UTC** — scheduled 2026 dates: **June 17** and **December 16**. A reset wipes all Testnet state. Build for it: (1) `make deploy:testnet` is scripted and idempotent and rewrites `config/networks.<network>.json`, (2) `make seed:testnet` restores HouseVault liquidity + `fixtures.lifecycleMarket`, (3) nothing off-chain treats a testnet contract id as permanent. Re-deploy before any demo or SCF review after a reset.
+**⚠️ Testnet resets ~2–4×/year at 17:00 UTC** — scheduled 2026 dates: **June 17** and **December 16**. After a reset: (1) `make deploy:testnet` rewrites `config/networks.testnet.json`, (2) optional `make seed:testnet` authorizes demo + lifecycle fixtures, (3) nothing off-chain treats contract ids as permanent.
 
 ---
 
@@ -137,7 +137,7 @@ kaido/
 │  ├─ contracts/
 │  │  ├─ market-factory/        # create_market(...) → deploys DistributionMarket
 │  │  ├─ distribution-market/   # the per-market AMM
-│  │  ├─ house-vault/           # protocol-owned underwriter (itself an L1 position holder)
+│  │  ├─ blend-adapter/           # BlendTap JIT borrow spine
 │  │  ├─ registry/              # indexes markets + resolvers + trust tiers
 │  │  ├─ resolver-reflector/    # T0 — reads Reflector SEP-40 feed
 │  │  ├─ resolver-attested/     # T1 — signed report from permissioned poster + challenge window
@@ -161,7 +161,7 @@ kaido/
 │  │  ├─ market/                # market state, LP panel, settlement, result card
 │  │  └─ wallet/                # Freighter connect (passkey deferred)
 │  ├─ lib/
-│  │  ├─ stellar/               # rpc client, deployed ids, USDC balance, HouseVault reads
+│  │  ├─ stellar/               # rpc client, deployed ids, USDC balance, Blend depth
 │  │  ├─ curve/                 # byte-exact port of kaido-math (conformance vectors)
 │  │  ├─ leaderboard/           # calibration scores from live RPC (S6)
 │  │  └─ indexer/               # RPC getEvents + wallet position discovery

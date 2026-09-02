@@ -61,6 +61,9 @@ seed\:testnet:
 spike\:blend:
 	STELLAR_NETWORK=testnet ./contracts/scripts/blend-spike.sh testnet
 
+lifecycle-e2e\:testnet:
+	./contracts/scripts/blend-lifecycle-e2e.sh testnet
+
 # --- web ------------------------------------------------------------------
 web-dev:
 	pnpm --filter web dev

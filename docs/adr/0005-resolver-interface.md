@@ -38,5 +38,5 @@ A `DistributionMarket` stores only the resolver's **address** and its declared
 - On a stale/garbage feed or a malformed signed report the market enters a
   *disputable / paused* state — never a bad payout (Sprint 2 acceptance; the
   oracle-failure drill in §6 item 11).
-- HouseVault and LP economics are independent of the resolver; the resolver only
+- BlendTap borrow caps and LP economics are independent of the resolver; the resolver only
   supplies `x₀` at settlement time.

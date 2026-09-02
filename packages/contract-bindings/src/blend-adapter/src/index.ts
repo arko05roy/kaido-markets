@@ -33,13 +33,8 @@ if (typeof window !== "undefined") {
 
 
 
-export const ResolverError = {
-  1: {message:"AlreadyInitialized"},
-  2: {message:"NotInitialized"},
-  3: {message:"AlreadyReported"},
-  4: {message:"NotYetResolveTime"},
-  5: {message:"NotReported"}
-}
+
+
 
 
 
@@ -436,41 +431,78 @@ owner: string;
 
 export interface Client {
   /**
-   * Construct and simulate a report transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * The designated party posts the realised outcome `value` (WAD). Callable
-   * only at or after `resolve_time`, once.
+   * Construct and simulate a blend_pool transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * The configured Blend pool address.
    */
-  report: ({reporter, value}: {reporter: string, value: i128}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  blend_pool: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
 
   /**
-   * Construct and simulate a status transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Non-trapping status query.
+   * Construct and simulate a borrow_cap transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Per-market borrow cap (7-dp USDC), `0` if unset.
    */
-  status: (options?: MethodOptions) => Promise<AssembledTransaction<ResolverStatus>>
+  borrow_cap: ({market}: {market: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
-   * Construct and simulate a resolve transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Realised outcome `x₀` in WAD. Panics if not yet reported.
+   * Construct and simulate a is_authorized transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Whether `market` is authorized to borrow.
    */
-  resolve: (options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+  is_authorized: ({market}: {market: string}, options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
 
   /**
-   * Construct and simulate a designated transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * The configured designated reporter.
+   * Construct and simulate a revoke_market transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Revoke a market's borrow permission.
    */
-  designated: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+  revoke_market: ({market}: {market: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a resolve_time transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Configured resolve timestamp.
+   * Construct and simulate a available_depth transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * `min(cap − outstanding, pool_available)` in 7-dp USDC.
    */
-  resolve_time: (options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+  available_depth: ({market}: {market: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a authorize_market transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Admin-gated. Authorize `market` to borrow up to `cap_7dp` USDC (7-dp).
+   */
+  authorize_market: ({market, cap_7dp}: {market: string, cap_7dp: i128}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a outstanding_debt transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Outstanding Blend debt for `market` (7-dp USDC).
+   */
+  outstanding_debt: ({market}: {market: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a repay_for_market transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Callable only by an authorized `market`. Repays up to `amount_7dp` USDC
+   * of outstanding debt (capped at outstanding). `amount_7dp` USDC must be
+   * in this adapter before the call. Returns the amount actually repaid.
+   */
+  repay_for_market: ({market, amount_7dp}: {market: string, amount_7dp: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a unwind_for_claim transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Callable only by an authorized `market` at claim time. Atomically withdraws
+   * all posted collateral and repays outstanding debt, forwarding net USDC to
+   * `market` so winner payouts can be settled from the market's token balance.
+   */
+  unwind_for_claim: ({market}: {market: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a borrow_for_market transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Callable only by an authorized `market`. `collateral_7dp` USDC must
+   * already be in this adapter (transferred by the market before the call).
+   * Atomically deposits collateral into Blend and borrows `borrow_7dp` USDC,
+   * then forwards the borrowed USDC back to `market`. Returns the amount
+   * borrowed (7-dp).
+   */
+  borrow_for_market: ({market, collateral_7dp, borrow_7dp}: {market: string, collateral_7dp: i128, borrow_7dp: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
 }
 export class Client extends ContractClient {
   static async deploy<T = Client>(
         /** Constructor/Initialization Args for the contract's `__constructor` method */
-        {designated, resolve_time}: {designated: string, resolve_time: u64},
+        {admin, blend_pool, usdc}: {admin: string, blend_pool: string, usdc: string},
     /** Options for initializing a Client as well as for calling a method, with extras specific to deploying. */
     options: MethodOptions &
       Omit<ContractClientOptions, "contractId"> & {
@@ -482,17 +514,24 @@ export class Client extends ContractClient {
         format?: "hex" | "base64";
       }
   ): Promise<AssembledTransaction<T>> {
-    return ContractClient.deploy({designated, resolve_time}, options)
+    return ContractClient.deploy({admin, blend_pool, usdc}, options)
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAABAAAAAAAAAAAAAAADVJlc29sdmVyRXJyb3IAAAAAAAAFAAAAAAAAABJBbHJlYWR5SW5pdGlhbGl6ZWQAAAAAAAEAAAAAAAAADk5vdEluaXRpYWxpemVkAAAAAAACAAAAAAAAAA9BbHJlYWR5UmVwb3J0ZWQAAAAAAwAAAAAAAAARTm90WWV0UmVzb2x2ZVRpbWUAAAAAAAAEAAAAAAAAAAtOb3RSZXBvcnRlZAAAAAAF",
-        "AAAAAAAAAG5UaGUgZGVzaWduYXRlZCBwYXJ0eSBwb3N0cyB0aGUgcmVhbGlzZWQgb3V0Y29tZSBgdmFsdWVgIChXQUQpLiBDYWxsYWJsZQpvbmx5IGF0IG9yIGFmdGVyIGByZXNvbHZlX3RpbWVgLCBvbmNlLgAAAAAABnJlcG9ydAAAAAAAAgAAAAAAAAAIcmVwb3J0ZXIAAAATAAAAAAAAAAV2YWx1ZQAAAAAAAAsAAAAA",
-        "AAAAAAAAABpOb24tdHJhcHBpbmcgc3RhdHVzIHF1ZXJ5LgAAAAAABnN0YXR1cwAAAAAAAAAAAAEAAAfQAAAADlJlc29sdmVyU3RhdHVzAAA=",
-        "AAAAAAAAADtSZWFsaXNlZCBvdXRjb21lIGB44oKAYCBpbiBXQUQuIFBhbmljcyBpZiBub3QgeWV0IHJlcG9ydGVkLgAAAAAHcmVzb2x2ZQAAAAAAAAAAAQAAAAs=",
-        "AAAAAAAAACNUaGUgY29uZmlndXJlZCBkZXNpZ25hdGVkIHJlcG9ydGVyLgAAAAAKZGVzaWduYXRlZAAAAAAAAAAAAAEAAAAT",
-        "AAAAAAAAAB1Db25maWd1cmVkIHJlc29sdmUgdGltZXN0YW1wLgAAAAAAAAxyZXNvbHZlX3RpbWUAAAAAAAAAAQAAAAY=",
-        "AAAAAAAAAEVXaXJlIHRoZSByZXNvbHZlciB0byBvbmUgZGVzaWduYXRlZCByZXBvcnRlciBhbmQgYSByZXNvbHZlIHRpbWVzdGFtcC4AAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAIAAAAAAAAACmRlc2lnbmF0ZWQAAAAAABMAAAAAAAAADHJlc29sdmVfdGltZQAAAAYAAAAA",
+      new ContractSpec([ "AAAABQAAAAAAAAAAAAAABlJlcGFpZAAAAAAAAQAAAAZyZXBhaWQAAAAAAAIAAAAAAAAABm1hcmtldAAAAAAAEwAAAAAAAAAAAAAACmFtb3VudF83ZHAAAAAAAAsAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAACEJvcnJvd2VkAAAAAQAAAAhib3Jyb3dlZAAAAAMAAAAAAAAABm1hcmtldAAAAAAAEwAAAAAAAAAAAAAADmNvbGxhdGVyYWxfN2RwAAAAAAALAAAAAAAAAAAAAAAKYW1vdW50XzdkcAAAAAAACwAAAAAAAAAC",
+        "AAAAAAAAACJUaGUgY29uZmlndXJlZCBCbGVuZCBwb29sIGFkZHJlc3MuAAAAAAAKYmxlbmRfcG9vbAAAAAAAAAAAAAEAAAAT",
+        "AAAAAAAAADBQZXItbWFya2V0IGJvcnJvdyBjYXAgKDctZHAgVVNEQyksIGAwYCBpZiB1bnNldC4AAAAKYm9ycm93X2NhcAAAAAAAAQAAAAAAAAAGbWFya2V0AAAAAAATAAAAAQAAAAs=",
+        "AAAABQAAAAAAAAAAAAAAEE1hcmtldEF1dGhvcml6ZWQAAAABAAAAEW1hcmtldF9hdXRob3JpemVkAAAAAAAAAgAAAAAAAAAGbWFya2V0AAAAAAATAAAAAAAAAAAAAAAHY2FwXzdkcAAAAAALAAAAAAAAAAI=",
+        "AAAAAAAAAEhgYmxlbmRfcG9vbGAg4oCUIHRoZSBCbGVuZCBsZW5kaW5nIHBvb2w7IGB1c2RjYCDigJQgdGhlIFVTREMgU0FDICg3LWRwKS4AAAANX19jb25zdHJ1Y3RvcgAAAAAAAAMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAAKYmxlbmRfcG9vbAAAAAAAEwAAAAAAAAAEdXNkYwAAABMAAAAA",
+        "AAAAAAAAAClXaGV0aGVyIGBtYXJrZXRgIGlzIGF1dGhvcml6ZWQgdG8gYm9ycm93LgAAAAAAAA1pc19hdXRob3JpemVkAAAAAAAAAQAAAAAAAAAGbWFya2V0AAAAAAATAAAAAQAAAAE=",
+        "AAAAAAAAACRSZXZva2UgYSBtYXJrZXQncyBib3Jyb3cgcGVybWlzc2lvbi4AAAANcmV2b2tlX21hcmtldAAAAAAAAAEAAAAAAAAABm1hcmtldAAAAAAAEwAAAAA=",
+        "AAAAAAAAADhgbWluKGNhcCDiiJIgb3V0c3RhbmRpbmcsIHBvb2xfYXZhaWxhYmxlKWAgaW4gNy1kcCBVU0RDLgAAAA9hdmFpbGFibGVfZGVwdGgAAAAAAQAAAAAAAAAGbWFya2V0AAAAAAATAAAAAQAAAAs=",
+        "AAAAAAAAAEZBZG1pbi1nYXRlZC4gQXV0aG9yaXplIGBtYXJrZXRgIHRvIGJvcnJvdyB1cCB0byBgY2FwXzdkcGAgVVNEQyAoNy1kcCkuAAAAAAAQYXV0aG9yaXplX21hcmtldAAAAAIAAAAAAAAABm1hcmtldAAAAAAAEwAAAAAAAAAHY2FwXzdkcAAAAAALAAAAAA==",
+        "AAAAAAAAADBPdXRzdGFuZGluZyBCbGVuZCBkZWJ0IGZvciBgbWFya2V0YCAoNy1kcCBVU0RDKS4AAAAQb3V0c3RhbmRpbmdfZGVidAAAAAEAAAAAAAAABm1hcmtldAAAAAAAEwAAAAEAAAAL",
+        "AAAAAAAAANNDYWxsYWJsZSBvbmx5IGJ5IGFuIGF1dGhvcml6ZWQgYG1hcmtldGAuIFJlcGF5cyB1cCB0byBgYW1vdW50XzdkcGAgVVNEQwpvZiBvdXRzdGFuZGluZyBkZWJ0IChjYXBwZWQgYXQgb3V0c3RhbmRpbmcpLiBgYW1vdW50XzdkcGAgVVNEQyBtdXN0IGJlCmluIHRoaXMgYWRhcHRlciBiZWZvcmUgdGhlIGNhbGwuIFJldHVybnMgdGhlIGFtb3VudCBhY3R1YWxseSByZXBhaWQuAAAAABByZXBheV9mb3JfbWFya2V0AAAAAgAAAAAAAAAGbWFya2V0AAAAAAATAAAAAAAAAAphbW91bnRfN2RwAAAAAAALAAAAAQAAAAs=",
+        "AAAAAAAAAOBDYWxsYWJsZSBvbmx5IGJ5IGFuIGF1dGhvcml6ZWQgYG1hcmtldGAgYXQgY2xhaW0gdGltZS4gQXRvbWljYWxseSB3aXRoZHJhd3MKYWxsIHBvc3RlZCBjb2xsYXRlcmFsIGFuZCByZXBheXMgb3V0c3RhbmRpbmcgZGVidCwgZm9yd2FyZGluZyBuZXQgVVNEQyB0bwpgbWFya2V0YCBzbyB3aW5uZXIgcGF5b3V0cyBjYW4gYmUgc2V0dGxlZCBmcm9tIHRoZSBtYXJrZXQncyB0b2tlbiBiYWxhbmNlLgAAABB1bndpbmRfZm9yX2NsYWltAAAAAQAAAAAAAAAGbWFya2V0AAAAAAATAAAAAA==",
+        "AAAAAAAAASpDYWxsYWJsZSBvbmx5IGJ5IGFuIGF1dGhvcml6ZWQgYG1hcmtldGAuIGBjb2xsYXRlcmFsXzdkcGAgVVNEQyBtdXN0CmFscmVhZHkgYmUgaW4gdGhpcyBhZGFwdGVyICh0cmFuc2ZlcnJlZCBieSB0aGUgbWFya2V0IGJlZm9yZSB0aGUgY2FsbCkuCkF0b21pY2FsbHkgZGVwb3NpdHMgY29sbGF0ZXJhbCBpbnRvIEJsZW5kIGFuZCBib3Jyb3dzIGBib3Jyb3dfN2RwYCBVU0RDLAp0aGVuIGZvcndhcmRzIHRoZSBib3Jyb3dlZCBVU0RDIGJhY2sgdG8gYG1hcmtldGAuIFJldHVybnMgdGhlIGFtb3VudApib3Jyb3dlZCAoNy1kcCkuAAAAAAARYm9ycm93X2Zvcl9tYXJrZXQAAAAAAAADAAAAAAAAAAZtYXJrZXQAAAAAABMAAAAAAAAADmNvbGxhdGVyYWxfN2RwAAAAAAALAAAAAAAAAApib3Jyb3dfN2RwAAAAAAALAAAAAQAAAAs=",
         "AAAABQAAADlFbWl0dGVkIGJ5IGBEaXN0cmlidXRpb25NYXJrZXQ6OnRyYWRlYCAodG9waWMgYCJ0cmFkZSJgKS4AAAAAAAAAAAAABVRyYWRlAAAAAAAAAQAAAAV0cmFkZQAAAAAAAAUAAAATUG9zaXRpb24gaWQgbWludGVkLgAAAAACaWQAAAAAAAYAAAAAAAAAC1RoZSB0cmFkZXIuAAAAAAZ0cmFkZXIAAAAAABMAAAAAAAAAGENvbGxhdGVyYWwgbG9ja2VkIChXQUQpLgAAAApjb2xsYXRlcmFsAAAAAAALAAAAAAAAAA9GZWUgcGFpZCAoV0FEKS4AAAAAA2ZlZQAAAAALAAAAAAAAAClUaGUgbmV3IGFnZ3JlZ2F0ZSBiZWxpZWYgYWZ0ZXIgdGhlIHRyYWRlLgAAAAAAAAZiZWxpZWYAAAAAB9AAAAAGQmVsaWVmAAAAAAAAAAAAAg==",
         "AAAAAQAAAN1BIEdhdXNzaWFuIGJlbGllZiBjdXJ2ZSwgc3RvcmVkIGFzIHBhcmFtZXRlcnMgKEFEUi0yKTogYGYoeCkgPSDOuyDCtyDPhl97zrwsz4N9KHgpYAp3aXRoIGDOuyA9IGvCt+KImigyz4PiiJrPgClgIHNvIGDigJZm4oCW4oKCID0ga2AuIEFsbCBXQUQuIGDOu2AgaXMgZGVyaXZlZCBhbmQgc3RvcmVkCnJlZHVuZGFudGx5IHNvIHJlYWRzIG5ldmVyIHJlY29tcHV0ZSBhIHNxdWFyZSByb290LgAAAAAAAAAAAAAGQmVsaWVmAAAAAAADAAAAPFNjYWxlIGDOuyA9IGvCt+KImigyz4PiiJrPgClgIChXQUQpLiBEZXJpdmVkIGZyb20gYChrLCDPgylgLgAAAAZsYW1iZGEAAAAAAAsAAAAhQ2VudGVyIGDOvGAgKG91dGNvbWUgdW5pdHMsIFdBRCkuAAAAAAAAAm11AAAAAAALAAAATVdpZHRoIGDPg2AgKG91dGNvbWUgdW5pdHMsIFdBRCkuIE11c3Qgc2F0aXNmeSBgz4Mg4omlIM+DX21pbmAgZm9yIHRoZSBtYXJrZXQuAAAAAAAABXNpZ21hAAAAAAAACw==",
         "AAAABQAAAD5FbWl0dGVkIGJ5IGBEaXN0cmlidXRpb25NYXJrZXQ6OnJlc29sdmVgICh0b3BpYyBgInJlc29sdmVkImApLgAAAAAAAAAAAAhSZXNvbHZlZAAAAAEAAAAIcmVzb2x2ZWQAAAABAAAAHlJlYWxpc2VkIG91dGNvbWUgYHjigoBgIChXQUQpLgAAAAAAAngwAAAAAAALAAAAAAAAAAI=",
@@ -518,10 +557,15 @@ export class Client extends ContractClient {
     )
   }
   public readonly fromJSON = {
-    report: this.txFromJSON<null>,
-        status: this.txFromJSON<ResolverStatus>,
-        resolve: this.txFromJSON<i128>,
-        designated: this.txFromJSON<string>,
-        resolve_time: this.txFromJSON<u64>
+    blend_pool: this.txFromJSON<string>,
+        borrow_cap: this.txFromJSON<i128>,
+        is_authorized: this.txFromJSON<boolean>,
+        revoke_market: this.txFromJSON<null>,
+        available_depth: this.txFromJSON<i128>,
+        authorize_market: this.txFromJSON<null>,
+        outstanding_debt: this.txFromJSON<i128>,
+        repay_for_market: this.txFromJSON<i128>,
+        unwind_for_claim: this.txFromJSON<null>,
+        borrow_for_market: this.txFromJSON<i128>
   }
 }

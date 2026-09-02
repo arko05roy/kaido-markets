@@ -701,7 +701,7 @@ function BuildersSection() {
             />
             <SDKRow
               label="Lifecycle"
-              body="Open · lock · resolve. Soroban handles settlement. House vault seeds initial liquidity."
+              body="Open · lock · resolve. Soroban handles settlement. BlendTap borrows liquidity on your first trade."
             />
           </div>
         </motion.div>

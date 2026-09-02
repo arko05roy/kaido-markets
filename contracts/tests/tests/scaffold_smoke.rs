@@ -5,8 +5,8 @@
 //!    `init` → `get_params` / `get_state` and emits an event.
 //!
 //! This proves the contract crates link and the workspace test harness runs.
-//! Full multi-contract lifecycle tests (factory → registry → house → market →
-//! resolver) arrive in Sprints 2–3 (build.md §5).
+//! Full multi-contract lifecycle tests (factory → registry → blend-adapter →
+//! market → resolver) live in `lifecycle.rs`.
 
 use kaido_common::{
     MarketParams, MarketStatus, MarketWindow, OutcomeSpace, Parameterization, ResolverTier,
@@ -53,8 +53,7 @@ fn scaffold_contracts_link() {
         assert_eq!(f.count(), 0);
         assert_eq!(f.registry(), reg.address);
     }
-    // house-vault, resolver-reflector, and T1–T3 resolvers have real logic —
-    // exercised by their crate tests and `lifecycle.rs`.
+    // resolver-reflector and T1–T3 resolvers — exercised by crate tests and lifecycle.rs.
 }
 
 #[test]

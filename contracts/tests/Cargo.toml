@@ -1,6 +1,6 @@
 [package]
 name = "kaido-integration-tests"
-description = "Multi-contract integration tests for Kaido (factory → registry → house-vault → market → resolver lifecycles) against a local Soroban env / RPC, with mock SEP-40 oracle and mock resolvers for determinism."
+description = "Multi-contract integration tests for Kaido (factory → registry → blend-adapter → market → resolver lifecycles) against a local Soroban env / RPC, with mock SEP-40 oracle and mock resolvers for determinism."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -23,7 +23,6 @@ distribution-market = { path = "../contracts/distribution-market" }
 blend-adapter = { path = "../contracts/blend-adapter" }
 blend-contract-sdk = { workspace = true, features = ["testutils"] }
 market-factory = { path = "../contracts/market-factory" }
-house-vault = { path = "../contracts/house-vault" }
 registry = { path = "../contracts/registry" }
 resolver-reflector = { path = "../contracts/resolver-reflector" }
 resolver-attested = { path = "../contracts/resolver-attested" }

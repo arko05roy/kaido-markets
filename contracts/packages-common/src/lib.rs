@@ -96,13 +96,10 @@ pub enum KaidoError {
     PeakExceedsB = 42,
     /// A non-positive amount was passed where a strictly-positive one is needed.
     InvalidAmount = 43,
-    /// HouseVault: the proposed seed would push cumulative exposure to this
-    /// market above the on-chain per-market cap. Set the cap explicitly via
-    /// `set_cap` before seeding.
-    CapExceeded = 44,
-    /// HouseVault: cap for this market is not configured (defaults to 0). The
-    /// admin must call `set_cap` before seeding the market.
-    CapNotSet = 45,
+    /// Reserved (legacy error slot — was HouseVault).
+    Reserved44 = 44,
+    /// Reserved (legacy error slot — was HouseVault).
+    Reserved45 = 45,
     /// BlendTap: the requested borrow exceeds per-market cap or pool depth.
     BlendDepthExceeded = 46,
     /// BlendTap: the caller is not an authorized `DistributionMarket`.

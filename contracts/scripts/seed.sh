@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
-# Re-seed demo / test fixtures for a network. Must be safely re-runnable —
-# after a testnet reset, `make deploy:testnet && make seed:testnet` restores a
-# demoable state from scratch (build.md §0a, Sprint 4).
+# Re-seed BlendTap test fixtures for a network (idempotent where the chain allows).
 #
 #   ./contracts/scripts/seed.sh <local|testnet|futurenet>
 #
-# What this does (idempotent where the chain allows):
-#   1. HouseVault: deposit USDC → set_cap → seed_market on fixtures.demoMarket
-#   2. Deploy a short-window T0 resolver + factory create_market → fixtures.lifecycleMarket
+# What this does:
+#   1. blend-adapter.authorize_market on fixtures.demoMarket
+#   2. Optional short-window lifecycle market (KAIDO_RESEED_LIFECYCLE=1)
 #   3. Rewrite config/networks.<network>.json fixtures + seededAt
 #
 # Prerequisites:
-#   * `make deploy:<network>` has already run (config/networks.<network>.json exists)
-#   * USDC_SAC_ID + REFLECTOR_FEED_ID in .env (same as deploy)
-#   * Deployer/admin holds testnet USDC (trustline to USDC issuer) for vault deposit
+#   * make deploy:<network> has already run
+#   * BLEND_POOL_ID + USDC_SAC_ID in .env
+#   * Deployer holds Blend USDC for lifecycle trades
 set -euo pipefail
 
 NETWORK="${1:-${STELLAR_NETWORK:-}}"
@@ -41,7 +39,7 @@ RPC="${RPC_URL:-$(read_cfg rpcUrl)}"
 [[ -n "${RPC}" ]] || { echo "no RPC url for '${NETWORK}'" >&2; exit 2; }
 
 : "${USDC_SAC_ID:?set USDC_SAC_ID in .env}"
-: "${REFLECTOR_FEED_ID:?set REFLECTOR_FEED_ID in .env (Reflector /oracles tab)}"
+: "${REFLECTOR_FEED_ID:?set REFLECTOR_FEED_ID in .env}"
 : "${REFLECTOR_ASSET_SYMBOL:=BTC}"
 
 stellar network add "${NETWORK}" \
@@ -61,17 +59,14 @@ else
   DEPLOYER_ADDR="$(stellar keys address "${KEY_NAME}")"
 fi
 SOURCE_ARG=(--source-account "${SOURCE}")
-ADMIN="${ADMIN_ADDRESS:-${DEPLOYER_ADDR}}"
 
-# Read contract + fixture ids from the live-ids file.
 eval "$(node -e "
 const j=require('${NET_FILE}');
 const c=j.contracts||{};
 const f=j.fixtures||{};
 const lines=[
-  'ID_HOUSE_VAULT='+(c.houseVault?.id||''),
+  'ID_BLEND_ADAPTER='+(c.blendAdapter?.id||''),
   'ID_MARKET_FACTORY='+(c.marketFactory?.id||''),
-  'ID_REGISTRY='+(c.registry?.id||''),
   'HASH_RESOLVER_REFLECTOR='+(c.resolverReflector?.wasmHash||''),
   'DEMO_MARKET='+(f.demoMarket||''),
   'DEMO_RESOLVER='+(f.demoResolver||''),
@@ -81,54 +76,39 @@ const lines=[
 for (const l of lines) console.log(l);
 ")"
 
-[[ -n "${ID_HOUSE_VAULT}" ]] || { echo "houseVault id missing in ${NET_FILE}" >&2; exit 1; }
+[[ -n "${ID_BLEND_ADAPTER}" ]] || { echo "blendAdapter id missing in ${NET_FILE}" >&2; exit 1; }
 [[ -n "${ID_MARKET_FACTORY}" ]] || { echo "marketFactory id missing in ${NET_FILE}" >&2; exit 1; }
 [[ -n "${DEMO_MARKET}" ]] || { echo "fixtures.demoMarket missing — re-run make deploy:${NETWORK}" >&2; exit 1; }
 
 WAD18="1000000000000000000"
 B18="100000000000000000000"
 MU0_18="50000000000000000000"
-# 50 USDC seed, 100 USDC cap (7-decimal stroops).
-SEED_7DP="500000000"
-CAP_7DP="1000000000"
 
-echo "network      : ${NETWORK}"
-echo "deployer     : ${DEPLOYER_ADDR}"
-echo "demo market  : ${DEMO_MARKET}"
-echo "house vault  : ${ID_HOUSE_VAULT}"
+echo "network       : ${NETWORK}"
+echo "deployer      : ${DEPLOYER_ADDR}"
+echo "demo market   : ${DEMO_MARKET}"
+echo "blend adapter : ${ID_BLEND_ADAPTER}"
 echo
 
-# --- HouseVault: deposit → set_cap → seed_market -------------------------
-seed_house_vault() {
+authorize_blend_market() {
   local market="$1"
-  echo "-- HouseVault seed (${market}) --"
-
-  echo "   deposit ${SEED_7DP} (7dp USDC) from deployer..."
-  if ! stellar contract invoke --id "${ID_HOUSE_VAULT}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-       -- deposit --from "${DEPLOYER_ADDR}" --amount-7dp "${SEED_7DP}" 2>/dev/null; then
-    echo "   (deposit failed — ensure deployer has a USDC trustline + balance)" >&2
-    return 1
-  fi
-
-  echo "   set_cap ${CAP_7DP}..."
-  stellar contract invoke --id "${ID_HOUSE_VAULT}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-    -- set_cap --market "${market}" --cap-7dp "${CAP_7DP}" || true
-
-  echo "   seed_market ${SEED_7DP}..."
-  if stellar contract invoke --id "${ID_HOUSE_VAULT}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
-       -- seed_market --market "${market}" --amount-7dp "${SEED_7DP}" 2>/dev/null; then
-    echo "   seeded OK"
-    return 0
-  fi
-  echo "   (seed_market failed — cap may already be set with insufficient vault balance)" >&2
+  echo "-- blend-adapter.authorize_market (${market}) --"
+  sleep 2
+  for attempt in 1 2 3 4 5; do
+    if stellar contract invoke --id "${ID_BLEND_ADAPTER}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+      -- authorize_market --market "${market}" --cap-7dp 100000000000 2>/dev/null; then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "   (authorize_market failed)" >&2
   return 1
 }
 
-seed_house_vault "${DEMO_MARKET}" || echo "   (HouseVault demo seed skipped — fund deployer with testnet USDC)" >&2
+authorize_blend_market "${DEMO_MARKET}" || true
 
-# --- Lifecycle fixture: short-window market for integration tests ----------
-LIFECYCLE_LOCK_SEC="${LIFECYCLE_LOCK_SEC:-300}"   # 5 min
-LIFECYCLE_RESOLVE_SEC="${LIFECYCLE_RESOLVE_SEC:-600}" # 10 min
+LIFECYCLE_LOCK_SEC="${LIFECYCLE_LOCK_SEC:-300}"
+LIFECYCLE_RESOLVE_SEC="${LIFECYCLE_RESOLVE_SEC:-600}"
 
 if [[ -z "${LIFECYCLE_MARKET}" || "${KAIDO_RESEED_LIFECYCLE:-}" == "1" ]]; then
   NOW="$(date +%s)"
@@ -159,12 +139,11 @@ if [[ -z "${LIFECYCLE_MARKET}" || "${KAIDO_RESEED_LIFECYCLE:-}" == "1" ]]; then
   LIFECYCLE_MARKET="${LIFECYCLE_MARKET//\"/}"
   echo "   market   : ${LIFECYCLE_MARKET}"
 
-  seed_house_vault "${LIFECYCLE_MARKET}" || true
+  authorize_blend_market "${LIFECYCLE_MARKET}" || true
 else
   echo "-- lifecycle fixture already present: ${LIFECYCLE_MARKET} --"
 fi
 
-# --- rewrite networks JSON with updated fixtures -------------------------
 node -e "
 const fs=require('fs');
 const path='${NET_FILE}';
@@ -172,7 +151,6 @@ const j=JSON.parse(fs.readFileSync(path,'utf8'));
 j.fixtures={
   demoMarket:'${DEMO_MARKET}',
   demoResolver:'${DEMO_RESOLVER:-}',
-  houseVault:'${ID_HOUSE_VAULT}',
   lifecycleMarket:'${LIFECYCLE_MARKET}',
   lifecycleResolver:'${LIFECYCLE_RESOLVER}',
 };
@@ -181,7 +159,7 @@ fs.writeFileSync(path, JSON.stringify(j, null, 2) + '\n');
 "
 
 echo
-echo "OK: seeded fixtures on ${NETWORK}; updated ${NET_FILE#${ROOT}/}"
+echo "OK: seeded BlendTap fixtures on ${NETWORK}; updated ${NET_FILE#${ROOT}/}"
 echo "  demo market      : ${DEMO_MARKET}"
 echo "  lifecycle market : ${LIFECYCLE_MARKET}"
 echo "  export NEXT_PUBLIC_KAIDO_DEMO_MARKET=${DEMO_MARKET}"

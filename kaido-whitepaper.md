@@ -235,7 +235,7 @@ A small suite of Soroban contracts:
   - **Resolver** — an address implementing the `Resolver` interface (§17). The market is only as trustworthy as its resolver, and the resolver type is displayed prominently to users.
   - **Window** — open time, lock time (no more trades), resolve time.
 - **`DistributionMarket`** — the per-market AMM. Holds collateral, tracks the current aggregate curve (stored as parameters, not a discretized array, for gas-efficiency), prices and executes `trade(belief, collateral)` calls, mints/burns position NFTs (a position is a curve = a few parameters + scale + ownership), handles LP `add`/`remove`, and at `resolve` pays out `f(x₀)` to position holders and `b − f(x₀)` to the AMM/LPs.
-- **`HouseVault`** — the protocol-owned underwriter used at launch to bootstrap markets that have no third-party LPs yet (see §18). Its positions are ordinary Layer-1 positions — Kaido dogfoods its own primitive.
+- **`BlendAdapter`** — optional per-market spine for **BlendTap**: JIT-borrows counterparty USDC from a Blend pool on `trade()` and unwinds on `claim()` (see §18).
 - **`Registry`** — indexes markets, resolvers, and their trust tiers for the frontend.
 
 Everything that can be done by hand via these contracts can also be done via an **SDK** (TypeScript + a Rust crate) so third parties can create markets, plug in their own resolvers, and embed Kaido markets in their own apps.
@@ -270,11 +270,11 @@ A market is only as good as its resolver. Kaido defines a single `Resolver` inte
 
 The breadth of "all possible markets" on day one is exactly: **T0 is live at launch (crypto), T1/T2 follow during testnet, T3 is available immediately for clearly-labeled trust-me markets.** Over time, more T1 adapters and a hardened T2 expand the trustless/economically-secured frontier. Kaido never claims a market is trustless when it isn't — the tier badge is non-negotiable UI.
 
-## 18. Bootstrapping liquidity — the house book
+## 18. Bootstrapping liquidity — BlendTap (JIT borrow)
 
-New markets face a cold-start problem: no LPs, no other side. Kaido's answer is the **`HouseVault`** — a protocol-owned pool that seeds every new market as the LP/underwriter of last resort, so a trader can show up minute one and take a position against *something*. Its exposure is itself a Layer-1 distribution position (so the protocol's own risk is transparent and on-chain), it's risk-capped per market, and as third-party LPs arrive the house can withdraw proportionally. The "trade vs. house" default of the launch market (§20) is literally this: you trade against the HouseVault's curve.
+New markets face a cold-start problem: no LPs, no other side. Kaido's answer is **BlendTap**: on the first `trade()`, the market JIT-borrows counterparty USDC from an existing **Blend** lending pool (collateral = the trader's locked margin). No protocol-owned book, no seed transaction, no HouseVault. At `claim()`, forfeitures repay the borrow and collateral is unwound. Optional third-party LPs can still add liquidity later; they are not required for minute-one trading.
 
-This also matters for the regulatory posture (Part VII): the protocol is providing *liquidity to a market*, not *operating a casino book against players* — a meaningfully different and cleaner framing.
+This also matters for the regulatory posture (Part VII): the protocol borrows from public DeFi liquidity and runs a transparent scoring-rule market — not a house book against players.
 
 ## 19. Layer 2 — the Belief Surface
 
@@ -289,7 +289,7 @@ The point: the *feel* is a clean financial surface, not a chart-trading app — 
 
 ## 20. The launch wedge — a single BTC market
 
-Day one, Kaido ships one market: **"Where does BTC close on Friday?"** Range `[$60k, $80k]`. Resolver: Reflector BTC/USD at the close timestamp. Default mode is **play-vs-house** (you trade against `HouseVault`), which kills 1v1 matchmaking cold-start; PvP density follows once the market accrues traders. Position sizes start at 1 USDC; fees are 1%.
+Day one, Kaido ships one market: **"Where does BTC close on Friday?"** Resolver: Reflector BTC/USD at the close timestamp. **BlendTap** supplies depth on the first trade (no seed step); traders take positions against the crowd curve. Position sizes start at 1 USDC; fees are 1%.
 
 Why crypto first, when the whole thesis is "all markets":
 - **Warm audience** — crypto-natives will price a BTC market on day one; they're the cheapest users to acquire.
@@ -301,8 +301,8 @@ Then the surface opens: permissionless market creation, scalar + trajectory mark
 ## 21. Economics — fees, the (absence of a) token, value capture
 
 - **No protocol token at launch.** Markets settle in **USDC on Stellar**. Adding a token would invite securities questions and add nothing the mechanism needs. (A future governance token is not precluded but is explicitly out of scope for v1.)
-- **Fees:** each trade pays a small fee in bps, split between (a) the market's LPs (incl. `HouseVault`) and (b) a protocol treasury. Market creators may optionally take a slice (incentive to create good markets / supply good resolvers).
-- **Where the value is:** the protocol treasury (fee share), the `HouseVault`'s LP returns, and — strategically — being *the* distribution-market primitive on Stellar that other apps build on (SDK adoption, ecosystem gravity). The grant case (Part VIII) is funded on building the primitive + reference app, not on token speculation.
+- **Fees:** each trade pays a small fee in bps, split between (a) the market's LPs and (b) a protocol treasury. Market creators may optionally take a slice (incentive to create good markets / supply good resolvers).
+- **Where the value is:** the protocol treasury (fee share), third-party LP returns, and — strategically — being *the* distribution-market primitive on Stellar that other apps build on (SDK adoption, ecosystem gravity). The grant case (Part VIII) is funded on building the primitive + reference app, not on token speculation.
 - **What traders pay for:** entry into a market (the "1 USDC" minimum on the launch market is just a position size). Skilled forecasters are net-positive; the house and LPs earn the spread/fees; the protocol earns its cut. No house *edge* baked into odds — payouts come from the scoring rule, and the "rake" is the explicit, visible fee.
 
 ---
@@ -348,11 +348,11 @@ Then the surface opens: permissionless market creation, scalar + trajectory mark
 
 | Risk | Why it matters | Mitigation |
 |---|---|---|
-| **Unbounded LP loss** (the §10 landmine) | A near-delta belief could force a near-infinite payout at one point | σ-floor per market by default; capped-Gaussian payouts as opt-in; both proven to keep `f(x) ≤ b` ⇒ always solvent. Per-market risk caps on `HouseVault`. |
+| **Unbounded LP loss** (the §10 landmine) | A near-delta belief could force a near-infinite payout at one point | σ-floor per market by default; capped-Gaussian payouts as opt-in; both proven to keep `f(x) ≤ b` ⇒ always solvent. BlendTap per-market borrow caps. |
 | **Smart-contract bugs** in the AMM math | Curve accounting, collateral, settlement are subtle | Spec the contract from the paper's math; property tests + fuzzing on the invariants (`‖f‖₂ = k`, `Σ holdings = b`); external audit before mainnet; conservative caps in early rounds; bug bounty. |
 | **Oracle manipulation / failure** | Wrong `x₀` ⇒ wrong payouts | Tiered, clearly-labeled resolvers (§17); T0 only for robust feeds; challenge/dispute windows on T1/T2; for short-window trajectory markets, sample multiple timestamps and consider TWAP-style reads to resist last-second wicks. |
 | **Sophisticates farm casuals** | Better-model/lower-latency players consistently beat retail in price games | The σ-floor caps how much an informed trader can extract per trade; play-vs-house mode means the *house* (a pool, risk-capped) absorbs skill asymmetry, not individual newbies; skill-bracketed pools for PvP; lean into "forecasting skill leaderboard" framing rather than pretending it's pure luck. |
-| **Liquidity cold-start** | Empty markets are unplayable | `HouseVault` seeds every market; play-vs-house default; LP incentives (fee share) to attract third-party underwriters. |
+| **Liquidity cold-start** | Empty markets are unplayable | **BlendTap** JIT-borrows on first trade (no seed tx); LP incentives (fee share) to attract third-party underwriters. |
 | **Frontend ↔ chain mismatch** (UI inputs vs. submitted belief) | User sets sliders to X, contract records Y ⇒ disputes | Deterministic mapping from slider values → `(μ, σ)`; show the *exact* fitted curve and quoted cost back to the user before they confirm; the contract is the source of truth and the UI says so. |
 | **Regulatory action** | Real-money forecasting on prices/events is a sensitive area | See Part VII — managed, not wished away. |
 | **MEV / front-running on trades** | Someone sees your belief tx and trades ahead | Per-market trade size limits (already implied by the σ-scaling); consider commit-reveal for the short-window games; Stellar's fee/ordering model is less MEV-friendly than EVM to begin with. |
@@ -363,7 +363,7 @@ Then the surface opens: permissionless market creation, scalar + trajectory mark
 
 Real-money forecasting on prices and events is a genuinely sensitive area, and short-dated price guessing in particular can resemble binary options — a product restricted or banned for retail in several major jurisdictions. Kaido's stance is to **manage this deliberately**, not pretend it away:
 
-1. **Build it as a market, not a casino.** Participants provide liquidity to / take positions in a *distribution market*; the protocol runs an AMM and earns a transparent fee — it is not a bookmaker setting odds against players. The `HouseVault` is an LP, clearly framed as such.
+1. **Build it as a market, not a casino.** Participants provide liquidity to / take positions in a *distribution market*; the protocol runs an AMM and earns a transparent fee — it is not a bookmaker setting odds against players.
 2. **Be a forecasting platform, not a price-betting app.** Crypto is the launch *wedge*, not the identity. Ship non-price markets (elections, box office, weather, sports) early so the platform reads as Kalshi/Metaculus-shaped — a venue for forecasting many quantities — with crypto as one vertical among many.
 3. **Geofence the obvious jurisdictions** at the frontend, with honest disclosures.
 4. **Tiered, labeled resolvers** so users always know what they're trusting; no "trustless" claim that isn't true.
@@ -380,8 +380,8 @@ Structured to map onto an SCF Build Award's milestone tranches.
 
 **Milestone 1 — MVP (≈10%)**
 - `DistributionMarket` core AMM (single scalar market, Gaussian + σ-floor, full collateralization, settlement) on Soroban testnet.
-- `HouseVault` v0; basic `MarketFactory`.
-- Launch market: "Where does BTC close on Friday?" (scalar, Gaussian + σ-floor, 1-USDC minimum), trade-vs-house default, Reflector T0 oracle, end-to-end on testnet.
+- `BlendAdapter` + BlendTap JIT borrow; basic `MarketFactory`.
+- Launch market: "Where does BTC close on Friday?" (scalar, Gaussian + σ-floor, 1-USDC minimum), Reflector T0 oracle, end-to-end on testnet.
 - Property tests on the AMM invariants.
 
 **Milestone 2 — Testnet (≈30%)**
@@ -425,7 +425,7 @@ Structured to map onto an SCF Build Award's milestone tranches.
 - **Soroban:** Stellar's smart-contract platform (Rust-based).
 - **Reflector:** an on-chain oracle network on Stellar (used for Kaido's T0 price feeds).
 - **Scalar market vs. trajectory market:** a market whose outcome is one final number vs. one whose outcome is a path of numbers over time (sampled at checkpoints).
-- **HouseVault:** Kaido's protocol-owned liquidity pool that underwrites new markets so players can trade from minute one; its positions are ordinary Layer-1 distribution positions.
+- **BlendTap:** Kaido's liquidity bootstrap — JIT borrow from a Blend lending pool on the first `trade()`, repaid and unwound at `claim()`. No protocol-owned book.
 - **Belief Surface:** Kaido's consumer UI — two sliders (center `μ` and confidence `σ`) plus a pre-trade quote (cost, max payout, worst case) before confirmation.
 
 ---

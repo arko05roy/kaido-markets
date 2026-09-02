@@ -1,11 +1,8 @@
 /**
  * Resolves the *deployed* Kaido contract ids for the active network.
  *
- * Source of truth: `config/networks.<network>.json` — the gitignored "live ids"
- * file that the deploy script rewrites on every run (build.md §0a). Nothing here
- * is hardcoded; if the file is missing (no deploy yet, or after a testnet reset
- * before re-deploy) we fall back to `NEXT_PUBLIC_KAIDO_*` env vars, and finally
- * throw with an actionable message. Read on the server only.
+ * Source of truth: `config/networks.<network>.json` — rewritten on every
+ * `make deploy:<network>` run (build.md §0a).
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -16,17 +13,16 @@ export interface DeployedContracts {
   readonly marketFactory: string;
   readonly distributionMarket: string;
   readonly registry: string;
-  readonly houseVault: string;
   readonly resolverReflector: string;
   readonly resolverAttested: string;
   readonly resolverOptimistic: string;
   readonly resolverDesignated: string;
+  readonly blendAdapter?: string;
 }
 
 export interface NetworkFixtures {
   readonly demoMarket?: string;
   readonly demoResolver?: string;
-  readonly houseVault?: string;
   readonly lifecycleMarket?: string;
   readonly lifecycleResolver?: string;
 }
@@ -34,38 +30,39 @@ export interface NetworkFixtures {
 export interface DeployedConfig {
   readonly network: StellarNetworkId;
   readonly contracts: DeployedContracts;
-  /** Per-network external ids (USDC SAC, Reflector feed, admin) — may be null. */
   readonly external: {
     readonly usdcSacId: string | null;
     readonly reflectorFeedId: string | null;
     readonly adminAddress: string | null;
   };
-  /** Demo / test fixture ids written by deploy.sh + seed.sh. */
   readonly fixtures: NetworkFixtures;
 }
+
+const REQUIRED_KEYS = [
+  "marketFactory",
+  "distributionMarket",
+  "registry",
+  "resolverReflector",
+  "resolverAttested",
+  "resolverOptimistic",
+  "resolverDesignated",
+] as const satisfies readonly (keyof DeployedContracts)[];
+
+const OPTIONAL_KEYS = ["blendAdapter"] as const satisfies readonly (keyof DeployedContracts)[];
 
 const ENV_KEYS: Record<keyof DeployedContracts, string> = {
   marketFactory: "NEXT_PUBLIC_KAIDO_MARKET_FACTORY",
   distributionMarket: "NEXT_PUBLIC_KAIDO_DISTRIBUTION_MARKET",
   registry: "NEXT_PUBLIC_KAIDO_REGISTRY",
-  houseVault: "NEXT_PUBLIC_KAIDO_HOUSE_VAULT",
+  blendAdapter: "NEXT_PUBLIC_KAIDO_BLEND_ADAPTER",
   resolverReflector: "NEXT_PUBLIC_KAIDO_RESOLVER_REFLECTOR",
   resolverAttested: "NEXT_PUBLIC_KAIDO_RESOLVER_ATTESTED",
   resolverOptimistic: "NEXT_PUBLIC_KAIDO_RESOLVER_OPTIMISTIC",
   resolverDesignated: "NEXT_PUBLIC_KAIDO_RESOLVER_DESIGNATED",
 };
 
-/**
- * The deployed-contract config for the active network. Re-reads
- * `config/networks.<network>.json` on every call (it's tiny, and all consumers
- * are `force-dynamic`) — so a `make deploy:<network>` that rewrites the file is
- * picked up without restarting the dev server. Crucially: testnet resets and
- * re-deploys change every id, so a stale process cache was a footgun.
- */
 export function deployedConfig(): DeployedConfig {
   const network = activeNetworkId();
-
-  // 1. the live-ids file written by the deploy script.
   const file = join(process.cwd(), "..", "config", `networks.${network}.json`);
   const fromFile: Partial<Record<keyof DeployedContracts, string>> = {};
   let external: DeployedConfig["external"] = {
@@ -81,7 +78,7 @@ export function deployedConfig(): DeployedConfig {
       fixtures?: NetworkFixtures;
     };
     if (raw.contracts) {
-      for (const key of Object.keys(ENV_KEYS) as (keyof DeployedContracts)[]) {
+      for (const key of [...REQUIRED_KEYS, ...OPTIONAL_KEYS]) {
         const id = raw.contracts[key]?.id;
         if (id) fromFile[key] = id;
       }
@@ -93,26 +90,26 @@ export function deployedConfig(): DeployedConfig {
         adminAddress: raw.external.adminAddress ?? null,
       };
     }
-    if (raw.fixtures) {
-      fixtures = raw.fixtures;
-    }
+    if (raw.fixtures) fixtures = raw.fixtures;
   } catch {
     // file absent — fall through to env vars.
   }
 
-  // 2. resolve each id: file value, then env var, else error.
-  const contracts = {} as Record<keyof DeployedContracts, string>;
+  const contracts: Partial<Record<keyof DeployedContracts, string>> = {};
   const missing: string[] = [];
-  for (const key of Object.keys(ENV_KEYS) as (keyof DeployedContracts)[]) {
+  for (const key of REQUIRED_KEYS) {
     const id = fromFile[key] ?? process.env[ENV_KEYS[key]];
     if (id) contracts[key] = id;
     else missing.push(`${key} (${ENV_KEYS[key]})`);
   }
+  for (const key of OPTIONAL_KEYS) {
+    const id = fromFile[key] ?? process.env[ENV_KEYS[key]];
+    if (id) contracts[key] = id;
+  }
   if (missing.length > 0) {
     throw new Error(
       `Kaido contract ids unresolved for network "${network}": ${missing.join(", ")}. ` +
-        `Run \`make deploy:${network}\` to write config/networks.${network}.json, ` +
-        `or set the listed NEXT_PUBLIC_KAIDO_* env vars.`,
+        `Run \`make deploy:${network}\` to write config/networks.${network}.json.`,
     );
   }
 

@@ -19,6 +19,7 @@ import { RecentActivity } from "@/components/market/recent-activity";
 import { type SettlementMarketView } from "@/components/market/settlement-panel";
 import {
   crowdTargetLabel,
+  formatUsdc7dp,
   isTradingWindowOpen,
   marketSubtitle,
 } from "@/lib/market-display";
@@ -31,6 +32,7 @@ import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 import {
   getBeliefs,
   checkpointsFromOutcomeSpace,
+  getBlendBackedDepth,
   getMarketInfo,
   getMarketState,
   getResolvedOutcomes,
@@ -88,6 +90,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
         lpMarket: { id: string; bWad: string; canAdd: boolean; canRemove: boolean };
         resolved: string[];
         crowdMuWad: bigint;
+        blendBackedDepth7dp: bigint;
       }
     | null = null;
   let error: string | null = null;
@@ -96,6 +99,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       getMarketInfo(id),
       getMarketState(id),
     ]);
+    const blendBackedDepth7dp = await getBlendBackedDepth(id);
     const isTraj = mp.outcome_space.tag === "Trajectory";
     const beliefs = isTraj ? await getBeliefs(id) : [];
     const checkpoints = checkpointsFromOutcomeSpace(mp.outcome_space);
@@ -148,7 +152,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       canAdd: state.status.tag === "Open",
       canRemove: state.status.tag === "Open" || state.status.tag === "Resolved" || state.status.tag === "ResolvedVec",
     };
-    data = { params: mp, state, view, settlement, resolved, lpMarket, crowdMuWad };
+    data = { params: mp, state, view, settlement, resolved, lpMarket, crowdMuWad, blendBackedDepth7dp };
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -186,6 +190,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
                 crowdTarget={crowdTargetLabel(data.crowdMuWad)}
                 closesAt={Number(data.params.window.lock)}
                 statusTag={data.state.status.tag}
+                blendBackedDepth7dp={data.blendBackedDepth7dp}
               />
             }
             chartLabel="Payoff zone · crowd target"
@@ -220,6 +225,12 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
                         value={data.view.kind === "trajectory" ? "Trajectory" : "Scalar"}
                       />
                       <DetailRow label="Fee" value={`${data.params.fee_bps / 100}%`} />
+                      {data.blendBackedDepth7dp > 0n && (
+                        <DetailRow
+                          label="Blend depth"
+                          value={`${formatUsdc7dp(data.blendBackedDepth7dp)} USDC`}
+                        />
+                      )}
                       <DetailRow label="Oracle" value={tierLabel(data.params.tier)} />
                       <DetailRow label="Trading opens" value={fmtTime(data.params.window.open)} />
                       <DetailRow label="Trading locks" value={fmtTime(data.params.window.lock)} />

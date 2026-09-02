@@ -1,6 +1,6 @@
 # Kaido — A Distribution-Market Primitive for Stellar
 
-### *Draw what you think happens next — to anything with a number attached. The market pays you if you're close.*
+### *Kaido is the first distribution market of its kind — providing more capital efficiency than traditional markets.*
 
 **Whitepaper v0.1 — Working Draft**
 
@@ -31,9 +31,9 @@ Prediction markets, as they exist today, ask a single impoverished question: *wi
 Kaido packages this into two layers:
 
 1. **The Distribution Engine** — a Soroban (Stellar smart-contract) implementation of a bounded-loss distribution-market AMM. It is **outcome-agnostic**: any market that supplies a numeric outcome space, a resolver (oracle), and an underwriter (liquidity) can be created permissionlessly. Crypto prices are merely the *first* application, not the only one.
-2. **The Forecast Canvas** — a consumer-facing surface where you don't read order books or type limit prices: you **draw your forecast**. For quantities that evolve over time (a price, a live score, a polling average) you draw a *path*. For quantities that resolve to one final number (an election margin, opening-weekend box office, a CPI print) you draw a *curve over a number line* — where it lands and how confident you are. A smart contract scores everyone by how close they were and pays out automatically.
+2. **The Belief Surface** — a consumer-facing UI where you don't read order books or type limit prices: you set **where you think the number lands** and **how confident you are**, in two slider gestures. The interface compiles those into a Gaussian belief `(μ, σ)`, prices it against the market's current curve, and shows you cost, max payout, and worst case before you confirm. A smart contract scores everyone by how close they were and pays out automatically.
 
-Kaido launches as a 90-second Bitcoin chart game ("ChartGuessr") — because the audience is already there and BTC has a free, trustless, manipulation-resistant price oracle — and then opens the canvas so anyone can create a market on **anything quantifiable**. Every builder who shows up gets a new financial primitive for free.
+Kaido launches with a Bitcoin-close market — because the audience is already there and BTC has a free, trustless, manipulation-resistant price oracle — and then opens the surface so anyone can create a market on **anything quantifiable**. Every builder who shows up gets a new financial primitive for free.
 
 This document explains all of it: what a distribution market *is*, starting from a coin flip and building up; the precise mechanism from the Paradigm paper, including the math and its sharp edges; how Kaido turns that mechanism into a working product on Stellar; the oracle design that determines how wide "all possible markets" can actually go; the economics; the risks; and the roadmap.
 
@@ -72,14 +72,14 @@ You have a rich, shaped belief in your head. The format only lets you whisper on
 
 ## 3. What if you could bet on the whole shape?
 
-Here is the leap. What if, instead of betting "yes" or "no," you could hand the market a **picture** — a curve drawn over all the possible numbers — that says *"here's how likely I think each outcome is"*? A tall hump over $68k. A thin tail stretching out to $75k. Almost nothing below $64k. And what if the market paid you based on **how close your picture was to what actually happened**?
+Here is the leap. What if, instead of betting "yes" or "no," you could hand the market a **shape** — a curve over all the possible numbers — that says *"here's how likely I think each outcome is"*? A tall hump over $68k. A thin tail stretching out to $75k. Almost nothing below $64k. And what if the market paid you based on **how close your shape was to what actually happened**?
 
 That's a **distribution market**. You're not buying YES/NO shares. You're submitting a *distribution* — a shape — and your profit depends on whether reality landed where your shape was tall (good) or where your shape was short (bad), compared to whatever shape the market held before you came along.
 
 Two things make this powerful:
 
 - **It captures everything you believe at once** — not just "up or down" but "where, and how sure."
-- **It rewards honesty about uncertainty.** If you're genuinely unsure, you draw a wide, flat hump and you won't lose much if you're off — but you won't win much either. If you're confident, you draw a tall narrow spike — big reward if you nail it, big loss if you don't. The shape *is* your confidence, and the payout respects that.
+- **It rewards honesty about uncertainty.** If you're genuinely unsure, you submit a wide, flat hump and you won't lose much if you're off — but you won't win much either. If you're confident, you submit a tall narrow spike — big reward if you nail it, big loss if you don't. The shape *is* your confidence, and the payout respects that.
 
 This is not a new dream. **Metaculus** is a popular site where forecasters submit full probability distributions over questions like "how many people will live on Mars in 2050." It produces famously good forecasts. But Metaculus has no money in it — it runs on reputation and pride. Distribution markets are, roughly, *"Metaculus, but with real financial stakes and real-time trading"* — the expressiveness of distributional forecasting fused with the truth-extracting pressure of money.
 
@@ -87,7 +87,7 @@ This is not a new dream. **Metaculus** is a popular site where forecasters submi
 
 Quick detour, because the whole document leans on this word. A **probability distribution** is just a complete description of *how likely each possible answer is*.
 
-- Picture a jar of marbles. Someone asks: "How many marbles are in the jar?" You don't know exactly. But you'd guess it's *probably around 200*, *almost certainly between 150 and 250*, and *definitely not 10 or 10,000*. If you drew that as a graph — the number of marbles on the bottom axis, "how plausible" going up — you'd get a hump centered near 200, tapering off on both sides. **That hump is your distribution.** A confident person draws a narrow tall hump. An unsure person draws a wide flat one.
+- Picture a jar of marbles. Someone asks: "How many marbles are in the jar?" You don't know exactly. But you'd guess it's *probably around 200*, *almost certainly between 150 and 250*, and *definitely not 10 or 10,000*. If you plotted that as a graph — the number of marbles on the bottom axis, "how plausible" going up — you'd get a hump centered near 200, tapering off on both sides. **That hump is your distribution.** A confident person has a narrow tall hump. An unsure person has a wide flat one.
 - The classic hump shape — symmetric, bell-like — is called a **Gaussian** or **Normal distribution**. It's described by just two numbers: the **mean** (μ, "mu") = where the center of the hump sits, and the **standard deviation** (σ, "sigma") = how wide/spread-out the hump is. Small σ = narrow, confident. Large σ = wide, unsure. Distribution markets often use Gaussians because two numbers are easy to work with — but the math allows other shapes too.
 - A key property: the area under the whole curve is fixed (it represents "100% of the probability has to go *somewhere*"). So if you make the hump narrower, it also has to get *taller* to keep the same area. Confidence makes the spike sharp **and** high. Remember this — it comes back as the mechanism's built-in safety feature.
 
@@ -110,7 +110,7 @@ There are several proper scoring rules. The most famous in this space is the **l
 | **Scoring-rule forecasting** | A full probability distribution | The whole shape | Usually no (reputation) | Metaculus |
 | **Distribution market** ← *Kaido* | A full probability distribution | The whole shape | **Yes — real trading** | (didn't exist in production) |
 
-Distribution markets are the bottom-right cell that was empty. Kaido fills it, on Stellar, with a friendly drawing interface on top.
+Distribution markets are the bottom-right cell that was empty. Kaido fills it, on Stellar, with a friendly two-slider interface on top.
 
 ---
 
@@ -222,7 +222,7 @@ Before and after, total system holdings still sum to `b` per outcome — full co
 
 # Part III — Kaido: System Architecture
 
-Kaido is two layers plus an oracle framework. **Layer 1** is the chain-side primitive (the distribution-market AMM as a Soroban contract suite). **Layer 2** is the off-chain + frontend experience (the Forecast Canvas, the games, the social loop). The **oracle framework** is what connects on-chain markets to real-world truth and ultimately decides how broad "all possible markets" can be on day one.
+Kaido is two layers plus an oracle framework. **Layer 1** is the chain-side primitive (the distribution-market AMM as a Soroban contract suite). **Layer 2** is the off-chain + frontend experience (the Belief Surface, the markets directory, the social loop). The **oracle framework** is what connects on-chain markets to real-world truth and ultimately decides how broad "all possible markets" can be on day one.
 
 ## 14. Layer 1 — the Distribution Engine (Soroban)
 
@@ -235,7 +235,7 @@ A small suite of Soroban contracts:
   - **Resolver** — an address implementing the `Resolver` interface (§17). The market is only as trustworthy as its resolver, and the resolver type is displayed prominently to users.
   - **Window** — open time, lock time (no more trades), resolve time.
 - **`DistributionMarket`** — the per-market AMM. Holds collateral, tracks the current aggregate curve (stored as parameters, not a discretized array, for gas-efficiency), prices and executes `trade(belief, collateral)` calls, mints/burns position NFTs (a position is a curve = a few parameters + scale + ownership), handles LP `add`/`remove`, and at `resolve` pays out `f(x₀)` to position holders and `b − f(x₀)` to the AMM/LPs.
-- **`HouseVault`** — the protocol-owned underwriter used at launch to bootstrap markets that have no third-party LPs yet (see §18). Its positions are ordinary Layer-1 positions — Kaido dogfoods its own primitive.
+- **`BlendAdapter`** — optional per-market spine for **BlendTap**: JIT-borrows counterparty USDC from a Blend pool on `trade()` and unwinds on `claim()` (see §18).
 - **`Registry`** — indexes markets, resolvers, and their trust tiers for the frontend.
 
 Everything that can be done by hand via these contracts can also be done via an **SDK** (TypeScript + a Rust crate) so third parties can create markets, plug in their own resolvers, and embed Kaido markets in their own apps.
@@ -253,7 +253,7 @@ If you can fill in those seven fields, you have a market. Note what's *not* requ
 Two flavors, because real questions come in two flavors:
 
 - **Scalar market** — the outcome is *one final number*. Examples: election margin, opening-weekend box office, next CPI print, a house's sale price, total goals in a tournament, BTC price *at* a fixed timestamp. The belief object is a distribution over that number — a hump on a number line. Settlement reads the single value `x₀` from the resolver and pays `f(x₀)`.
-- **Trajectory market** — the outcome is a *path over time*: `x(t)` for `t` in some window. Examples: BTC price over the next 90 seconds, a match's live score over 90 minutes, a candidate's polling average over 30 days, a video's view count over its first week, a city's temperature over a day. We handle this by **sampling**: fix `n` checkpoints `t₁ < t₂ < … < t_n` in the window; the outcome is the vector `(x(t₁), …, x(t_n))`; the belief is a distribution over that vector (in v1, an independent or simply-correlated Gaussian per checkpoint, which keeps the math the discrete-N case of §7 stacked across time). The "draw a line" UI maps a freehand path to its values at the checkpoints. Settlement reads the realized path from the resolver at those timestamps and scores the drawn path by aggregate distance.
+- **Trajectory market** — the outcome is a *path over time*: `x(t)` for `t` in some window. Examples: a match's live score over 90 minutes, a candidate's polling average over 30 days, a video's view count over its first week, a city's temperature over a day. We handle this by **sampling**: fix `n` checkpoints `t₁ < t₂ < … < t_n` in the window; the outcome is the vector `(x(t₁), …, x(t_n))`; the belief is a distribution over that vector (in v1, an independent or simply-correlated Gaussian per checkpoint, which keeps the math the discrete-N case of §7 stacked across time). The UI exposes per-checkpoint center sliders and a shared confidence control. Settlement reads the realized path from the resolver at those timestamps and scores the submitted path by aggregate distance.
 
 Both flavors compile down to the same core AMM — a trajectory market is, mathematically, a product of per-checkpoint markets sharing one collateral pool.
 
@@ -270,39 +270,40 @@ A market is only as good as its resolver. Kaido defines a single `Resolver` inte
 
 The breadth of "all possible markets" on day one is exactly: **T0 is live at launch (crypto), T1/T2 follow during testnet, T3 is available immediately for clearly-labeled trust-me markets.** Over time, more T1 adapters and a hardened T2 expand the trustless/economically-secured frontier. Kaido never claims a market is trustless when it isn't — the tier badge is non-negotiable UI.
 
-## 18. Bootstrapping liquidity — the house book
+## 18. Bootstrapping liquidity — BlendTap (JIT borrow)
 
-New markets face a cold-start problem: no LPs, no other side. Kaido's answer is the **`HouseVault`** — a protocol-owned pool that seeds every new market as the LP/underwriter of last resort, so a player can show up minute one and trade against *something*. Its exposure is itself a Layer-1 distribution position (so the protocol's own risk is transparent and on-chain), it's risk-capped per market, and as third-party LPs arrive the house can withdraw proportionally. The "play vs. house" mode of the launch game (§19) is literally this: you trade against the HouseVault's curve.
+New markets face a cold-start problem: no LPs, no other side. Kaido's answer is **BlendTap**: on the first `trade()`, the market JIT-borrows counterparty USDC from an existing **Blend** lending pool (collateral = the trader's locked margin). No protocol-owned book, no seed transaction, no HouseVault. At `claim()`, forfeitures repay the borrow and collateral is unwound. Optional third-party LPs can still add liquidity later; they are not required for minute-one trading.
 
-This also matters for the regulatory posture (Part VII): the protocol is providing *liquidity to a market*, not *operating a casino book against players* — a meaningfully different and cleaner framing.
+This also matters for the regulatory posture (Part VII): the protocol borrows from public DeFi liquidity and runs a transparent scoring-rule market — not a house book against players.
 
-## 19. Layer 2 — the Forecast Canvas
+## 19. Layer 2 — the Belief Surface
 
-The consumer surface. No order books, no limit prices, no jargon. You **draw**.
+The consumer surface. No order books, no limit prices, no jargon. Two sliders and a confirmation step.
 
-- **Trajectory mode** (for trajectory markets, §16): a live chart of the quantity builds in front of you for a set window (e.g., 45 seconds of BTC), then you get a short window (e.g., 15 seconds) to **draw the continuation** with your finger/mouse. Your drawn path is converted to its checkpoint values and submitted as your belief. At reveal, the real path animates in next to yours; the contract scores by distance and pays the closest.
-- **Distribution mode** (for scalar markets, §16): you see a number line (with the market's current consensus hump faintly shown), and you **draw your own hump** — drag to set the center, pinch/stretch to set the width. A spike says "I'm sure"; a wide mound says "no idea, roughly here." Submitted as your `(μ, σ)`. At reveal, the true value drops onto the line; payout by how much probability mass you put near it vs. the prior market curve.
-- **Shared everywhere:** a one-tap **result card** (your curve, the truth, your P&L, the market name) built for screenshots; **leaderboards** (best forecasters by Brier-like calibration score, not just $ won); **streaks** and lightweight identity (passkey login via Stellar's Passport/passkey work — play in ~10 seconds, no seed phrase).
+- **Where it lands (μ).** A slider over the outcome range sets the *center* of your belief. For a market on "BTC close on Friday" with range `[$60k, $80k]`, the slider runs the same scale; you place the handle at the price you think will print.
+- **How sure you are (σ).** A second slider sets the *width* of your hump — from a tight spike (confident) to a wide mound (cautious). The two sliders together fully specify your Gaussian `(μ, σ)`. The σ-floor of the market is enforced as the slider's tight-end stop, so the UI cannot produce an infeasible position.
+- **Pre-trade quote.** Before you confirm, the surface shows your *cost to open*, your *worst case* (the collateral you'll post), and your *max payout* (the curve height at its peak). These are derived deterministically from `(μ, σ)` against the market's current curve, so what you see is what the contract will record.
+- **Result card.** At resolution: your hump, the truth marker, the realized payout, the market name. Built for screenshots. Leaderboards rank forecasters by calibration score (Brier-like), not just dollars won. Identity is a passkey (Stellar's passkey work) — ~10 seconds, no seed phrase.
 
-The point: the *feel* is GeoGuessr, not Bloomberg — but every drawn curve is a real position in a real distribution market underneath.
+The point: the *feel* is a clean financial surface, not a chart-trading app — but every confirmed belief is a real position in a real distribution market underneath.
 
-## 20. The launch wedge — ChartGuessr
+## 20. The launch wedge — a single BTC market
 
-Day one, Kaido ships as exactly one skin: **ChartGuessr-on-BTC**. Pay 1 USDC. A BTC/USD chart builds live for 45 seconds. You get 15 seconds to draw the path you think comes next. The real price reveals beside your line. The smart contract auto-pays the closest forecasts. Default mode is **play-vs-house** (you trade against `HouseVault`), which kills 1v1 matchmaking cold-start; PvP pools open once there's density.
+Day one, Kaido ships one market: **"Where does BTC close on Friday?"** Resolver: Reflector BTC/USD at the close timestamp. **BlendTap** supplies depth on the first trade (no seed step); traders take positions against the crowd curve. Position sizes start at 1 USDC; fees are 1%.
 
 Why crypto first, when the whole thesis is "all markets":
-- **Warm audience** — crypto-natives will play a price game on day one; they're the cheapest users to acquire.
+- **Warm audience** — crypto-natives will price a BTC market on day one; they're the cheapest users to acquire.
 - **Trustless oracle** — BTC/USD has a robust on-chain feed (T0) so the very first market needs zero trusted parties.
-- **Cheap to operate** — frequent, tiny markets only make economic sense on a sub-cent-fee, instant-finality chain (see Part IV).
+- **Cheap to operate** — short-window, small-stake markets only make economic sense on a sub-cent-fee, instant-finality chain (see Part IV).
 
-Then the canvas opens: permissionless market creation, distribution mode, T1/T2 resolvers, and ChartGuessr becomes one game in a category — a forecasting *platform* over anything quantifiable.
+Then the surface opens: permissionless market creation, scalar + trajectory markets, T1/T2 resolvers, and the launch market becomes one of many — a forecasting *platform* over anything quantifiable.
 
 ## 21. Economics — fees, the (absence of a) token, value capture
 
 - **No protocol token at launch.** Markets settle in **USDC on Stellar**. Adding a token would invite securities questions and add nothing the mechanism needs. (A future governance token is not precluded but is explicitly out of scope for v1.)
-- **Fees:** each trade pays a small fee in bps, split between (a) the market's LPs (incl. `HouseVault`) and (b) a protocol treasury. Market creators may optionally take a slice (incentive to create good markets / supply good resolvers).
-- **Where the value is:** the protocol treasury (fee share), the `HouseVault`'s LP returns, and — strategically — being *the* distribution-market primitive on Stellar that other apps build on (SDK adoption, ecosystem gravity). The grant case (Part VIII) is funded on building the primitive + reference app, not on token speculation.
-- **What players pay for:** entry into a market (the "1 USDC" in ChartGuessr is just a position size). Skilled forecasters are net-positive; the house and LPs earn the spread/fees; the protocol earns its cut. No house *edge* baked into odds — payouts come from the scoring rule, and the "rake" is the explicit, visible fee.
+- **Fees:** each trade pays a small fee in bps, split between (a) the market's LPs and (b) a protocol treasury. Market creators may optionally take a slice (incentive to create good markets / supply good resolvers).
+- **Where the value is:** the protocol treasury (fee share), third-party LP returns, and — strategically — being *the* distribution-market primitive on Stellar that other apps build on (SDK adoption, ecosystem gravity). The grant case (Part VIII) is funded on building the primitive + reference app, not on token speculation.
+- **What traders pay for:** entry into a market (the "1 USDC" minimum on the launch market is just a position size). Skilled forecasters are net-positive; the house and LPs earn the spread/fees; the protocol earns its cut. No house *edge* baked into odds — payouts come from the scoring rule, and the "rake" is the explicit, visible fee.
 
 ---
 
@@ -323,22 +324,22 @@ Then the canvas opens: permissionless market creation, distribution mode, T1/T2 
 
 # Part V — Worked Examples
 
-### Example A — ChartGuessr, BTC, 90 seconds (trajectory market, T0 oracle)
+### Example A — "Where does BTC close on Friday?" (scalar market, T0 oracle)
 
-- **Market:** OutcomeSpace = BTC/USD path over `[T, T+90s]`, sampled at 6 checkpoints; Parameterization = independent Gaussian per checkpoint with a σ-floor; Resolver = Reflector BTC/USD feed read at the 6 timestamps; Window: open now, lock at T, resolve at T+90s; fee = e.g. 1%.
-- **You play:** pay 1 USDC. Watch 45s of chart. Draw a path that ticks up then dips. Your path → 6 checkpoint values → submitted as your belief; collateral = your max downside vs. the house curve.
-- **Reveal:** real BTC path animates next to yours. Contract scores aggregate distance, pays the closest forecasters from the pool; LPs/house earn the fee. Result card pops: your curve, the truth, "+2.40 USDC", share button.
+- **Market:** OutcomeSpace = BTC/USD close ∈ `[$60k, $80k]`; Parameterization = Gaussian `(μ, σ)` with a σ-floor; Resolver = Reflector BTC/USD feed read at the close timestamp; Window: open Monday, lock Friday 20:55 UTC, resolve Friday 21:00 UTC; fee = 1%.
+- **You take a position:** stake 1 USDC. Move the center slider to `μ = $68,200`. Move the confidence slider to a tight band (`σ = $1,400`). The surface quotes cost = 12 USDC, max payout = 180 USDC, worst case = 12 USDC. Confirm.
+- **Reveal:** the realized close is `$68,600`. Contract evaluates `f($68,600) = 14.7 USDC` and pays out. Result card pops: your curve, the truth, "+2.70 USDC", share button.
 
 ### Example B — "US presidential popular-vote margin, 2028" (scalar market, T1 oracle)
 
 - **Market:** OutcomeSpace = margin in percentage points ∈ [−20, +20]; Parameterization = Gaussian (μ, σ), capped-Gaussian enabled; Resolver = T1 attested adapter that posts the certified result with a 7-day challenge window; resolves a week after certification; fee = 1%.
-- **A trader:** believes the margin is +4 with real uncertainty — draws a hump centered at +4, moderately wide (σ ≈ 3). The mechanism scales their position by `λ = k√(2σ√π)`; they post collateral = worst-case vs. the current market hump. If consensus had it at +2, they've pushed the center toward their view.
+- **A trader:** believes the margin is +4 with real uncertainty — submits a hump centered at +4, moderately wide (σ ≈ 3). The mechanism scales their position by `λ = k√(2σ√π)`; they post collateral = worst-case vs. the current market hump. If consensus had it at +2, they've pushed the center toward their view.
 - **Resolution:** certified margin = +3.1. Traders who put mass near +3 profit; the overconfident +6 spike loses; LPs net the fees. The market's pre-resolution hump *was* a live, money-backed probabilistic forecast of the margin — strictly more information than "Will the margin exceed +3%? Yes/No."
 
 ### Example C — "Rainfall in Mumbai tomorrow (mm)" (scalar market, T1/T2 oracle)
 
 - **Market:** OutcomeSpace = mm of rain ∈ [0, 300]; Gaussian (or, better, a right-skewed parameterization in a later version); Resolver = T1 adapter to the national meteorological service, fallback T2 optimistic oracle; resolves the next day; fee = 1%.
-- **Players:** locals who think it'll be a dry 0–5mm draw narrow humps near 0; a few who expect a storm draw a low wide mound stretching toward 80mm. The market hump *is* the crowd's rainfall forecast, with money behind it.
+- **Traders:** locals who think it'll be a dry 0–5mm place narrow humps near 0; a few who expect a storm submit a low wide mound stretching toward 80mm. The market hump *is* the crowd's rainfall forecast, with money behind it.
 - **Resolution:** 12mm falls. Modest payouts to the "light rain" forecasters; the dry-0mm spikes take a small loss (bounded by the σ-floor); storm-bettors lose their (small, wide) stakes. Note: no ticker, no exchange, no "financial instrument" anywhere — just a number, a resolver, and the AMM.
 
 ---
@@ -347,12 +348,12 @@ Then the canvas opens: permissionless market creation, distribution mode, T1/T2 
 
 | Risk | Why it matters | Mitigation |
 |---|---|---|
-| **Unbounded LP loss** (the §10 landmine) | A near-delta belief could force a near-infinite payout at one point | σ-floor per market by default; capped-Gaussian payouts as opt-in; both proven to keep `f(x) ≤ b` ⇒ always solvent. Per-market risk caps on `HouseVault`. |
+| **Unbounded LP loss** (the §10 landmine) | A near-delta belief could force a near-infinite payout at one point | σ-floor per market by default; capped-Gaussian payouts as opt-in; both proven to keep `f(x) ≤ b` ⇒ always solvent. BlendTap per-market borrow caps. |
 | **Smart-contract bugs** in the AMM math | Curve accounting, collateral, settlement are subtle | Spec the contract from the paper's math; property tests + fuzzing on the invariants (`‖f‖₂ = k`, `Σ holdings = b`); external audit before mainnet; conservative caps in early rounds; bug bounty. |
 | **Oracle manipulation / failure** | Wrong `x₀` ⇒ wrong payouts | Tiered, clearly-labeled resolvers (§17); T0 only for robust feeds; challenge/dispute windows on T1/T2; for short-window trajectory markets, sample multiple timestamps and consider TWAP-style reads to resist last-second wicks. |
 | **Sophisticates farm casuals** | Better-model/lower-latency players consistently beat retail in price games | The σ-floor caps how much an informed trader can extract per trade; play-vs-house mode means the *house* (a pool, risk-capped) absorbs skill asymmetry, not individual newbies; skill-bracketed pools for PvP; lean into "forecasting skill leaderboard" framing rather than pretending it's pure luck. |
-| **Liquidity cold-start** | Empty markets are unplayable | `HouseVault` seeds every market; play-vs-house default; LP incentives (fee share) to attract third-party underwriters. |
-| **Frontend ↔ chain mismatch** (drawn curve vs. submitted belief) | User draws X, contract records Y ⇒ disputes | Deterministic, audited curve-fitting from drawn path → parameters; show the *exact* fitted curve back to the user before they confirm; the contract is the source of truth and the UI says so. |
+| **Liquidity cold-start** | Empty markets are unplayable | **BlendTap** JIT-borrows on first trade (no seed tx); LP incentives (fee share) to attract third-party underwriters. |
+| **Frontend ↔ chain mismatch** (UI inputs vs. submitted belief) | User sets sliders to X, contract records Y ⇒ disputes | Deterministic mapping from slider values → `(μ, σ)`; show the *exact* fitted curve and quoted cost back to the user before they confirm; the contract is the source of truth and the UI says so. |
 | **Regulatory action** | Real-money forecasting on prices/events is a sensitive area | See Part VII — managed, not wished away. |
 | **MEV / front-running on trades** | Someone sees your belief tx and trades ahead | Per-market trade size limits (already implied by the σ-scaling); consider commit-reveal for the short-window games; Stellar's fee/ordering model is less MEV-friendly than EVM to begin with. |
 
@@ -362,7 +363,7 @@ Then the canvas opens: permissionless market creation, distribution mode, T1/T2 
 
 Real-money forecasting on prices and events is a genuinely sensitive area, and short-dated price guessing in particular can resemble binary options — a product restricted or banned for retail in several major jurisdictions. Kaido's stance is to **manage this deliberately**, not pretend it away:
 
-1. **Build it as a market, not a casino.** Participants provide liquidity to / take positions in a *distribution market*; the protocol runs an AMM and earns a transparent fee — it is not a bookmaker setting odds against players. The `HouseVault` is an LP, clearly framed as such.
+1. **Build it as a market, not a casino.** Participants provide liquidity to / take positions in a *distribution market*; the protocol runs an AMM and earns a transparent fee — it is not a bookmaker setting odds against players.
 2. **Be a forecasting platform, not a price-betting app.** Crypto is the launch *wedge*, not the identity. Ship non-price markets (elections, box office, weather, sports) early so the platform reads as Kalshi/Metaculus-shaped — a venue for forecasting many quantities — with crypto as one vertical among many.
 3. **Geofence the obvious jurisdictions** at the frontend, with honest disclosures.
 4. **Tiered, labeled resolvers** so users always know what they're trusting; no "trustless" claim that isn't true.
@@ -379,21 +380,21 @@ Structured to map onto an SCF Build Award's milestone tranches.
 
 **Milestone 1 — MVP (≈10%)**
 - `DistributionMarket` core AMM (single scalar market, Gaussian + σ-floor, full collateralization, settlement) on Soroban testnet.
-- `HouseVault` v0; basic `MarketFactory`.
-- ChartGuessr-on-BTC trajectory loop (45s build / 15s draw / reveal / auto-payout), play-vs-house, Reflector T0 oracle, on testnet.
+- `BlendAdapter` + BlendTap JIT borrow; basic `MarketFactory`.
+- Launch market: "Where does BTC close on Friday?" (scalar, Gaussian + σ-floor, 1-USDC minimum), Reflector T0 oracle, end-to-end on testnet.
 - Property tests on the AMM invariants.
 
 **Milestone 2 — Testnet (≈30%)**
 - Multi-market; permissionless `create_market`; trajectory + scalar markets; capped-Gaussian opt-in.
 - Oracle framework: T0 live, T1 adapter pattern + first adapter, T2 optimistic oracle (basic), T3 designated resolver; trust-tier badges in UI.
-- Forecast Canvas: both modes polished; result cards; leaderboards (calibration-scored); passkey onboarding.
+- Belief Surface: scalar + trajectory modes polished; result cards; leaderboards (calibration-scored); passkey onboarding.
 - LP flows (third-party `add`/`remove`); fee splitting.
 - SDK alpha (TS + Rust crate); docs.
 - External security review begun.
 
 **Milestone 3 — Mainnet / "UX readiness" (≈40%)**
 - Audit complete; conservative per-market caps; bug bounty live.
-- Mainnet launch on Stellar: 1-USDC live ChartGuessr; at least one **non-crypto market** (e.g. an election-margin or box-office market) live and resolved end-to-end via a T1/T2 resolver.
+- Mainnet launch on Stellar: 1-USDC live BTC-close market; at least one **non-crypto market** (e.g. an election-margin or box-office market) live and resolved end-to-end via a T1/T2 resolver.
 - SDK 1.0 + docs; at least one **external party** has created a market with their own resolver.
 - Legal opinion obtained for the launch jurisdiction; geofencing + T&Cs in place.
 
@@ -424,9 +425,8 @@ Structured to map onto an SCF Build Award's milestone tranches.
 - **Soroban:** Stellar's smart-contract platform (Rust-based).
 - **Reflector:** an on-chain oracle network on Stellar (used for Kaido's T0 price feeds).
 - **Scalar market vs. trajectory market:** a market whose outcome is one final number vs. one whose outcome is a path of numbers over time (sampled at checkpoints).
-- **HouseVault:** Kaido's protocol-owned liquidity pool that underwrites new markets so players can trade from minute one; its positions are ordinary Layer-1 distribution positions.
-- **Forecast Canvas:** Kaido's drawing-based UI — *trajectory mode* (draw a path) and *distribution mode* (draw a hump over a number line).
-- **ChartGuessr:** Kaido's launch application — a 90-second BTC-chart trajectory game; the wedge, not the whole product.
+- **BlendTap:** Kaido's liquidity bootstrap — JIT borrow from a Blend lending pool on the first `trade()`, repaid and unwound at `claim()`. No protocol-owned book.
+- **Belief Surface:** Kaido's consumer UI — two sliders (center `μ` and confidence `σ`) plus a pre-trade quote (cost, max payout, worst case) before confirmation.
 
 ---
 
@@ -443,4 +443,4 @@ Structured to map onto an SCF Build Award's milestone tranches.
 
 ---
 
-*Kaido whitepaper v0.1 — working draft. The mechanism described in Part II is due to White (2024); Parts III–VIII (the Stellar implementation, the Forecast Canvas, the oracle tiering, the economics, the roadmap) are Kaido's contribution. Open questions flagged in-text: belief parameterizations beyond Gaussian; correlation structure across trajectory checkpoints; hardening the T2 optimistic oracle; the pre-mainnet legal opinion. Feedback welcome.*
+*Kaido whitepaper v0.1 — working draft. The mechanism described in Part II is due to White (2024); Parts III–VIII (the Stellar implementation, the Belief Surface, the oracle tiering, the economics, the roadmap) are Kaido's contribution. Open questions flagged in-text: belief parameterizations beyond Gaussian; correlation structure across trajectory checkpoints; hardening the T2 optimistic oracle; the pre-mainnet legal opinion. Feedback welcome.*

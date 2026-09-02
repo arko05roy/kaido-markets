@@ -8,7 +8,8 @@
 //!   3. calls its `init(...)` with the tuple + the per-network USDC SAC id;
 //!   4. registers the new market in the `Registry`.
 //!
-//! It does **not** auto-seed liquidity: `HouseVault::seed_market` is admin-gated
+//! It does **not** auto-seed liquidity: BlendTap JIT-borrow on first trade
+//! (see `blend-adapter` + `liquidity-plan.md`).
 //! (the house is the protocol's own LP, not something a market creator can
 //! conscript), so seeding stays an explicit follow-up call by the house admin.
 //!
