@@ -9,11 +9,11 @@
  * Regenerate with `cargo make --cwd contracts bindings`. CI fails on a diff
  * (bindings-staleness check — build.md Sprint 3 acceptance & §6).
  */
-export * as marketFactory from "./market-factory/src/index.js";
-export * as distributionMarket from "./distribution-market/src/index.js";
-export * as registry from "./registry/src/index.js";
-export * as houseVault from "./house-vault/src/index.js";
-export * as resolverReflector from "./resolver-reflector/src/index.js";
-export * as resolverAttested from "./resolver-attested/src/index.js";
-export * as resolverOptimistic from "./resolver-optimistic/src/index.js";
-export * as resolverDesignated from "./resolver-designated/src/index.js";
+export * as marketFactory from "./market-factory/src/index";
+export * as distributionMarket from "./distribution-market/src/index";
+export * as registry from "./registry/src/index";
+export * as houseVault from "./house-vault/src/index";
+export * as resolverReflector from "./resolver-reflector/src/index";
+export * as resolverAttested from "./resolver-attested/src/index";
+export * as resolverOptimistic from "./resolver-optimistic/src/index";
+export * as resolverDesignated from "./resolver-designated/src/index";
