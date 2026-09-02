@@ -514,7 +514,7 @@ export function MarketCardItem({
                 </div>
                 <p
                   className={cn(
-                    "mt-2.5 max-w-full truncate leading-none font-semibold tabular-nums text-[#f3efe6] text-[1.8rem] sm:text-[2.2rem]",
+                    "mt-2.5 max-w-full truncate leading-none font-semibold font-serif tabular-nums text-[#f3efe6] text-[1.8rem] sm:text-[2.2rem]",
                     urgency === "hot" && tone === "open" && "text-amber-300",
                   )}
                 >
