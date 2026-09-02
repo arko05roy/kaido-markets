@@ -152,7 +152,8 @@ for c in ${CONTRACTS}; do
         --registry "${ID_registry}" --usdc "${USDC_SAC_ID}")
       ;;
   esac
-  id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}" "${CTOR_ARGS[@]}")"
+  # `${arr[@]+...}` so an empty CTOR_ARGS doesn't trip `set -u` on bash 3.2 (macOS).
+  id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}" ${CTOR_ARGS[@]+"${CTOR_ARGS[@]}"})"
   echo "   contract  : ${id}"
   key="$(to_camel "${c}")"
   [[ -n "${CONTRACTS_JSON}" ]] && CONTRACTS_JSON="${CONTRACTS_JSON},"
