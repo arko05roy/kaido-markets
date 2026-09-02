@@ -412,16 +412,22 @@ impl DistributionMarket {
         env.storage()
             .persistent()
             .remove(&DataKey::Position(position_id));
-        maybe_blend_unwind_claim(&env, returned_7dp);
+        maybe_blend_unwind_claim(&env, 0);
         if returned_7dp > 0 {
             let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
-            token::TokenClient::new(&env, &usdc).transfer(
+            let pay_7dp = returned_7dp.min(token::TokenClient::new(&env, &usdc).balance(
                 &env.current_contract_address(),
-                &pos.owner,
-                &returned_7dp,
-            );
+            ));
+            if pay_7dp > 0 {
+                token::TokenClient::new(&env, &usdc).transfer(
+                    &env.current_contract_address(),
+                    &pos.owner,
+                    &pay_7dp,
+                );
+            }
+            return pay_7dp;
         }
-        returned_7dp
+        0
     }
 
     // --------------------------------------------------------------------- //
@@ -1191,19 +1197,18 @@ fn maybe_blend_unwind_claim(env: &Env, reserve_payout_7dp: i128) {
     let tok = token::TokenClient::new(env, &usdc);
     let debt = BlendAdapterClient::new(env, &adapter).outstanding_debt(&market);
     if debt > 0 {
-        let market_bal = tok.balance(&market);
-        let available = market_bal.saturating_sub(reserve_payout_7dp);
         let backed: i128 = storage.get(&DataKey::BlendBackedUsdc).unwrap_or(0);
         let need = debt.saturating_add(BLEND_INTEREST_BUFFER_7DP);
-        let prepay = need
-            .min(backed.saturating_add(BLEND_INTEREST_BUFFER_7DP))
-            .min(available);
+        let prepay = need.min(backed.saturating_add(BLEND_INTEREST_BUFFER_7DP));
         if prepay > 0 {
-            tok.transfer(&market, &adapter, &prepay);
-            storage.set(
-                &DataKey::BlendBackedUsdc,
-                &backed.saturating_sub(prepay.min(backed)),
-            );
+            let market_bal = tok.balance(&market);
+            if market_bal >= prepay.saturating_add(reserve_payout_7dp) {
+                tok.transfer(&market, &adapter, &prepay);
+                storage.set(
+                    &DataKey::BlendBackedUsdc,
+                    &backed.saturating_sub(prepay.min(backed)),
+                );
+            }
         }
     }
     env.authorize_as_current_contract(adapter_unwind_auth(env, &adapter, &market));

@@ -78,7 +78,7 @@ export async function POST(req: Request) {
 
   const sacId = config.external.usdcSacId;
   const symbol = config.external.settlementSymbol ?? "KAIDO";
-  const issuer = config.external.kaidoIssuer ?? config.deployer;
+  const issuer = config.external.kaidoIssuer ?? config.external.adminAddress;
   const claim7dp = BigInt(process.env.KAIDO_FAUCET_AMOUNT_7DP ?? DEFAULT_CLAIM_7DP);
   const rpcUrl = process.env.RPC_URL ?? "https://soroban-testnet.stellar.org";
 

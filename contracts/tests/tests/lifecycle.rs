@@ -224,6 +224,41 @@ fn blend_tap_first_trade_no_seed() {
 }
 
 #[test]
+fn blend_tap_two_claims_conserve_usdc_with_lp_seed() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (adapter_id, usdc) = setup_blend(&env);
+    let adapter = BlendAdapterClient::new(&env, &adapter_id);
+    let w = boot_in(env, usdc, Some(adapter_id.clone()));
+    adapter.authorize_market(&w.market.address, &100_000_000_000i128);
+
+    let lp = Address::generate(&w.env);
+    w.sa.mint(&lp, &200_000_000_000i128);
+    w.market.add_liquidity(&lp, &WAD);
+
+    let mint = 20_000_000_000i128;
+    let t1 = Address::generate(&w.env);
+    let t2 = Address::generate(&w.env);
+    w.sa.mint(&t1, &mint);
+    w.sa.mint(&t2, &mint);
+    let id1 = w.market.trade(&t1, &(55 * WAD), &(2 * WAD), &mint);
+    let id2 = w.market.trade(&t2, &(45 * WAD), &(2 * WAD), &mint);
+
+    let scale = 10i128.pow(ORACLE_DP);
+    w.oracle.set_price(&vec![&w.env, 50i128 * scale], &W_RESOLVE);
+    w.env.ledger().set_timestamp(W_RESOLVE + 1);
+    w.market.resolve();
+
+    let lp_before = w.tok.balance(&lp);
+    let got2 = w.market.claim(&id2);
+    let got1 = w.market.claim(&id1);
+    assert_eq!(adapter.outstanding_debt(&w.market.address), 0);
+    assert!(got1 >= 0 && got2 >= 0);
+    // LP settlement reserves must survive the first claim (blend prepay is capped).
+    assert!(w.tok.balance(&lp) >= lp_before);
+}
+
+#[test]
 fn sub_floor_sigma_reverts() {
     let w = boot(None);
     let trader = Address::generate(&w.env);

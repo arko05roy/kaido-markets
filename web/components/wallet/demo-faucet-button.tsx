@@ -46,19 +46,19 @@ export function DemoFaucetButton({
           toast({
             title: "Use a trading wallet",
             description: data.error ?? "The KAIDO issuer account cannot hold KAIDO.",
-            variant: "destructive",
+            variant: "error",
           });
         } else if (data.needsTrustline && (data.issuer ?? issuer)) {
           toast({
             title: `Add ${symbol} trustline`,
             description: `In Freighter, trust ${symbol} issued by ${(data.issuer ?? issuer)!.slice(0, 8)}… then retry.`,
-            variant: "destructive",
+            variant: "error",
           });
         } else {
           toast({
             title: "Faucet failed",
             description: data.error ?? "Try again.",
-            variant: "destructive",
+            variant: "error",
           });
         }
         return;
@@ -69,7 +69,7 @@ export function DemoFaucetButton({
       });
       onSuccess?.();
     } catch {
-      toast({ title: "Faucet failed", description: "Network error.", variant: "destructive" });
+      toast({ title: "Faucet failed", description: "Network error.", variant: "error" });
     } finally {
       setBusy(false);
     }
