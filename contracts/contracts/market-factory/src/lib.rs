@@ -55,6 +55,7 @@ trait DistributionMarketIface {
         fee_lp_bps: u32,
         fee_treasury_bps: u32,
         fee_creator_bps: u32,
+        blend_adapter: Option<Address>,
     );
     fn free_collateral(env: Env) -> i128;
     #[allow(clippy::too_many_arguments)]
@@ -77,6 +78,7 @@ trait DistributionMarketIface {
         fee_lp_bps: u32,
         fee_treasury_bps: u32,
         fee_creator_bps: u32,
+        blend_adapter: Option<Address>,
     );
 }
 
@@ -115,6 +117,8 @@ enum DataKey {
     /// `u64` — monotonic counter, used as the deploy salt so addresses are
     /// deterministic and collision-free.
     Counter,
+    /// Optional BlendTap adapter wired into new markets (`None` = disabled).
+    BlendAdapter,
 }
 
 #[contract]
@@ -131,6 +135,7 @@ impl MarketFactory {
         registry: Address,
         usdc: Address,
         treasury: Address,
+        blend_adapter: Option<Address>,
     ) {
         let s = env.storage().instance();
         s.set(&DataKey::Admin, &admin);
@@ -138,6 +143,7 @@ impl MarketFactory {
         s.set(&DataKey::Registry, &registry);
         s.set(&DataKey::Usdc, &usdc);
         s.set(&DataKey::Treasury, &treasury);
+        s.set(&DataKey::BlendAdapter, &blend_adapter);
         s.set(&DataKey::Counter, &0u64);
         s.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
     }
@@ -199,6 +205,7 @@ impl MarketFactory {
             panic_with_error!(&env, KaidoError::SigmaBelowFloor);
         }
         let treasury: Address = s.get(&DataKey::Treasury).unwrap();
+        let blend_adapter: Option<Address> = s.get(&DataKey::BlendAdapter).unwrap_or(None);
 
         // --- deploy + init ---
         let counter: u64 = s.get(&DataKey::Counter).unwrap();
@@ -226,6 +233,7 @@ impl MarketFactory {
             &DEFAULT_FEE_LP_BPS,
             &DEFAULT_FEE_TREASURY_BPS,
             &DEFAULT_FEE_CREATOR_BPS,
+            &blend_adapter,
         );
 
         // --- register ---
@@ -308,6 +316,7 @@ impl MarketFactory {
             }
         }
         let treasury: Address = s.get(&DataKey::Treasury).unwrap();
+        let blend_adapter: Option<Address> = s.get(&DataKey::BlendAdapter).unwrap_or(None);
 
         let counter: u64 = s.get(&DataKey::Counter).unwrap();
         s.set(&DataKey::Counter, &(counter + 1));
@@ -334,6 +343,7 @@ impl MarketFactory {
             &DEFAULT_FEE_LP_BPS,
             &DEFAULT_FEE_TREASURY_BPS,
             &DEFAULT_FEE_CREATOR_BPS,
+            &blend_adapter,
         );
 
         let info = MarketInfo {

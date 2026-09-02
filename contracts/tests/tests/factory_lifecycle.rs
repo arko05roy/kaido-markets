@@ -57,7 +57,7 @@ fn boot() -> World {
 
     let fac_id = env.register(
         MarketFactory,
-        (admin.clone(), dm_hash, reg_id.clone(), usdc, treasury),
+        (admin.clone(), dm_hash, reg_id.clone(), usdc, treasury, None::<Address>),
     );
     let factory = MarketFactoryClient::new(&env, &fac_id);
     registry.set_factory(&fac_id);

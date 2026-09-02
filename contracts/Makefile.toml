@@ -14,7 +14,7 @@ skip_core_tasks = true
 [env]
 WASM_TARGET = "wasm32v1-none"
 # All contract crates that emit a cdylib .wasm. Keep in sync with contracts/*.
-CONTRACT_CRATES = "market-factory distribution-market house-vault registry resolver-reflector resolver-attested resolver-optimistic resolver-designated"
+CONTRACT_CRATES = "market-factory distribution-market blend-adapter house-vault registry resolver-reflector resolver-attested resolver-optimistic resolver-designated"
 WASM_OUT_DIR = "target/${WASM_TARGET}/release"
 
 [tasks.default]
@@ -23,17 +23,30 @@ alias = "ci"
 # --- build ----------------------------------------------------------------
 
 [tasks.build-wasm]
-description = "Build all contract crates to WASM (release)."
-command = "cargo"
-args = ["build", "--release", "--target", "${WASM_TARGET}",
-        "-p", "market-factory",
-        "-p", "distribution-market",
-        "-p", "house-vault",
-        "-p", "registry",
-        "-p", "resolver-reflector",
-        "-p", "resolver-attested",
-        "-p", "resolver-optimistic",
-        "-p", "resolver-designated"]
+description = "Build all contract crates to WASM (release) and copy into ${WASM_OUT_DIR}."
+script_runner = "@shell"
+script = '''
+set -e
+cargo build --release --target "${WASM_TARGET}" \
+  -p market-factory \
+  -p distribution-market \
+  -p blend-adapter \
+  -p house-vault \
+  -p registry \
+  -p resolver-reflector \
+  -p resolver-attested \
+  -p resolver-optimistic \
+  -p resolver-designated
+mkdir -p "${WASM_OUT_DIR}"
+for c in ${CONTRACT_CRATES}; do
+  underscored="$(echo "$c" | tr '-' '_')"
+  src="target/${WASM_TARGET}/release/deps/${underscored}.wasm"
+  dst="${WASM_OUT_DIR}/${underscored}.wasm"
+  [[ -s "${src}" ]] || { echo "missing or empty wasm: ${src}" >&2; exit 1; }
+  cp "${src}" "${dst}"
+  echo "wasm: ${dst} ($(wc -c < "${dst}") bytes)"
+done
+'''
 
 [tasks.optimize]
 description = "Optimise every built .wasm with the Stellar CLI."

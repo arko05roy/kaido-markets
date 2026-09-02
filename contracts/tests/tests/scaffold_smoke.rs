@@ -44,9 +44,10 @@ fn scaffold_contracts_link() {
 
         let dm_wasm = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
         let usdc = Address::generate(&env);
+        let treasury = Address::generate(&env);
         let f = env.register(
             market_factory::MarketFactory,
-            (admin, dm_wasm, reg.address.clone(), usdc),
+            (admin, dm_wasm, reg.address.clone(), usdc, treasury, None::<Address>),
         );
         let f = market_factory::MarketFactoryClient::new(&env, &f);
         assert_eq!(f.count(), 0);
@@ -101,6 +102,7 @@ fn distribution_market_init_and_reads() {
         &7_000u32,
         &2_000u32,
         &1_000u32,
+        &None,
     );
     // `init` emitted exactly one event (`MarketCreated`). Check immediately —
     // the test env's event buffer reflects the most recent invocation.
@@ -151,7 +153,7 @@ fn distribution_market_init_and_reads() {
             &7_000u32,
             &2_000u32,
             &1_000u32,
-        )
+            &None,
         )
         .is_err());
 }

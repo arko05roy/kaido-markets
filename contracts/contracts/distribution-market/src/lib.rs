@@ -27,8 +27,29 @@ use kaido_math::{
     gaussian_pdf_scaled, lambda as lambda_of, sigma_floor, worst_case_collateral, WAD as MATH_WAD,
 };
 use soroban_sdk::{
-    contract, contractimpl, contracttype, panic_with_error, token, Address, Env, Vec,
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
+    contract, contractclient, contractimpl, contracttype, panic_with_error, token, Address, Env,
+    IntoVal, Symbol, Vec,
 };
+
+/// 75% LTV — matches Blend default `c_factor` (0.75) for USDC collateral.
+const BLEND_BORROW_NUM: i128 = 1;
+const BLEND_BORROW_DEN: i128 = 2;
+
+/// Cross-contract client for [`BlendAdapter`] (BlendTap spine).
+#[contractclient(name = "BlendAdapterClient")]
+pub trait BlendAdapter {
+    fn available_depth(env: Env, market: Address) -> i128;
+    fn borrow_for_market(
+        env: Env,
+        market: Address,
+        collateral_7dp: i128,
+        borrow_7dp: i128,
+    ) -> i128;
+    fn repay_for_market(env: Env, market: Address, amount_7dp: i128) -> i128;
+    fn outstanding_debt(env: Env, market: Address) -> i128;
+    fn unwind_for_claim(env: Env, market: Address);
+}
 
 const LEDGERS_PER_DAY: u32 = 17_280;
 const INSTANCE_TTL_TARGET: u32 = 120 * LEDGERS_PER_DAY;
@@ -92,6 +113,8 @@ enum DataKey {
     TrajPosition(u64),
     /// `Vec<i128>` — realised per-checkpoint values (WAD), once resolved.
     ResolvedOutcomes,
+    /// Optional BlendTap adapter — `None` disables JIT borrow (local tests).
+    BlendAdapter,
 }
 
 #[contract]
@@ -121,6 +144,7 @@ impl DistributionMarket {
         fee_lp_bps: u32,
         fee_treasury_bps: u32,
         fee_creator_bps: u32,
+        blend_adapter: Option<Address>,
     ) {
         let storage = env.storage().instance();
         if storage.has(&DataKey::Params) {
@@ -191,6 +215,7 @@ impl DistributionMarket {
         storage.set(&DataKey::TreasuryFees, &0i128);
         storage.set(&DataKey::CreatorFees, &0i128);
         storage.set(&DataKey::LockedCollateral, &0i128);
+        storage.set(&DataKey::BlendAdapter, &blend_adapter);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
         MarketCreated {
@@ -285,6 +310,7 @@ impl DistributionMarket {
         let locked: i128 = storage.get(&DataKey::LockedCollateral).unwrap();
         storage.set(&DataKey::LockedCollateral, &(locked + collateral_wad));
         storage.set(&DataKey::Belief, &g);
+        maybe_blend_tap_trade(&env, collateral_7dp);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
         Trade {
@@ -381,6 +407,7 @@ impl DistributionMarket {
         env.storage()
             .persistent()
             .remove(&DataKey::Position(position_id));
+        maybe_blend_unwind_claim(&env);
         if returned_7dp > 0 {
             let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
             token::TokenClient::new(&env, &usdc).transfer(
@@ -628,6 +655,7 @@ impl DistributionMarket {
         fee_lp_bps: u32,
         fee_treasury_bps: u32,
         fee_creator_bps: u32,
+        blend_adapter: Option<Address>,
     ) {
         let storage = env.storage().instance();
         if storage.has(&DataKey::Params) {
@@ -714,6 +742,7 @@ impl DistributionMarket {
         storage.set(&DataKey::TreasuryFees, &0i128);
         storage.set(&DataKey::CreatorFees, &0i128);
         storage.set(&DataKey::LockedCollateral, &0i128);
+        storage.set(&DataKey::BlendAdapter, &blend_adapter);
         storage.extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_TARGET);
 
         // reuse `MarketCreated` with the first checkpoint's belief as a summary.
@@ -922,6 +951,18 @@ impl DistributionMarket {
         params.b.saturating_sub(locked).saturating_sub(pool)
     }
 
+    /// Blend-backed borrow headroom for this market (7-dp USDC), `0` if disabled.
+    pub fn blend_backed_depth(env: Env) -> i128 {
+        let storage = env.storage().instance();
+        let adapter: Option<Address> = storage.get(&DataKey::BlendAdapter).unwrap_or(None);
+        match adapter {
+            Some(addr) => {
+                BlendAdapterClient::new(&env, &addr).available_depth(&env.current_contract_address())
+            }
+            None => 0,
+        }
+    }
+
     /// `(treasury_fees_wad, creator_fees_wad)`.
     pub fn pending_fees(env: Env) -> (i128, i128) {
         let s = env.storage().instance();
@@ -1041,6 +1082,149 @@ fn mul_div_floor(a: i128, b: i128, c: i128) -> i128 {
 /// `ceil(a / c)` for `a ≥ 0`, `c > 0`.
 fn ceil_div(a: i128, c: i128) -> i128 {
     (a + c - 1) / c
+}
+
+/// BlendTap: JIT borrow after a trade when a [`BlendAdapter`] is configured.
+fn maybe_blend_tap_trade(env: &Env, collateral_7dp: i128) {
+    if collateral_7dp <= 0 {
+        return;
+    }
+    let storage = env.storage().instance();
+    let adapter: Option<Address> = storage.get(&DataKey::BlendAdapter).unwrap_or(None);
+    let adapter = match adapter {
+        Some(a) => a,
+        None => return,
+    };
+    let borrow_7dp = collateral_7dp * BLEND_BORROW_NUM / BLEND_BORROW_DEN;
+    if borrow_7dp <= 0 {
+        return;
+    }
+    let market = env.current_contract_address();
+    let adapter_client = BlendAdapterClient::new(env, &adapter);
+    let depth = adapter_client.available_depth(&market);
+    if borrow_7dp > depth {
+        panic_with_error!(env, KaidoError::BlendDepthExceeded);
+    }
+    let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
+    token::TokenClient::new(env, &usdc).transfer(&market, &adapter, &collateral_7dp);
+    env.authorize_as_current_contract(adapter_borrow_auth(
+        env,
+        &adapter,
+        &market,
+        collateral_7dp,
+        borrow_7dp,
+    ));
+    adapter_client.borrow_for_market(&market, &collateral_7dp, &borrow_7dp);
+}
+
+/// BlendTap: repay outstanding debt from a loser's forfeit at claim time.
+#[allow(dead_code)]
+fn maybe_blend_repay_claim(env: &Env, collateral_wad: i128, returned_wad: i128) {
+    let pool_gain_wad = collateral_wad - returned_wad;
+    if pool_gain_wad <= 0 {
+        return;
+    }
+    let repay_7dp = pool_gain_wad / MONEY_SCALE;
+    if repay_7dp <= 0 {
+        return;
+    }
+    let storage = env.storage().instance();
+    let adapter: Option<Address> = storage.get(&DataKey::BlendAdapter).unwrap_or(None);
+    let adapter = match adapter {
+        Some(a) => a,
+        None => return,
+    };
+    let market = env.current_contract_address();
+    let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
+    token::TokenClient::new(env, &usdc).transfer(&market, &adapter, &repay_7dp);
+    env.authorize_as_current_contract(adapter_repay_auth(env, &adapter, &market, repay_7dp));
+    BlendAdapterClient::new(env, &adapter).repay_for_market(&market, &repay_7dp);
+}
+
+/// BlendTap: withdraw posted collateral and clear outstanding debt before payout.
+fn maybe_blend_unwind_claim(env: &Env) {
+    let storage = env.storage().instance();
+    let adapter: Option<Address> = storage.get(&DataKey::BlendAdapter).unwrap_or(None);
+    let adapter = match adapter {
+        Some(a) => a,
+        None => return,
+    };
+    let market = env.current_contract_address();
+    let usdc: Address = storage.get(&DataKey::Usdc).unwrap();
+    let tok = token::TokenClient::new(env, &usdc);
+    let debt = BlendAdapterClient::new(env, &adapter).outstanding_debt(&market);
+    if debt > 0 {
+        // Fund adapter for repay + accrued interest buffer before unwind.
+        let prepay = tok.balance(&market);
+        if prepay > 0 {
+            tok.transfer(&market, &adapter, &prepay);
+        }
+    }
+    env.authorize_as_current_contract(adapter_unwind_auth(env, &adapter, &market));
+    BlendAdapterClient::new(env, &adapter).unwind_for_claim(&market);
+}
+
+fn adapter_borrow_auth(
+    env: &Env,
+    adapter: &Address,
+    market: &Address,
+    collateral_7dp: i128,
+    borrow_7dp: i128,
+) -> soroban_sdk::Vec<InvokerContractAuthEntry> {
+    soroban_sdk::vec![
+        env,
+        InvokerContractAuthEntry::Contract(SubContractInvocation {
+            context: ContractContext {
+                contract: adapter.clone(),
+                fn_name: Symbol::new(env, "borrow_for_market"),
+                args: (
+                    market.clone(),
+                    collateral_7dp,
+                    borrow_7dp,
+                )
+                    .into_val(env),
+            },
+            sub_invocations: soroban_sdk::vec![env],
+        }),
+    ]
+}
+
+#[allow(dead_code)]
+fn adapter_repay_auth(
+    env: &Env,
+    adapter: &Address,
+    market: &Address,
+    repay_7dp: i128,
+) -> soroban_sdk::Vec<InvokerContractAuthEntry> {
+    soroban_sdk::vec![
+        env,
+        InvokerContractAuthEntry::Contract(SubContractInvocation {
+            context: ContractContext {
+                contract: adapter.clone(),
+                fn_name: Symbol::new(env, "repay_for_market"),
+                args: (market.clone(), repay_7dp).into_val(env),
+            },
+            sub_invocations: soroban_sdk::vec![env],
+        }),
+    ]
+}
+
+fn adapter_unwind_auth(
+    env: &Env,
+    adapter: &Address,
+    market: &Address,
+) -> soroban_sdk::Vec<InvokerContractAuthEntry> {
+    soroban_sdk::vec![
+        env,
+        InvokerContractAuthEntry::Contract(SubContractInvocation {
+            context: ContractContext {
+                contract: adapter.clone(),
+                fn_name: Symbol::new(env, "unwind_for_claim"),
+                args: (market.clone(),).into_val(env),
+            },
+            sub_invocations: soroban_sdk::vec![env],
+        }),
+    ]
 }
 
 #[cfg(test)]

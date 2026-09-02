@@ -397,6 +397,16 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "BlendAdapter"
+                          }
+                        ]
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "CollateralPool"
                           }
                         ]

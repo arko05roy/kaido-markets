@@ -20,6 +20,8 @@ kaido-math = { workspace = true }
 # Contract crates expose an `rlib` alongside `cdylib`, so lifecycle tests can
 # register them directly. Wired up in Sprint 2 (see build.md §5 Sprint 2).
 distribution-market = { path = "../contracts/distribution-market" }
+blend-adapter = { path = "../contracts/blend-adapter" }
+blend-contract-sdk = { workspace = true, features = ["testutils"] }
 market-factory = { path = "../contracts/market-factory" }
 house-vault = { path = "../contracts/house-vault" }
 registry = { path = "../contracts/registry" }

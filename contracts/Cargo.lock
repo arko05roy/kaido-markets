@@ -213,6 +213,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
 
 [[package]]
+name = "blend-adapter"
+version = "0.1.0"
+dependencies = [
+ "blend-contract-sdk",
+ "kaido-common",
+ "sep-40-oracle",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "blend-contract-sdk"
+version = "2.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdf0e34a9219e894aa1f14b212bdad5111e7e695743b447e0290d744f083601e"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -974,6 +993,8 @@ dependencies = [
 name = "kaido-integration-tests"
 version = "0.1.0"
 dependencies = [
+ "blend-adapter",
+ "blend-contract-sdk",
  "distribution-market",
  "house-vault",
  "kaido-common",

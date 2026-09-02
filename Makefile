@@ -10,7 +10,7 @@
 
 .PHONY: localnet localnet-stop localnet-logs contracts-build contracts-test \
         deploy\:local deploy\:testnet deploy\:futurenet deploy\:mainnet \
-        seed\:testnet web-dev bootstrap
+        seed\:testnet spike\:blend web-dev bootstrap
 
 LOCAL_CONTAINER ?= kaido-localnet
 
@@ -57,6 +57,9 @@ deploy\:mainnet:
 
 seed\:testnet:
 	STELLAR_NETWORK=testnet ./contracts/scripts/seed.sh testnet
+
+spike\:blend:
+	STELLAR_NETWORK=testnet ./contracts/scripts/blend-spike.sh testnet
 
 # --- web ------------------------------------------------------------------
 web-dev:

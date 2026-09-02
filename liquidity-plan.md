@@ -1,261 +1,462 @@
-# Kaido Liquidity Plan — Discussion Doc
+# Kaido Liquidity Plan — BlendTap (HouseVault-free)
 
-Status: **draft for discussion** (June 2026)
+Status: **approved direction for discussion → implementation** (June 2026)
 
-This document captures the liquidity problem, ideas we considered and rejected, ETHGlobal research, and the current proposal. It is meant to be debated before any implementation work.
+This document supersedes the prior HouseVault-centric draft. It consolidates:
 
----
-
-## 1. The problem
-
-Kaido's distribution-market AMM needs counterparty collateral (`b`) in each market pool. Without it, traders cannot place beliefs — there is nothing on the other side of the curve.
-
-**Today:**
-
-- Each [`DistributionMarket`](contracts/contracts/distribution-market/src/lib.rs) holds its own isolated USDC pool.
-- [`HouseVault`](contracts/contracts/house-vault/src/lib.rs) seeds markets manually (admin-gated, per-market caps).
-- [`MarketFactory`](contracts/contracts/market-factory/src/lib.rs) does not auto-seed — new markets can be empty until an admin runs `seed_market`.
-- Third-party LPs must discover each market and call `add_liquidity` individually.
-
-**The constraint we keep coming back to:**
-
-> We will not have prediction-market LPs on Day 1. Stellar already has USDC liquidity in Blend, Soroswap, and native balances. We need to use *that* — not recruit a new LP class.
-
-This is different from "how do we make LPs more profitable?" The question is: **how does the first trade work on a brand-new market with zero Kaido-specific deposits?**
+- On-chain behavior verified against the current Soroban contracts in this repo
+- Session research (Colosseum Copilot + ETHGlobal hackathon patterns)
+- Stellar / Blend official documentation (no mocked APIs)
+- The decision to **remove `HouseVault` entirely** and bootstrap via **Blend JIT borrow**
 
 ---
 
-## 2. What the whitepaper assumes today
+## 1. Decisions (locked for this plan)
 
-[`kaido-whitepaper.md`](kaido-whitepaper.md) §18 describes `HouseVault` as the protocol-owned underwriter of last resort:
-
-- Seeds every new market so a player can trade minute one.
-- Risk-capped per market.
-- House withdraws as third-party LPs arrive.
-
-[`build.md`](build.md) notes HouseVault seeding in `seed.sh` and treats LP economics as a future epic. The mechanism works on testnet when someone manually funds the vault — but it does not solve **permissionless market creation at scale** or **Day 1 on mainnet without a funded house**.
-
----
-
-## 3. Ideas we considered (and why they fail the Day 1 constraint)
-
-### 3.1 Belief Spine — one pool per phenomenon
-
-**Idea:** Instead of per-market pools, one collateral spine per outcome space (e.g. all BTC close markets share one USDC pool). New markets are "windows" on an already-funded spine.
-
-**Pros:** Capital-efficient across correlated markets; structurally unique to continuous distribution AMMs (Polymarket cannot copy).
-
-**Why it fails Day 1:** Someone still has to deposit into the spine. It solves fragmentation across markets, not the bootstrap problem.
-
-### 3.2 Mesh vault + demand router
-
-**Idea:** Single vault; LPs deposit once; off-chain keeper routes USDC to thin markets via `add_liquidity`.
-
-**Why it fails Day 1:** Still requires vault depositors. A Soroswap with extra steps.
-
-### 3.3 AI market makers (AIMM-style)
-
-**Idea:** Autonomous agents price and seed long-tail markets using oracles and sentiment.
-
-**Reference:** [AIMM](https://ethglobal.com/showcase/aimm-ajcan) (ETHGlobal Buenos Aires — Pyth 2nd, Chainlink CRE winner).
-
-**Why it fails Day 1:** Agents still need capital to post. Off-chain band-aid, not a primitive change.
-
-### 3.4 Auto-seed + fee multipliers + UI badges
-
-**Idea:** Auto-call `HouseVault::seed_market` on create; boost LP fees on thin markets; show "needs liquidity" on cards.
-
-**Why it fails Day 1:** Symptoms of empty pools. Does not create depth without a funded HouseVault.
-
-### 3.5 Yield vaults (Basis-Zero-style)
-
-**Idea:** USDC earns yield in a vault; only yield funds early counterparty risk.
-
-**Reference:** [Basis-Zero](https://ethglobal.com/showcase/basis-zero-6gkde) (HackMoney 2026).
-
-**Partial fit:** Good optimization for collateral already in the system. Still needs a seed deposit or external yield source at t=0.
+| # | Decision | Rationale |
+|---|---|---|
+| D1 | **Delete `HouseVault`** | Protocol-owned seeding does not scale permissionlessly; contradicts “tap existing Stellar USDC, not recruit prediction-market LPs.” |
+| D2 | **BlendTap is the sole Day-1 bootstrap** | Stellar is a payments chain; USDC already sits in Blend. Borrow at trade time, repay at resolve. |
+| D3 | **No vAMM / virtual depth** | Breaks Kaido’s full-collateralization story (`f(x) ≤ b`). |
+| D4 | **When Blend is dry → graceful reject** | No protocol book, no treasury bailout, no HouseVault fallback. |
+| D5 | **Third-party LPs remain optional** | `add_liquidity` for fee share only; never required for first trade. |
+| D6 | **Product copy: “trade vs market curve”** | Retire “play vs house” / “HouseVault seeds.” |
 
 ---
 
-## 4. ETHGlobal research — prediction markets & liquidity
+## 2. The problem
 
-Searched 80+ projects via [ETHGlobal skills API](https://ethglobalskills.vercel.app). Relevant winners for **tapping existing liquidity without new LPs**:
+Kaido’s distribution-market AMM needs counterparty capacity (`b`) so traders can move the aggregate curve `f`. Without depth, markets look empty and (under BlendTap) borrows cannot be opened.
 
-| Project | Event / prize | Mechanism | Link |
+**The constraint:**
+
+> We will not have prediction-market LPs on Day 1. Stellar already has USDC in Blend, Soroswap, and native balances. We must use *that* — not recruit a new LP class and not operate a protocol house book.
+
+This is **not** “how do we make LPs more profitable?” It is: **how does the first trade work on a brand-new market with zero Kaido-specific deposits?**
+
+---
+
+## 3. Current on-chain behavior (verified)
+
+### 3.1 State at market creation
+
+`DistributionMarket::init` sets `CollateralPool = 0`, `LockedCollateral = 0`. Parameter `b` is stored in `MarketParams` but no USDC is deposited.
+
+```188:193:contracts/contracts/distribution-market/src/lib.rs
+        storage.set(&DataKey::CollateralPool, &0i128);
+        storage.set(&DataKey::LpTotalShares, &0i128);
+        storage.set(&DataKey::FeePool, &0i128);
+        storage.set(&DataKey::TreasuryFees, &0i128);
+        storage.set(&DataKey::CreatorFees, &0i128);
+        storage.set(&DataKey::LockedCollateral, &0i128);
+```
+
+`MarketFactory` explicitly does **not** auto-seed:
+
+```11:13:contracts/contracts/market-factory/src/lib.rs
+//! It does **not** auto-seed liquidity: `HouseVault::seed_market` is admin-gated
+//! (the house is the protocol's own LP, not something a market creator can
+//! conscript), so seeding stays an explicit follow-up call by the house admin.
+```
+
+### 3.2 `trade()` does not require LP USDC today
+
+`trade()` pulls trader USDC, locks `worst_case_collateral`, advances the curve. It does **not** read `CollateralPool` or `free_collateral`.
+
+```212:298:contracts/contracts/distribution-market/src/lib.rs
+    pub fn trade(
+        env: Env,
+        trader: Address,
+        mu2: i128,
+        sigma2: i128,
+        max_collateral_7dp: i128,
+    ) -> u64 {
+        // ... status / window / sigma checks ...
+        let collateral_wad = if params.capped {
+            capped_worst_case_collateral(/* ... */)
+        } else {
+            worst_case_collateral((g.mu, g.sigma, g.lambda), (f.mu, f.sigma, f.lambda))
+        };
+        // ... fee, slippage, USDC transfer_from trader ...
+        storage.set(&DataKey::LockedCollateral, &(locked + collateral_wad));
+        storage.set(&DataKey::Belief, &g);
+        // ...
+    }
+```
+
+**Implication:** A zero-LP market can still accept trades today. Solvency at `claim` is backed by **locked trader collateral** plus pool accounting — not by pre-seeded LP USDC.
+
+### 3.3 What `b` and `free_collateral` mean
+
+```914:923:contracts/contracts/distribution-market/src/lib.rs
+    /// Free collateral available for LP entry: `b − locked − pool` (WAD).
+    pub fn free_collateral(env: Env) -> i128 {
+        let params: MarketParams = storage.get(&DataKey::Params).unwrap();
+        let locked: i128 = storage.get(&DataKey::LockedCollateral).unwrap_or(0);
+        let pool: i128 = storage.get(&DataKey::CollateralPool).unwrap_or(0);
+        params.b.saturating_sub(locked).saturating_sub(pool)
+    }
+```
+
+`add_liquidity` reverts with `InsufficientLiquidity` when `free_wad ≤ 0`:
+
+```417:422:contracts/contracts/distribution-market/src/lib.rs
+        let free_wad = params.b.saturating_sub(locked).saturating_sub(pool);
+        if free_wad <= 0 {
+            panic_with_error!(&env, KaidoError::InsufficientLiquidity);
+        }
+```
+
+### 3.4 Worst-case collateral (solvency primitive)
+
+From `kaido-math` (whitepaper §11):
+
+```81:84:contracts/crates/kaido-math/src/gaussian.rs
+/// Worst-case collateral for a trade that moves the market curve from `f` to
+/// `g`: `max( 0, −min_x ( g(x) − f(x) ) )` — the largest amount the trader
+/// could owe at resolution (whitepaper §11, step 3).
+pub fn worst_case_collateral(g: (i128, i128, i128), f: (i128, i128, i128)) -> i128 {
+```
+
+**BlendTap thesis:** this known max loss can secure a Blend borrow (same insight as [Aqua Outcome Market](https://ethglobal.com/showcase/aqua-outcome-market-0va0j) on Euler).
+
+### 3.5 What `HouseVault` does today (to be removed)
+
+```135:186:contracts/contracts/house-vault/src/lib.rs
+    pub fn seed_market(env: Env, market: Address, amount_7dp: i128) -> i128 {
+        // admin auth, cap check ...
+        let free = dm.free_collateral();
+        if free <= 0 {
+            panic_with_error!(&env, KaidoError::InsufficientLiquidity);
+        }
+        // authorize USDC transfer → market.add_liquidity(...)
+    }
+```
+
+Testnet seeding today (`contracts/scripts/seed.sh`): deployer deposits USDC → `set_cap` → `seed_market` on demo/lifecycle markets. **This pipeline goes away.**
+
+Current testnet ids (for migration reference): `config/networks.testnet.json` — `houseVault` `CCHABSAKYR2Y56DBIF5JST7PIBBXBNLELFQG23ZMPJ7UUA7KW7GYN5NY`.
+
+---
+
+## 4. Session research summary
+
+### 4.1 ETHGlobal — patterns that avoid dedicated prediction-market LPs
+
+| Project | Event | Mechanism | Link |
 |---|---|---|---|
-| **Aqua Outcome Market** | Buenos Aires — 1inch 1st | pm-AMM; **JIT borrow from Euler** on each swap; virtual reserves across markets; credit-based MM | [showcase](https://ethglobal.com/showcase/aqua-outcome-market-0va0j) |
-| **Basis-Zero** | HackMoney 2026 | Yield-funded counterparty; Safe Mode bets only accrued yield | [showcase](https://ethglobal.com/showcase/basis-zero-6gkde) |
-| **Poorps (vAMM)** | Buenos Aires | Virtual AMM — depth without physical LPs; collateral vault for settlement | [showcase](https://ethglobal.com/showcase/poorps-jg27k) |
-| **QU!D** | HackMoney 2026 | Virtual reserves (Bancor-style) — LP without holding full inventory | [showcase](https://ethglobal.com/showcase/qu-d-qtr04) |
-| **Orbswap Prediction** | Buenos Aires — Uniswap 2nd | Concentrated probability LP curve; asymmetric payoff | [showcase](https://ethglobal.com/showcase/orbswap-prediction-hyxb2) |
+| **Aqua Outcome Market** | Buenos Aires — 1inch 1st | pm-AMM; **JIT borrow from Euler** on each swap; virtual reserves; credit-based MM | [showcase](https://ethglobal.com/showcase/aqua-outcome-market-0va0j) |
+| **Basis-Zero** | HackMoney 2026 | Yield-funded counterparty; Safe Mode uses only accrued yield | [showcase](https://ethglobal.com/showcase/basis-zero-6gkde) |
+| **Poorps (vAMM)** | Buenos Aires | Virtual AMM — depth without physical LPs (**rejected** for Kaido) | [showcase](https://ethglobal.com/showcase/poorps-jg27k) |
+| **QU!D** | HackMoney 2026 | Virtual reserves (Bancor-style) (**rejected**) | [showcase](https://ethglobal.com/showcase/qu-d-qtr04) |
+| **Orbswap Prediction** | Buenos Aires — Uniswap 2nd | Concentrated probability LP curve (LP economics, not Day-0) | [showcase](https://ethglobal.com/showcase/orbswap-prediction-hyxb2) |
+| **JIT Saving Vault** | ETHGlobal NY 2025 | Uniswap v4 hook + Aave borrow before swap, repay after | [showcase](https://ethglobal.com/showcase/jit-saving-vault-uud5s) |
 
-**Pattern:** The projects that avoid recruiting prediction-market LPs either **borrow from money markets at trade time** (Aqua) or use **virtual curves + collateral vaults** (Poorps, QU!D). Kaido's fully collateralized trades fit the borrow path better than going virtual (we want to keep `f(x) ≤ b` solvency proofs).
+**Pattern:** Winners either **borrow from money markets at trade time** (Aqua) or go **virtual** (Poorps, QU!D). Kaido keeps full collateralization → borrow path.
 
-**Aqua Outcome Market** is the closest template. Key quote from their submission:
+Key Aqua quote:
 
-> *"Just-In-Time liquidity… borrow or withdraw from a money market on demand to fulfill a swap… pull the capital necessary at the exact time it's needed and underwrite outcome tokens in response to actual demand."*
+> *"Just-In-Time liquidity… borrow or withdraw from a money market on demand to fulfill a swap… pull the capital necessary at the exact time it's needed."*
 
-They built on Euler (Ethereum). Stellar's equivalent is **Blend**.
+Stellar equivalent: **Blend** (not Euler).
+
+### 4.2 Colosseum Copilot (Solana hackathons)
+
+- Prediction-market cluster: **149 projects** — most use standard AMM + oracle + escrow; few innovate on bootstrap.
+- Standouts: **Splash Markets** (vAMM), **Caudal** (shared liquidity launchpad), **tap2bet** (LMSR subsidy).
+- Gap analysis: winners slightly overindex on `fragmented liquidity` and `capital inefficiency` as stated problems.
+- **None of these replace BlendTap on Stellar** — they confirm borrow-at-trade-time and shared-spine as capital-efficiency ideas, not Day-0 Stellar USDC tap.
+
+### 4.3 Stellar-specific verdict
+
+On a **payments chain**, the winning approach taps existing money-market USDC (Blend), not virtual depth or a protocol house. Compose optionally with **yield-on-locked-margin** (Basis-Zero slice) to subsidize borrow APR.
 
 ---
 
 ## 5. Proposed solution: BlendTap
 
-**One mechanism:** At trade time, Kaido borrows counterparty USDC from Blend (JIT). At resolve time, it repays from trader forfeitures and locked collateral. **Zero dedicated prediction-market LPs on Day 1.**
+**One mechanism:** At trade time, Kaido borrows counterparty USDC from a Blend lending pool (JIT). At resolve/claim time, it repays from trader forfeitures and locked collateral. **Zero Kaido-specific LP deposits on Day 1. Zero HouseVault.**
 
 ```mermaid
 sequenceDiagram
   participant Trader
-  participant Kaido as DistributionMarket
-  participant Blend as BlendLendingPool
-  participant Depositors as ExistingBlendDepositors
+  participant Market as DistributionMarket
+  participant Adapter as BlendAdapter
+  participant Pool as BlendLendingPool
+  participant Depositors as BlendUSDCDepositors
 
   Note over Depositors: USDC already in Blend — not Kaido LPs
-  Trader->>Kaido: trade(belief, collateral)
-  Kaido->>Kaido: lock worst_case_collateral
-  Kaido->>Blend: borrow USDC JIT
-  Blend-->>Kaido: counterparty funds
-  Note over Kaido: trade executes — no seed tx
-  Trader->>Kaido: resolve / claim
-  Kaido->>Blend: repay from pool + forfeitures
+  Trader->>Market: trade(belief, max_collateral)
+  Market->>Market: lock worst_case_collateral
+  Market->>Adapter: borrow_if_needed(amount)
+  Adapter->>Pool: submit(Borrow USDC)
+  Pool-->>Adapter: USDC
+  Adapter-->>Market: counterparty funds
+  Note over Market: curve advances — no seed tx
+  Trader->>Market: resolve / claim
+  Market->>Adapter: repay(outstanding)
+  Adapter->>Pool: submit(Repay USDC)
 ```
 
-### 5.1 Why Kaido's math makes this plausible
+### 5.1 Why Kaido’s math fits
 
-Every trade posts **`worst_case_collateral`** upfront, bounded by σ-floor / capped Gaussians. Property tests in [`distribution-market/src/test.rs`](contracts/contracts/distribution-market/src/test.rs) verify solvency.
+Every trade posts **`worst_case_collateral`** upfront (σ-floor / capped Gaussians). Property tests in `contracts/contracts/distribution-market/src/test.rs` verify non-negativity and lifecycle invariants.
 
-The Blend borrow is secured by collateral with a **known on-chain max loss** before the borrow executes. Most binary prediction markets do not have this property — which is why Aqua had to build a custom pm-AMM hook rather than plug into Polymarket directly.
+The Blend borrow can be secured by collateral with a **known on-chain max loss** before the borrow executes — stronger than generic binary prediction markets, which is why Aqua built a custom pm-AMM hook.
 
-### 5.2 Day 1 comparison
+### 5.2 Reinterpret `b` under BlendTap
 
-| Today | BlendTap |
+| Field | Today | BlendTap |
+|---|---|---|
+| `MarketParams.b` | Max curve mass / collateral envelope | **Max borrow capacity** (per-market cap) |
+| `CollateralPool` | LP USDC (optional) | Still optional third-party LP deposits |
+| `LockedCollateral` | Trader posted collateral | Unchanged |
+| External | — | `outstanding_blend_debt` tracked in `BlendAdapter` |
+
+### 5.3 Blend integration facts (official docs — not mocked)
+
+Source: [Blend Fund Management](https://docs.blend.capital/tech-docs/core-contracts/lending-pool/fund-management.md), [Integrate with a Blend Pool](https://docs.blend.capital/tech-docs/integrations/integrate-pool.md).
+
+**Single entrypoint:** pool contract `submit(from, spender, to, requests[])`.
+
+**Request struct** (from Blend docs):
+
+```rust
+pub struct Request {
+    pub request_type: u32,
+    pub address: Address, // asset contract address
+    pub amount: i128,
+}
+```
+
+**Request types relevant to BlendTap:**
+
+| Name | `request_type` | Use |
+|---|---|---|
+| Deposit Collateral | **2** | Post collateral before borrow (Blend requires healthy position) |
+| Borrow | **4** | Draw USDC from pool |
+| Repay | **5** | Return USDC + accrued interest |
+
+**Rules from Blend docs:**
+
+- Requests in one `submit()` are **atomic**; reverts if position would be unhealthy after all requests.
+- `from` and `to` must **authorize** the `submit()` call.
+- **Borrow fails** if `pool_status > 1` (Frozen or On-Ice).
+- **Repay** clears accrued interest as part of liability balance.
+
+**Available borrow liquidity** (for `available_depth()`):
+
+- Call pool `get_reserve(env, usdc_asset) -> Reserve` (updated to current ledger).
+- `available ≈ TotalSupplied - TotalBorrowed` for the USDC reserve ([Interest Rates / utilization](https://docs.blend.capital/pool-creators/adding-assets/interest-rates.md)).
+
+**Blend testnet addresses** (from [blend-utils/testnet.contracts.json](https://github.com/blend-capital/blend-utils/blob/main/testnet.contracts.json)):
+
+| Asset / contract | Testnet address |
 |---|---|
-| Admin seeds each market via HouseVault | `b` = borrow cap, not pre-deposited USDC |
-| Empty until seed confirms | First trader gets depth in one tx |
-| Recruit Kaido LPs | Blend depositors are passive LPs (higher utilization) |
-| USDC idle in Kaido pools | USDC stays in Blend until a trade pulls it |
+| USDC (SAC) | `CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU` |
+| Pool factory V2 | `CDV6RX4CGPCOKGTBFS52V3LMWQGZN3LCQTXF5RVPOOCG4XVMHXQ4NTF6` |
+| Backstop V2 | `CBDVWXT433PRVTUNM56C3JREF3HIZHRBA64NB2C3B2UNCKIS65ZYCLZA` |
+| Testnet V2 pool | `CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF` |
 
-### 5.3 Ecosystem pitch (Stellar, not prediction-market natives)
+**Blend mainnet core** ([deployments](https://docs.blend.capital/mainnet-deployments.md)): Pool Factory `CDSYOAVXFY7SM5S64IZPPPYB4GVGGLMQVFREPSQQEZVIWXX5R23G4QSU`, Backstop `CAQQR5SWBXKIGZKPBZDH3KM5GQ5GUTPKB7JAFCINLZBC5WXPJKRG3IM7`.
 
-> "Kaido is a Blend utilization sink. Belief trades borrow USDC from the lending pool and repay at resolution. Blend depositors earn more yield without opting into prediction markets."
+**SDK:** Blend documents integration via `blend-contract-sdk` (Rust clients + WASM). Kaido should depend on the **published** SDK rather than inventing pool interfaces.
 
-### 5.4 Architecture sketch
+### 5.4 `BlendAdapter` — spec (not yet implemented)
 
-**New: `BlendAdapter` Soroban contract**
+New Soroban contract crate: `contracts/contracts/blend-adapter/`.
 
-- `borrow(amount)` / `repay(amount)` against Blend USDC pool.
-- Per-market `borrow_cap` (governance).
-- `available_depth()` = min(Blend liquidity, cap − outstanding borrow).
-- Callable only by authorized `DistributionMarket` instances.
+**Storage (proposed):**
 
-**Changes to `DistributionMarket`**
+- `blend_pool: Address` — target lending pool
+- `usdc: Address` — USDC SAC id (same as markets; per-network at deploy)
+- `admin: Address` — governance
+- `authorized_markets: Map<Address, bool>` — which `DistributionMarket` instances may borrow
+- `borrow_cap: Map<Address, i128>` — per-market max outstanding borrow (7-dp or WAD — match market money scale at boundary)
+- `outstanding: Map<Address, i128>` — per-market debt to Blend
 
-- `init`: `b` reinterpreted as max borrow capacity; `CollateralPool` may start at 0.
-- `trade`: after locking trader collateral → borrow from Blend if counterparty needs USDC.
-- `claim` / resolve path: repay outstanding Blend debt.
-- Extend property tests for borrow/repay sequences and cap exhaustion.
+**Public interface (proposed):**
 
-**UI / SDK**
+```rust
+// Callable only by authorized DistributionMarket
+fn borrow_for_market(env, market: Address, amount_7dp: i128) -> i128;
+fn repay_for_market(env, market: Address, amount_7dp: i128) -> i128;
 
-- Show **"Blend-backed depth: $X"** instead of empty LP pool.
-- Defer standalone LP deposit UX until explicit LPs are wanted for fee share.
+// Views
+fn available_depth(env, market: Address) -> i128;  // min(cap - outstanding, pool_available)
+fn outstanding_debt(env, market: Address) -> i128;
+```
 
-**Phase 2: Soroswap LP tokens via Blend collateral**
+**Authorization pattern:** Mirror `HouseVault`’s `env.authorize_as_current_contract(...)` for sub-calls — already used when the vault authorizes USDC `transfer` into `add_liquidity`:
 
-- Soroswap LPs deposit LP tokens into Blend → borrow USDC → backs Kaido.
-- DEX LPs never unstake; they lease liquidity through Blend ([Aqua credit-based MM](https://ethglobal.com/showcase/aqua-outcome-market-0va0j) pattern).
+```179:186:contracts/contracts/house-vault/src/lib.rs
+        env.authorize_as_current_contract(transfer_auth(
+            &env,
+            &usdc,
+            &me,
+            &market,
+            actual_7dp,
+        ));
+        let shares = dm.add_liquidity(&me, &scale);
+```
 
-**Optional (same thesis, not a second system): yield on locked margin**
+`BlendAdapter` will need the equivalent for `pool.submit(...)` with `from = adapter`, `to = adapter` (exact auth layout **must be confirmed in spike** against live Blend testnet pool).
 
-- Park locked trader collateral in Blend while positions are open ([Basis-Zero](https://ethglobal.com/showcase/basis-zero-6gkde) pattern).
-- Accrued yield subsidizes borrow cost early on.
+### 5.5 Changes to `DistributionMarket` (proposed)
 
-### 5.5 What happens to HouseVault?
+**`init` additions:**
 
-Not deleted — **demoted from bootstrap to optional top-up**:
+- `blend_adapter: Address` (or optional zero = disabled for local tests without Blend)
+- Store adapter address in instance storage
 
-- Useful if Blend utilization is high or borrow caps are conservative.
-- Protocol can still deposit explicit LP capital for fee capture.
-- No longer on the critical path for first trade.
+**`trade` path:**
 
----
+1. Existing: compute `collateral_wad`, pull USDC from trader, lock collateral, advance curve.
+2. **New (if counterparty USDC needed for solvency envelope):** call `BlendAdapter::borrow_for_market` up to cap.
+3. **New:** pre-check `available_depth()` ≥ required borrow; revert `InsufficientLiquidity` (or new error `BlendDepthExceeded`) if not.
 
-## 6. Risks and open questions (for discussion)
+**`claim` / resolve path:**
 
-### 6.1 Blend integration
+- After settlement transfers, call `BlendAdapter::repay_for_market` for outstanding debt attributable to that market.
 
-- [ ] Does Blend on Soroban expose borrow/repay in a form Kaido can call atomically inside `trade`?
-- [ ] Flash-loan style (borrow + trade + repay same tx) vs persistent borrow until resolve?
-- [ ] Borrow interest: who pays — trader fee, protocol treasury, or yield-on-locked margin?
+**New view:**
 
-### 6.2 Solvency under borrow
+- `blend_backed_depth() -> i128` — delegate to adapter `available_depth`.
 
-- [ ] Exact invariant: `outstanding_blend_debt + max_winner_payout ≤ locked_trader_collateral + collateral_pool` at all times?
-- [ ] Need formal proof extension beyond current `worst_case_collateral` tests.
-- [ ] What happens if multiple winners exhaust pool before resolve — can borrow cover peak `f(x₀)` across positions?
+**Tests:** Extend property/fuzz tests in `distribution-market/src/test.rs` with borrow/repay sequences alongside existing trade/LP fuzz.
 
-### 6.3 Blend liquidity crunch
+### 5.6 Phase 2 (not Day 1)
 
-- [ ] If Blend USDC utilization is already high, `available_depth()` may be near zero.
-- [ ] Mitigation: per-market caps, graceful rejection, HouseVault as emergency top-up.
-- [ ] Is this acceptable product-wise vs always-on depth?
-
-### 6.4 Regulatory / narrative
-
-- [ ] Framing: Kaido is a **Blend borrower** using existing DeFi infrastructure, not a house book.
-- [ ] Does Blend partnership / listing require coordination with Blend team?
-
-### 6.5 Virtual AMM alternative
-
-- [ ] [Poorps vAMM](https://ethglobal.com/showcase/poorps-jg27k) achieves "no LPs" with virtual curves — should Kaido ever go virtual?
-- [ ] Current position: **no** — distribution market whitepaper promises full collateralization; virtual depth breaks that promise unless carefully redesigned.
-
-### 6.6 Belief Spine — revisit later?
-
-- [ ] Spine + BlendTap may compose: spine for cross-window capital efficiency, Blend for Day 0 bootstrap.
-- [ ] Not needed for first trade; worth revisiting once borrow path works.
+- **Belief Spine** — shared collateral across correlated markets (Caudal pattern); capital efficiency after borrow path works.
+- **Soroswap LP → Blend collateral** — lease DEX liquidity (Aqua credit-MM pattern).
+- **Yield-on-locked-margin** — park locked trader USDC in Blend; accrued yield subsidizes borrow APR ([Basis-Zero](https://ethglobal.com/showcase/basis-zero-6gkde)).
 
 ---
 
-## 7. Success criteria
+## 6. Empty pool — scenarios and fixes (HouseVault-free)
+
+| Scenario | Symptom | Fix |
+|---|---|---|
+| **A — Cold start** | $0 LP pool, new market | **BlendTap**; UI shows `Blend-backed depth` |
+| **B — Full capacity** | `free_collateral = 0` | Claims unlock locked; raise borrow cap; Belief Spine (P2); optional third-party LPs |
+| **C — LPs exited** | `CollateralPool = 0`, positions open | `worst_case_collateral` + claim accounting; BlendTap repay at resolve; LP fee incentives |
+| **D — Blend dry** | `available_depth ≈ 0` | Pre-trade revert; UI “liquidity low”; yield-on-margin (P2); **accept pause** — no vault bailout |
+| **E — Settlement** | Should not happen | σ-floor, capped Gaussians, fuzz proofs, `Disputable` on stale oracle |
+
+**Critical:** Without HouseVault, **Scenario D is the primary production failure mode.** Product must handle it honestly.
+
+---
+
+## 7. Rejected approaches
+
+| Idea | Why rejected |
+|---|---|
+| **HouseVault** | Protocol book; manual seeding; removed by D1 |
+| **Belief Spine alone** | Fixes fragmentation, not t=0 bootstrap |
+| **Mesh vault + keeper router** | Still needs vault depositors |
+| **AIMM agents** | Agents need capital; off-chain |
+| **vAMM (Poorps/Splash)** | Virtual depth vs full collateralization |
+| **LMSR / treasury subsidy** | Same capital problem as HouseVault |
+| **Auto-seed + UI badges** | Symptoms without USDC source |
+
+---
+
+## 8. HouseVault removal checklist
+
+| Area | Action |
+|---|---|
+| `contracts/contracts/house-vault/` | Delete crate |
+| `contracts/scripts/seed.sh` | Remove `seed_house_vault`; tests use trader-funded trades only |
+| `contracts/tests/tests/lifecycle.rs` | Remove house seed step |
+| `config/networks.*.json` | Remove `houseVault` contract + fixture |
+| `deploy.sh` | Stop deploying house-vault |
+| `web/lib/stellar/house.ts` | Remove |
+| `web/components/hero.tsx`, market UI | Remove house exposure / seed copy |
+| `packages/contract-bindings/src/house-vault/` | Remove after redeploy |
+| `kaido-whitepaper.md` §18, §20 | Rewrite: BlendTap bootstrap, “trade vs market curve” |
+| `build.md` | Update pivot note (HouseVault → BlendTap) |
+| `KaidoError::CapExceeded`, `CapNotSet` | Remove or repurpose when house-vault deleted |
+
+**Regulatory narrative (was HouseVault-as-LP):** Kaido is a **Blend borrower** using existing DeFi infrastructure; optional third-party LPs earn fees; no protocol house book.
+
+---
+
+## 9. Open questions (must resolve in spike)
+
+### 9.1 Blend integration
+
+- [ ] Confirm `submit()` auth layout for a Soroban contract borrower on testnet pool `CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF`.
+- [ ] **Collateral requirement:** Blend docs state borrow requires posted collateral. Spike: bundle `Deposit Collateral (2)` + `Borrow (4)` atomically, using trader-locked USDC as collateral source.
+- [ ] **Borrow model:** flash per trade vs hold borrow until market resolves?
+- [ ] **Interest:** who pays borrow APR — trader fee, treasury, or yield-on-locked-margin?
+- [ ] **Decimals:** Blend reserve amounts vs Kaido 7-dp USDC boundary — exact conversion rules.
+
+### 9.2 Solvency under borrow
+
+- [ ] Formal invariant: `outstanding_blend_debt + max_winner_payout ≤ locked_trader_collateral + collateral_pool` at all times?
+- [ ] Extend property tests beyond current `worst_case_collateral` proofs.
+- [ ] Peak winner payout across multiple open positions before resolve.
+
+### 9.3 Product
+
+- [ ] Is graceful reject when Blend dry acceptable vs always-on depth?
+- [ ] Blend partnership / audit path before mainnet?
+
+---
+
+## 10. Success criteria
 
 | Metric | Target |
 |---|---|
-| First trade on fresh market | Same tx as market creation — no seed tx |
+| First trade on fresh market | Same tx as trade — **no seed tx**, no HouseVault |
 | Kaido-specific LP deposits (first 30 days testnet) | Zero required |
-| Blend utilization from Kaido | Measurable increase (proves ecosystem tap, not LP recruitment) |
-| Solvency | All existing property tests pass + borrow/repay fuzz |
+| Blend utilization from Kaido | Measurable increase |
+| Solvency | Existing property tests + borrow/repay fuzz pass |
+| HouseVault | Not deployed |
 
 ---
 
-## 8. Implementation order (if we agree)
+## 11. Implementation order
 
-1. **Spike:** Blend Soroban borrow/repay from a throwaway contract on testnet.
-2. **`BlendAdapter`:** borrow cap, `available_depth`, authorized callers.
-3. **`DistributionMarket` integration:** trade/resolve borrow lifecycle + solvency checks.
-4. **Property tests + fuzz:** borrow sequences alongside existing trade/LP fuzz.
-5. **SDK + UI:** Blend-backed depth display; remove empty-pool blocker on trade path.
-6. **Phase 2:** Soroswap LP collateral path; yield-on-locked margin.
-
----
-
-## 9. Decisions needed
-
-Please comment inline or in issues:
-
-1. **Go / no-go on BlendTap** as the Day 1 liquidity primitive (vs keep HouseVault-only bootstrap for M1).
-2. **Borrow model:** flash per trade vs hold borrow until market resolves.
-3. **Who pays borrow APR** and whether yield-on-locked margin is in scope for v1.
-4. **HouseVault role:** deprecate bootstrap entirely or keep as fallback.
-5. **Blend partnership:** pursue official integration / audit path before mainnet?
+1. **Spike:** `blend-contract-sdk` + testnet pool `submit(Borrow/Repay)` from throwaway Soroban contract ([Blend testnet addresses §5.3](#53-blend-integration-facts-official-docs--not-mocked)).
+2. **`BlendAdapter` crate:** caps, authorized callers, `available_depth`, outstanding debt ledger.
+3. **`DistributionMarket` integration:** trade/claim borrow lifecycle + pre-trade depth check.
+4. **Property tests + fuzz:** borrow sequences in `distribution-market/src/test.rs`.
+5. **Remove HouseVault:** crate, deploy, seed.sh, bindings, UI.
+6. **SDK + UI:** `blend_backed_depth` display; remove empty-pool / house blockers.
+7. **Whitepaper + build.md** updates.
+8. **Phase 2:** Belief Spine, Soroswap collateral path, yield-on-margin.
 
 ---
 
-## 10. References
+## 12. References
 
-- Kaido whitepaper §12 (LP math), §18 (HouseVault): [`kaido-whitepaper.md`](kaido-whitepaper.md)
-- Build status / HouseVault seeding: [`build.md`](build.md)
-- Distribution market contract: [`contracts/contracts/distribution-market/src/lib.rs`](contracts/contracts/distribution-market/src/lib.rs)
-- ETHGlobal Aqua Outcome Market: https://ethglobal.com/showcase/aqua-outcome-market-0va0j
-- ETHGlobal Basis-Zero: https://ethglobal.com/showcase/basis-zero-6gkde
-- Paradigm distribution markets (mechanism Kaido implements): https://www.paradigm.xyz/2024/12/distribution-markets
+### Kaido repo
+
+- [`contracts/contracts/distribution-market/src/lib.rs`](contracts/contracts/distribution-market/src/lib.rs)
+- [`contracts/contracts/market-factory/src/lib.rs`](contracts/contracts/market-factory/src/lib.rs)
+- [`contracts/contracts/house-vault/src/lib.rs`](contracts/contracts/house-vault/src/lib.rs) — **to be deleted**
+- [`contracts/crates/kaido-math/src/gaussian.rs`](contracts/crates/kaido-math/src/gaussian.rs)
+- [`contracts/scripts/seed.sh`](contracts/scripts/seed.sh)
+- [`kaido-whitepaper.md`](kaido-whitepaper.md)
+- [`build.md`](build.md)
+
+### External
+
+- [Aqua Outcome Market](https://ethglobal.com/showcase/aqua-outcome-market-0va0j) (ETHGlobal Buenos Aires)
+- [Basis-Zero](https://ethglobal.com/showcase/basis-zero-6gkde) (HackMoney 2026)
+- [Blend — Fund Management](https://docs.blend.capital/tech-docs/core-contracts/lending-pool/fund-management.md)
+- [Blend — Integrate with a Pool](https://docs.blend.capital/tech-docs/integrations/integrate-pool.md)
+- [Blend — Mainnet deployments](https://docs.blend.capital/mainnet-deployments.md)
+- [Blend — Testnet contracts JSON](https://github.com/blend-capital/blend-utils/blob/main/testnet.contracts.json)
+- [Stellar — Blend & Meru case study](https://stellar.org/case-studies/meru-wallet-uses-blend-defi-protocol-for-yield-v2)
+- [Paradigm — Distribution markets](https://www.paradigm.xyz/2024/12/distribution-markets)
+
+---
+
+## 13. Changelog
+
+| Date | Change |
+|---|---|
+| 2026-06 (prior draft) | HouseVault bootstrap + ETHGlobal survey |
+| 2026-06-26 | **This revision:** HouseVault removal; BlendTap sole bootstrap; empty-pool matrix; verified contract citations; Blend API from official docs; Colosseum/ETHGlobal session synthesis |

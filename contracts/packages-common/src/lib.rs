@@ -103,6 +103,10 @@ pub enum KaidoError {
     /// HouseVault: cap for this market is not configured (defaults to 0). The
     /// admin must call `set_cap` before seeding the market.
     CapNotSet = 45,
+    /// BlendTap: the requested borrow exceeds per-market cap or pool depth.
+    BlendDepthExceeded = 46,
+    /// BlendTap: the caller is not an authorized `DistributionMarket`.
+    BlendMarketNotAuthorized = 47,
 
     // --- arithmetic (50+) ---
     /// A fixed-point computation overflowed `i128` (a bug / out-of-envelope

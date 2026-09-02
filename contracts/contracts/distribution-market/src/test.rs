@@ -110,6 +110,7 @@ fn setup() -> Ctx {
         &7_000u32,
         &2_000u32,
         &1_000u32,
+        &None,
     );
     Ctx {
         usdc_admin: token::StellarAssetClient::new(&env, &usdc),
@@ -183,6 +184,7 @@ fn init_one_shot() {
             &flp,
             &ftr,
             &fcr,
+            &None,
         )
         .is_err());
 }
@@ -313,6 +315,7 @@ fn rejects_bad_params() {
             &flp,
             &ftr,
             &fcr,
+            &None,
         )
         .is_err());
     assert!(fresh()
@@ -334,6 +337,7 @@ fn rejects_bad_params() {
             &flp,
             &ftr,
             &fcr,
+            &None,
         )
         .is_err());
     assert!(fresh()
@@ -355,6 +359,7 @@ fn rejects_bad_params() {
             &flp,
             &ftr,
             &fcr,
+            &None,
         )
         .is_err());
 }
@@ -535,6 +540,7 @@ mod trajectory {
             &flp,
             &ftr,
             &fcr,
+            &None,
         );
         Ctx {
             usdc_admin: token::StellarAssetClient::new(&env, &usdc),

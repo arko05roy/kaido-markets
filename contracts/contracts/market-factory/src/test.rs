@@ -16,7 +16,7 @@ fn boot() -> (Env, MarketFactoryClient<'static>, Address) {
     // any `deploy_v2`, so the hash is never dereferenced.
     let wasm = BytesN::from_array(&env, &[7u8; 32]);
     let treasury = Address::generate(&env);
-    let id = env.register(MarketFactory, (admin, wasm, registry, usdc, treasury));
+    let id = env.register(MarketFactory, (admin, wasm, registry, usdc, treasury, None::<Address>));
     let client = MarketFactoryClient::new(&env, &id);
     let creator = Address::generate(&env);
     (env, client, creator)

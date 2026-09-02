@@ -4,6 +4,7 @@
 #   ./contracts/scripts/deploy.sh <local|testnet|futurenet|mainnet>
 #
 # Design rules (build.md §0a):
+#   * requires stellar-cli >= 27 (fee-bump for large WASM deploy/invoke fees)
 #   * idempotent — re-running re-builds, re-uploads and re-deploys the whole
 #     suite and rewrites config/networks.<network>.json (the "live ids" file,
 #     gitignored);
@@ -49,6 +50,12 @@ FRIENDBOT="${FRIENDBOT_URL:-$(read_cfg friendbotUrl)}"
 # house-vault take it as a constructor/init arg — never hardcoded). Require it
 # from the environment with no default; fail loudly if unset.
 : "${USDC_SAC_ID:?set USDC_SAC_ID (the USDC Stellar Asset Contract id for ${STELLAR_NETWORK:-this network}); see .env.example}"
+# BlendTap spine (liquidity-plan §5.3). Optional — when unset, markets deploy without JIT borrow.
+BLEND_POOL_ID="${BLEND_POOL_ID:-}"
+BLEND_USDC_SAC_ID="${BLEND_USDC_SAC_ID:-${USDC_SAC_ID}}"
+if [[ -n "${BLEND_POOL_ID}" && "${BLEND_USDC_SAC_ID}" != "${USDC_SAC_ID}" ]]; then
+  echo "warning: BLEND_USDC_SAC_ID != USDC_SAC_ID — BlendTap markets need the same SAC as the pool reserve." >&2
+fi
 # Optional Reflector feed + asset for the T0 resolver constructor; if unset we
 # point the demo resolver at a placeholder so the deploy still completes.
 : "${REFLECTOR_FEED_ID:=${USDC_SAC_ID}}"
@@ -110,7 +117,12 @@ WASM_DIR="${CONTRACTS_DIR}/target/wasm32v1-none/release"
 # the resolvers and `house-vault` (no inter-deps), then `registry` (constructed
 # with a placeholder factory = admin), then `market-factory` (needs the registry
 # id + the dm WASM hash), and finally `registry.set_factory(<factory id>)`.
-CONTRACTS="distribution-market resolver-reflector resolver-attested resolver-optimistic resolver-designated house-vault registry market-factory"
+CONTRACTS="distribution-market blend-adapter resolver-reflector resolver-attested resolver-optimistic resolver-designated house-vault registry market-factory"
+if [[ -n "${BLEND_POOL_ID}" && "${SKIP_HOUSE_VAULT:-1}" == "1" ]]; then
+  # house-vault WASM (~105KB) simulates >u32::MAX resource fee on current CLI; BlendTap replaces it.
+  CONTRACTS="distribution-market blend-adapter resolver-reflector resolver-attested resolver-optimistic resolver-designated registry market-factory"
+  echo "note: skipping house-vault (BlendTap mode; set SKIP_HOUSE_VAULT=0 to force deploy)" >&2
+fi
 
 # kebab-case -> camelCase, portably (no GNU sed).
 to_camel() { awk 'BEGIN{FS="-"}{out=$1;for(i=2;i<=NF;i++)out=out toupper(substr($i,1,1)) substr($i,2);print out}' <<<"$1"; }
@@ -118,11 +130,23 @@ to_camel() { awk 'BEGIN{FS="-"}{out=$1;for(i=2;i<=NF;i++)out=out toupper(substr(
 CONTRACTS_JSON=""
 N=0
 for c in ${CONTRACTS}; do
+  if [[ "${c}" == "blend-adapter" && -z "${BLEND_POOL_ID}" ]]; then
+    echo "-- blend-adapter (skipped — set BLEND_POOL_ID in .env) --"
+    continue
+  fi
   wasm="${WASM_DIR}/$(echo "${c}" | tr '-' '_').wasm"
   [[ -f "${wasm}" ]] || { echo "missing ${wasm}" >&2; exit 1; }
 
   echo "-- ${c} --------------------------------"
-  hash="$(stellar contract upload --wasm "${wasm}" --network "${NETWORK}" "${SOURCE_ARG[@]}")"
+  hash=""
+  for attempt in 1 2 3 4 5 6; do
+    if hash="$(stellar contract upload --wasm "${wasm}" --network "${NETWORK}" "${SOURCE_ARG[@]}" 2>/dev/null)"; then
+      hash="${hash//\"/}"
+      break
+    fi
+    sleep 3
+  done
+  [[ -n "${hash}" ]] || { echo "   upload failed after retries (${c})" >&2; exit 1; }
   echo "   wasm hash : ${hash}"
   eval "HASH_$(echo "${c}" | tr '-' '_')=${hash}"
   # `distribution-market` uses an explicit `init(...)` (invoked below);
@@ -146,11 +170,19 @@ for c in ${CONTRACTS}; do
       # placeholder factory = admin; rewired to the real factory id below.
       CTOR_ARGS=(-- --admin "${ADMIN}" --factory "${ADMIN}")
       ;;
+    blend-adapter)
+      CTOR_ARGS=(-- --admin "${ADMIN}" \
+        --blend-pool "${BLEND_POOL_ID}" --usdc "${BLEND_USDC_SAC_ID}")
+      ;;
     market-factory)
+      BLEND_ARG=()
+      if [[ -n "${BLEND_POOL_ID:-}" && -n "${ID_blend_adapter:-}" ]]; then
+        BLEND_ARG=(--blend-adapter "\"${ID_blend_adapter}\"")
+      fi
       CTOR_ARGS=(-- --admin "${ADMIN}" \
         --market-wasm "${HASH_distribution_market}" \
         --registry "${ID_registry}" --usdc "${USDC_SAC_ID}" \
-        --treasury "${ADMIN}")
+        --treasury "${ADMIN}" ${BLEND_ARG[@]+"${BLEND_ARG[@]}"})
       ;;
     resolver-designated)
       CTOR_ARGS=(-- --designated "${ADMIN}" \
@@ -182,7 +214,17 @@ for c in ${CONTRACTS}; do
       ;;
   esac
   # `${arr[@]+...}` so an empty CTOR_ARGS doesn't trip `set -u` on bash 3.2 (macOS).
-  id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}" ${CTOR_ARGS[@]+"${CTOR_ARGS[@]}"})"
+  # Ledger can lag behind upload; retry deploy until WASM is visible.
+  id=""
+  for attempt in 1 2 3 4 5 6; do
+    if id="$(stellar contract deploy --wasm-hash "${hash}" --network "${NETWORK}" "${SOURCE_ARG[@]}" ${CTOR_ARGS[@]+"${CTOR_ARGS[@]}"} 2>/dev/null)"; then
+      id="${id//\"/}"
+      break
+    fi
+    sleep 2
+  done
+  [[ -n "${id}" ]] || { echo "   deploy failed after retries (wasm ${hash})" >&2; exit 1; }
+  sleep 1
   echo "   contract  : ${id}"
   key="$(to_camel "${c}")"
   [[ -n "${CONTRACTS_JSON}" ]] && CONTRACTS_JSON="${CONTRACTS_JSON},"
@@ -213,6 +255,10 @@ MU0_18="50000000000000000000"          # 50 * 1e18
 NOW="$(date +%s)"
 W_OPEN="${NOW}"; W_LOCK="$(( NOW + 3600 ))"; W_RESOLVE="$(( NOW + 7200 ))"
 echo "-- distribution-market: init + verify ----"
+BLEND_INIT=()
+if [[ -n "${ID_blend_adapter:-}" ]]; then
+  BLEND_INIT=(--blend-adapter "\"${ID_blend_adapter}\"")
+fi
 if stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
      -- init \
         --k "${WAD18}" --b "${B18}" --fee-bps 30 \
@@ -220,7 +266,8 @@ if stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK
         --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
         --mu0 "${MU0_18}" --sigma0 "${WAD18}" --usdc "${USDC_SAC_ID}" \
         --capped-flag 0 --treasury "${ADMIN}" --creator "${DEPLOYER_ADDR}" \
-        --fee-lp-bps 7000 --fee-treasury-bps 2000 --fee-creator-bps 1000; then
+        --fee-lp-bps 7000 --fee-treasury-bps 2000 --fee-creator-bps 1000 \
+        ${BLEND_INIT[@]+"${BLEND_INIT[@]}"}; then
   echo "   get_params ->"
   stellar contract invoke --id "${ID_distribution_market}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no \
     -- get_params || true
@@ -245,6 +292,12 @@ if MKT="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWO
         --mu0 "${MU0_18}" --sigma0 "${WAD18}" --capped-flag 0 2>/dev/null)"; then
   DEMO_MKT="${MKT//\"/}"
   echo "   created market : ${DEMO_MKT}"
+  if [[ -n "${ID_blend_adapter:-}" ]]; then
+    echo "-- blend-adapter.authorize_market (${DEMO_MKT}) --"
+    stellar contract invoke --id "${ID_blend_adapter}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
+      -- authorize_market --market "${DEMO_MKT}" --cap-7dp 100000000000 || \
+      echo "   (authorize_market failed — re-run manually)" >&2
+  fi
   echo "   registry.count ->"
   stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- count || true
   echo "   registry.get(${DEMO_MKT}) ->"
@@ -261,7 +314,7 @@ if [[ -n "${DEMO_MKT}" ]]; then
   \"fixtures\": {
     \"demoMarket\": \"${DEMO_MKT}\",
     \"demoResolver\": \"${ID_resolver_reflector}\",
-    \"houseVault\": \"${ID_house_vault}\"
+    \"houseVault\": $(json_or_null "${ID_house_vault:-}")
   },"
 fi
 

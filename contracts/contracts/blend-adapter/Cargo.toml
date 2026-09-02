@@ -1,0 +1,20 @@
+[package]
+name = "blend-adapter"
+description = "BlendTap adapter — JIT borrow/repay from Blend lending pools for DistributionMarket bootstrap."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+kaido-common = { workspace = true }
+blend-contract-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+blend-contract-sdk = { workspace = true, features = ["testutils"] }
+sep-40-oracle = { workspace = true, features = ["testutils"] }

@@ -59,6 +59,7 @@ fn make_market(env: &Env, resolver: &Address, usdc: &Address) -> Address {
         &7_000u32,
         &2_000u32,
         &1_000u32,
+        &None,
     );
     id
 }

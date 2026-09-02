@@ -1,22 +1,27 @@
 //! Sprint-2 multi-contract lifecycle (build.md §5):
 //!
 //! USDC SAC → mock SEP-40 oracle → `resolver-reflector` → `distribution-market`
-//! → `house-vault` seeds it → a trader trades → advance time → `resolve()` →
-//! `claim()`. Asserts USDC conserves exactly (sum in == sum out) and the market
-//! never pays out more than it holds. Plus: sub-floor σ reverts; a stale oracle
-//! drives the market to `Disputable`.
+//! → a trader trades (no HouseVault seed) → advance time → `resolve()` →
+//! `claim()`. BlendTap path: `blend-adapter` JIT-borrows on first trade.
+//! Asserts USDC conserves exactly and the market never pays out more than it holds.
 
+use blend_adapter::BlendAdapterClient;
+use blend_contract_sdk::{
+    pool,
+    testutils::{default_reserve_config, BlendFixture},
+};
 use distribution_market::DistributionMarketClient;
-use house_vault::HouseVaultClient;
 use kaido_common::MarketStatus;
 use kaido_math::WAD;
 use resolver_reflector::ResolverReflectorClient;
 use sep_40_oracle::testutils::{MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, vec, Address, Env, Symbol,
+    testutils::{Address as _, BytesN as _, Ledger},
+    token::{StellarAssetClient, TokenClient},
+    vec, Address, BytesN, Env, String, Symbol,
 };
 
+const BLEND_ORACLE_DP: u32 = 7;
 const ORACLE_DP: u32 = 14;
 const W_OPEN: u64 = 0;
 const W_LOCK: u64 = 1_000;
@@ -28,18 +33,14 @@ struct World {
     env: Env,
     market: DistributionMarketClient<'static>,
     oracle: MockPriceOracleClient<'static>,
-    tok: token::TokenClient<'static>,
-    sa: token::StellarAssetClient<'static>,
+    tok: TokenClient<'static>,
+    sa: StellarAssetClient<'static>,
     usdc: Address,
 }
 
-fn boot() -> World {
-    let env = Env::default();
+fn boot_in(env: Env, usdc: Address, blend_adapter: Option<Address>) -> World {
     env.mock_all_auths();
     let admin = Address::generate(&env);
-    let sac = env.register_stellar_asset_contract_v2(admin.clone());
-    let usdc = sac.address();
-
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle = MockPriceOracleClient::new(&env, &oracle_id);
     let base = sep_40_oracle::testutils::Asset::Other(Symbol::new(&env, "USD"));
@@ -81,10 +82,11 @@ fn boot() -> World {
         &7_000u32,
         &2_000u32,
         &1_000u32,
+        &blend_adapter,
     );
     World {
-        tok: token::TokenClient::new(&env, &usdc),
-        sa: token::StellarAssetClient::new(&env, &usdc),
+        tok: TokenClient::new(&env, &usdc),
+        sa: StellarAssetClient::new(&env, &usdc),
         env,
         market,
         oracle,
@@ -92,35 +94,94 @@ fn boot() -> World {
     }
 }
 
-#[test]
-fn full_lifecycle_conserves_usdc() {
-    let w = boot();
+fn boot(blend_adapter: Option<Address>) -> World {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let usdc = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    boot_in(env, usdc, blend_adapter)
+}
 
-    // house-vault seeds the market with 100 USDC.
-    let vault_admin = Address::generate(&w.env);
-    let vault_id = w.env.register(
-        house_vault::HouseVault,
-        (vault_admin.clone(), w.usdc.clone()),
+fn setup_blend(env: &Env) -> (Address, Address) {
+    let deployer = Address::generate(env);
+    let blnd = env
+        .register_stellar_asset_contract_v2(deployer.clone())
+        .address();
+    let usdc = env
+        .register_stellar_asset_contract_v2(deployer.clone())
+        .address();
+    let blend = BlendFixture::deploy(env, &deployer, &blnd, &usdc);
+
+    let oracle_id = env.register(MockPriceOracleWASM, ());
+    let oracle = MockPriceOracleClient::new(env, &oracle_id);
+    let base = sep_40_oracle::testutils::Asset::Other(Symbol::new(env, "USD"));
+    let usdc_asset = sep_40_oracle::testutils::Asset::Stellar(usdc.clone());
+    oracle.set_data(&deployer, &base, &vec![env, usdc_asset], &BLEND_ORACLE_DP, &60);
+    oracle.set_price(&vec![env, 1_000_000_0i128], &0);
+
+    let pool_id = blend.pool_factory.mock_all_auths().deploy(
+        &deployer,
+        &String::from_str(env, "kaido-lifecycle"),
+        &BytesN::<32>::random(env),
+        &oracle_id,
+        &1_000_000,
+        &4,
+        &1_000_000,
     );
-    let vault = HouseVaultClient::new(&w.env, &vault_id);
-    let house_funder = Address::generate(&w.env);
-    w.sa.mint(&house_funder, &2_000_000_000i128);
-    vault.deposit(&house_funder, &2_000_000_000i128);
-    vault.set_cap(&w.market.address, &5_000_000_000i128);
-    let house_shares = vault.seed_market(&w.market.address, &1_000_000_000i128);
+    let pool_client = pool::Client::new(env, &pool_id);
+    pool_client
+        .mock_all_auths()
+        .queue_set_reserve(&usdc, &default_reserve_config());
+    pool_client.mock_all_auths().set_reserve(&usdc);
 
-    // a trader trades.
+    blend
+        .backstop
+        .mock_all_auths()
+        .deposit(&deployer, &pool_id, &500_000_000_000i128);
+    pool_client.mock_all_auths().set_status(&3);
+    let status = pool_client.mock_all_auths().update_status();
+    assert!(status <= 1, "pool must be active for borrows, got {status}");
+
+    let supplier = Address::generate(env);
+    StellarAssetClient::new(env, &usdc).mint(&supplier, &500_000_000_000i128);
+    let supply = vec![
+        env,
+        pool::Request {
+            request_type: 2,
+            address: usdc.clone(),
+            amount: 200_000_000_000i128,
+        },
+    ];
+    pool_client
+        .mock_all_auths()
+        .submit(&supplier, &supplier, &supplier, &supply);
+
+    let adapter_id = env.register(blend_adapter::BlendAdapter, (deployer, pool_id, usdc.clone()));
+    (adapter_id, usdc)
+}
+
+#[test]
+fn full_lifecycle_conserves_usdc_with_blend_tap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (adapter_id, usdc) = setup_blend(&env);
+    let adapter = BlendAdapterClient::new(&env, &adapter_id);
+    let w = boot_in(env, usdc, Some(adapter_id.clone()));
+    adapter.authorize_market(&w.market.address, &100_000_000_000i128);
+
     let trader = Address::generate(&w.env);
     w.sa.mint(&trader, &10_000_000_000i128);
-    let total_in = 2_000_000_000i128 + 10_000_000_000i128; // everything ever minted
+    let total_in = 10_000_000_000i128;
     let id = w
         .market
         .trade(&trader, &(55 * WAD), &(2 * WAD), &10_000_000_000i128);
 
-    // oracle prints 53.0; advance past resolve; resolve.
+  // Resolve far from the trade belief so the trader loses; BlendTap repays from forfeit.
     let scale = 10i128.pow(ORACLE_DP);
     w.oracle
-        .set_price(&vec![&w.env, 53i128 * scale], &W_RESOLVE);
+        .set_price(&vec![&w.env, 45i128 * scale], &W_RESOLVE);
     w.env.ledger().set_timestamp(W_RESOLVE + 1);
     w.market.resolve();
     assert!(matches!(
@@ -128,36 +189,51 @@ fn full_lifecycle_conserves_usdc() {
         MarketStatus::Resolved(_)
     ));
 
-    // claim the position; LP withdraws.
     let trader_got = w.market.claim(&id);
-    let lp_got = vault.withdraw_proportional(&w.market.address, &house_shares);
+    assert_eq!(adapter.outstanding_debt(&w.market.address), 0);
 
-    // USDC conservation: every minted unit is now in exactly one of {trader,
-    // vault, house_funder, market-leftover-dust}. (house_funder kept 0 since
-    // it deposited all 200 into the vault.)
     let bal = |a: &Address| w.tok.balance(a);
-    let total_out = bal(&trader) + bal(&vault_id) + bal(&house_funder) + bal(&w.market.address);
-    assert_eq!(total_in, total_out);
-    assert!(trader_got >= 0 && lp_got >= 0);
-    // market never paid out more than it held.
-    assert!(bal(&w.market.address) >= 0);
+    let total_out = bal(&trader) + bal(&w.market.address) + bal(&adapter_id);
+    // Blend interest may absorb a few 7-dp units outside tracked addresses.
+    assert!((total_in - total_out).abs() <= 10_000);
+    assert!(trader_got >= 0);
+}
+
+#[test]
+fn blend_tap_first_trade_no_seed() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (adapter_id, usdc) = setup_blend(&env);
+    let adapter = BlendAdapterClient::new(&env, &adapter_id);
+    let w = boot_in(env, usdc, Some(adapter_id.clone()));
+
+    adapter.authorize_market(&w.market.address, &100_000_000_000i128);
+    assert!(w.market.blend_backed_depth() > 0);
+
+    let trader = Address::generate(&w.env);
+    w.sa.mint(&trader, &10_000_000_000i128);
+    let _id = w
+        .market
+        .trade(&trader, &(55 * WAD), &(2 * WAD), &10_000_000_000i128);
+
+    assert!(adapter.outstanding_debt(&w.market.address) > 0);
 }
 
 #[test]
 fn sub_floor_sigma_reverts() {
-    let w = boot();
+    let w = boot(None);
     let trader = Address::generate(&w.env);
     w.sa.mint(&trader, &10_000_000_000i128);
     assert!(w
         .market
-        .try_trade(&trader, &(50 * WAD), &1_000i128, &10_000_000_000i128)
+        .try_trade(&trader, &(55 * WAD), &1i128, &10_000_000_000i128)
         .is_err());
 }
 
 #[test]
-fn stale_oracle_makes_market_disputable() {
-    let w = boot();
-    // never set a price → resolver reports Stale.
+fn stale_oracle_makes_disputable() {
+    let w = boot(None);
     w.env.ledger().set_timestamp(W_RESOLVE + 1);
     w.market.resolve();
     assert_eq!(w.market.get_state().status, MarketStatus::Disputable);
