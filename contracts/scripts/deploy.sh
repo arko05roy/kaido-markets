@@ -203,6 +203,7 @@ fi
 # --- demo: create a market through the factory (Sprint 3) ----------------
 # Proves the permissionless path: factory deploys a fresh DistributionMarket,
 # inits it, and registers it. Same demo curve as above; a *new* market every run.
+DEMO_MKT=""
 echo "-- market-factory.create_market (demo) ----"
 if MKT="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWORK}" "${SOURCE_ARG[@]}" \
      -- create_market \
@@ -211,17 +212,27 @@ if MKT="$(stellar contract invoke --id "${ID_market_factory}" --network "${NETWO
         --resolver "${ID_resolver_reflector}" --tier 0 \
         --window-open "${W_OPEN}" --window-lock "${W_LOCK}" --window-resolve "${W_RESOLVE}" \
         --mu0 "${MU0_18}" --sigma0 "${WAD18}" 2>/dev/null)"; then
-  MKT="${MKT//\"/}"
-  echo "   created market : ${MKT}"
+  DEMO_MKT="${MKT//\"/}"
+  echo "   created market : ${DEMO_MKT}"
   echo "   registry.count ->"
   stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- count || true
-  echo "   registry.get(${MKT}) ->"
-  stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- get --market "${MKT}" || true
+  echo "   registry.get(${DEMO_MKT}) ->"
+  stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- get --market "${DEMO_MKT}" || true
 else
   echo "   (factory create_market failed — re-run manually)" >&2
 fi
 
 json_or_null() { [[ -n "$1" ]] && printf '"%s"' "$1" || printf 'null'; }
+
+FIXTURES_JSON=""
+if [[ -n "${DEMO_MKT}" ]]; then
+  FIXTURES_JSON="
+  \"fixtures\": {
+    \"demoMarket\": \"${DEMO_MKT}\",
+    \"demoResolver\": \"${ID_resolver_reflector}\",
+    \"houseVault\": \"${ID_house_vault}\"
+  },"
+fi
 
 # --- write the live-ids file --------------------------------------------
 # This file is gitignored and is the source of truth for "what is deployed
@@ -240,9 +251,16 @@ cat > "${OUT}" <<EOF
     "adminAddress": $(json_or_null "${ADMIN_ADDRESS}")
   },
   "contracts": {${CONTRACTS_JSON}
-  }
+  },${FIXTURES_JSON}
+  "seededAt": null
 }
 EOF
 
 echo
 echo "OK: deployed ${N} contracts to ${NETWORK}; wrote ${OUT#${ROOT}/}"
+if [[ -n "${DEMO_MKT}" ]]; then
+  echo
+  echo "Demo market (factory-registered): ${DEMO_MKT}"
+  echo "  export NEXT_PUBLIC_KAIDO_DEMO_MARKET=${DEMO_MKT}"
+  echo "Next: make seed:${NETWORK}  # HouseVault liquidity + lifecycle fixture"
+fi

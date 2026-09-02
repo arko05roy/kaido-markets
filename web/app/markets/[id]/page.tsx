@@ -14,6 +14,7 @@ import { type SettlementMarketView } from "@/components/market/settlement-panel"
 
 import { MarketActions } from "./market-actions";
 import { deployedConfig } from "@/lib/stellar/contracts";
+import { fmtHouseUsdc, getHouseCap, getHouseExposure } from "@/lib/stellar/house";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 import {
   WAD,
@@ -114,6 +115,8 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
       windowOpen: Number(mp.window.open),
       windowLock: Number(mp.window.lock),
       windowResolve: Number(mp.window.resolve),
+      kWad: mp.k.toString(),
+      bWad: mp.b.toString(),
       resolvedWad: resolved.length ? resolved : undefined,
     };
     data = { info, params: mp, state, view, settlement, resolved };
@@ -122,6 +125,20 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
   }
 
   const config = kaidoConfig();
+  let houseExposure: bigint | null = null;
+  let houseCap: bigint | null = null;
+  if (data) {
+    try {
+      const deployed = deployedConfig();
+      const vaultId = deployed.fixtures.houseVault ?? deployed.contracts.houseVault;
+      [houseExposure, houseCap] = await Promise.all([
+        getHouseExposure(vaultId, id),
+        getHouseCap(vaultId, id),
+      ]);
+    } catch {
+      /* vault read optional */
+    }
+  }
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 space-y-6 p-6 sm:p-10">
@@ -199,6 +216,23 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
             <h2 className="mb-2 text-sm font-semibold">Recent activity</h2>
             <RecentActivity marketId={id} />
           </section>
+
+          {houseExposure != null && houseExposure > 0n && (
+            <section>
+              <h2 className="mb-2 text-sm font-semibold">House liquidity</h2>
+              <p className="rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
+                HouseVault exposure:{" "}
+                <span className="font-mono text-foreground">{fmtHouseUsdc(houseExposure)} USDC</span>
+                {houseCap != null && houseCap > 0n && (
+                  <>
+                    {" "}
+                    · cap{" "}
+                    <span className="font-mono text-foreground">{fmtHouseUsdc(houseCap)} USDC</span>
+                  </>
+                )}
+              </p>
+            </section>
+          )}
 
           <section>
             <h2 className="mb-2 text-sm font-semibold">Window (UTC)</h2>

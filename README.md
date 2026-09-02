@@ -266,8 +266,16 @@ written by `contracts/scripts/deploy.sh` into `config/networks.<network>.json`.
 ## Deploying
 
 ```bash
-make deploy:testnet      # scripted, idempotent
-make seed:testnet        # re-seed demo fixtures
+make deploy:testnet      # scripted, idempotent — writes config/networks.testnet.json + fixtures.demoMarket
+make seed:testnet        # HouseVault liquidity + fixtures.lifecycleMarket (10-min integration window)
+```
+
+After seeding, optional env hints are printed (`NEXT_PUBLIC_KAIDO_DEMO_MARKET`, `NEXT_PUBLIC_KAIDO_LIFECYCLE_MARKET`).
+
+Gated SDK lifecycle test (real testnet, no mocks):
+
+```bash
+KAIDO_INTEGRATION=1 KAIDO_INTEGRATION_LIFECYCLE=1 KAIDO_INTEGRATION_SECRET=S... pnpm --filter @kaido/sdk test
 ```
 
 Mainnet deploys are gated on an external audit + a legal opinion (see

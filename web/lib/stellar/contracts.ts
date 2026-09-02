@@ -23,6 +23,14 @@ export interface DeployedContracts {
   readonly resolverDesignated: string;
 }
 
+export interface NetworkFixtures {
+  readonly demoMarket?: string;
+  readonly demoResolver?: string;
+  readonly houseVault?: string;
+  readonly lifecycleMarket?: string;
+  readonly lifecycleResolver?: string;
+}
+
 export interface DeployedConfig {
   readonly network: StellarNetworkId;
   readonly contracts: DeployedContracts;
@@ -32,6 +40,8 @@ export interface DeployedConfig {
     readonly reflectorFeedId: string | null;
     readonly adminAddress: string | null;
   };
+  /** Demo / test fixture ids written by deploy.sh + seed.sh. */
+  readonly fixtures: NetworkFixtures;
 }
 
 const ENV_KEYS: Record<keyof DeployedContracts, string> = {
@@ -63,10 +73,12 @@ export function deployedConfig(): DeployedConfig {
     reflectorFeedId: null,
     adminAddress: null,
   };
+  let fixtures: NetworkFixtures = {};
   try {
     const raw = JSON.parse(readFileSync(file, "utf8")) as {
       contracts?: Record<string, { id?: string }>;
       external?: Partial<DeployedConfig["external"]>;
+      fixtures?: NetworkFixtures;
     };
     if (raw.contracts) {
       for (const key of Object.keys(ENV_KEYS) as (keyof DeployedContracts)[]) {
@@ -80,6 +92,9 @@ export function deployedConfig(): DeployedConfig {
         reflectorFeedId: raw.external.reflectorFeedId ?? null,
         adminAddress: raw.external.adminAddress ?? null,
       };
+    }
+    if (raw.fixtures) {
+      fixtures = raw.fixtures;
     }
   } catch {
     // file absent — fall through to env vars.
@@ -101,5 +116,5 @@ export function deployedConfig(): DeployedConfig {
     );
   }
 
-  return { network, contracts: contracts as DeployedContracts, external };
+  return { network, contracts: contracts as DeployedContracts, external, fixtures };
 }

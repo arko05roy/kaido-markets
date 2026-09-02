@@ -5,6 +5,7 @@ import { Loader2, LogOut, Wallet, ChevronDown } from "lucide-react";
 
 import { useWallet } from "./provider";
 import type { WalletKind } from "./types";
+import { useUsdcBalance } from "./use-usdc-balance";
 
 /**
  * Compact navbar wallet trigger. Disconnected → single ink pill
@@ -15,7 +16,23 @@ import type { WalletKind } from "./types";
  * variant (used elsewhere) stays unchanged.
  */
 export function NavbarWallet() {
-  const { wallet, connecting, error, connectors, connect, disconnect } = useWallet();
+  const {
+    wallet,
+    connecting,
+    error,
+    connectors,
+    connect,
+    disconnect,
+    rpcUrl,
+    usdcSacId,
+    networkPassphrase,
+  } = useWallet();
+  const { formatted: usdcBal, loading: usdcLoading } = useUsdcBalance(
+    rpcUrl ?? undefined,
+    networkPassphrase,
+    usdcSacId ?? undefined,
+    wallet?.accountId,
+  );
   const [available, setAvailable] = useState<Record<WalletKind, boolean> | null>(null);
   const [open, setOpen] = useState(false);
   const popRef = useRef<HTMLDivElement>(null);
@@ -51,6 +68,14 @@ export function NavbarWallet() {
   if (wallet) {
     return (
       <div className="flex items-center gap-1.5">
+        {usdcSacId && (
+          <span
+            className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-[#0b0b0c]/50 sm:inline"
+            title="USDC balance (SAC)"
+          >
+            {usdcLoading ? "…" : usdcBal != null ? `${usdcBal} USDC` : "no USDC"}
+          </span>
+        )}
         <span
           title={wallet.accountId}
           className="inline-flex h-9 items-center rounded-full bg-[#0b0b0c] px-3.5 font-mono text-[11px] uppercase tracking-[0.2em] text-[#f3efe6]"

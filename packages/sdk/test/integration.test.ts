@@ -14,36 +14,97 @@
  *
  * Run:  KAIDO_INTEGRATION=1 pnpm --filter @kaido/sdk test
  *       KAIDO_INTEGRATION=1 KAIDO_INTEGRATION_SECRET=S... pnpm --filter @kaido/sdk test
+ *       KAIDO_INTEGRATION=1 KAIDO_INTEGRATION_LIFECYCLE=1 KAIDO_INTEGRATION_SECRET=S... pnpm --filter @kaido/sdk test
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { rpc as StellarRpc } from "@stellar/stellar-sdk";
+import {
+  Address,
+  Contract,
+  rpc as StellarRpc,
+  scValToBigInt,
+  TransactionBuilder,
+} from "@stellar/stellar-sdk";
 import { describe, it, expect, beforeAll } from "vitest";
 
 import { Kaido, keypairSigner, type KaidoConfig, distributionMarket } from "../src/index";
 
 const ENABLED = process.env.KAIDO_INTEGRATION === "1";
 const SECRET = process.env.KAIDO_INTEGRATION_SECRET;
+const LIFECYCLE = process.env.KAIDO_INTEGRATION_LIFECYCLE === "1";
 const NETWORK = (process.env.STELLAR_NETWORK ?? "testnet") as KaidoConfig["network"];
 
-function loadConfig(): KaidoConfig {
-  // vitest cwd is packages/sdk → config/ is two levels up.
-  const file = join(process.cwd(), "..", "..", "config", `networks.${NETWORK}.json`);
-  const raw = JSON.parse(readFileSync(file, "utf8")) as {
-    networkPassphrase: string;
-    rpcUrl: string;
-    external?: { usdcSacId?: string | null };
-    contracts: Record<string, { id: string }>;
+interface NetworksFile {
+  networkPassphrase: string;
+  rpcUrl: string;
+  external?: { usdcSacId?: string | null };
+  contracts: Record<string, { id: string }>;
+  fixtures?: {
+    lifecycleMarket?: string;
+    demoMarket?: string;
   };
+}
+
+function loadNetworksFile(): NetworksFile {
+  const file = join(process.cwd(), "..", "..", "config", `networks.${NETWORK}.json`);
+  return JSON.parse(readFileSync(file, "utf8")) as NetworksFile;
+}
+
+function loadConfig(): KaidoConfig {
+  const raw = loadNetworksFile();
   const usdc = raw.external?.usdcSacId ?? "";
   return {
     network: NETWORK,
     rpcUrl: raw.rpcUrl,
     networkPassphrase: raw.networkPassphrase,
     contracts: { marketFactory: raw.contracts.marketFactory.id, registry: raw.contracts.registry.id },
-    usdcSacId: usdc || "C".padEnd(56, "A"), // only matters if a trade is run; reads/create don't use it
+    usdcSacId: usdc || "C".padEnd(56, "A"),
   };
+}
+
+async function usdcBalance7dp(
+  rpcUrl: string,
+  passphrase: string,
+  sacId: string,
+  accountId: string,
+): Promise<bigint | null> {
+  const server = new StellarRpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
+  try {
+    const account = await server.getAccount(accountId);
+    const contract = new Contract(sacId);
+    const tx = new TransactionBuilder(account, { fee: "100000", networkPassphrase: passphrase })
+      .addOperation(contract.call("balance", new Address(accountId).toScVal()))
+      .setTimeout(30)
+      .build();
+    const sim = await server.simulateTransaction(tx);
+    if (StellarRpc.Api.isSimulationError(sim) || !sim.result?.retval) return null;
+    return scValToBigInt(sim.result.retval);
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function waitUntilResolved(
+  kaido: Kaido,
+  marketId: string,
+  resolveAfterSec: bigint,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { state, params } = await kaido.getMarket(marketId);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    if (state.status.tag === "Resolved" || state.status.tag === "ResolvedVec") return;
+    if (now >= resolveAfterSec) return;
+    if (state.status.tag === "Locked" && now >= params.window.resolve) return;
+    await sleep(15_000);
+  }
+  throw new Error(`timed out waiting for market ${marketId} to reach resolve window`);
 }
 
 describe.skipIf(!ENABLED)("@kaido/sdk integration (live RPC)", () => {
@@ -142,4 +203,54 @@ describe.skipIf(!ENABLED)("@kaido/sdk integration (live RPC)", () => {
     expect(state.status.tag).toBe("Open");
     expect(state.belief.mu).toBe(50_000_000_000_000_000_000n);
   }, 120_000);
+
+  it.skipIf(!SECRET || !LIFECYCLE)(
+    "trade → resolve (Reflector) → claim on fixtures.lifecycleMarket",
+    async () => {
+      const signer = keypairSigner(SECRET as string);
+      const nets = loadNetworksFile();
+      const marketId = nets.fixtures?.lifecycleMarket;
+      if (!marketId) {
+        throw new Error(
+          "fixtures.lifecycleMarket missing — run make deploy:testnet && make seed:testnet",
+        );
+      }
+      const bal = await usdcBalance7dp(
+        config.rpcUrl,
+        config.networkPassphrase,
+        config.usdcSacId,
+        signer.accountId,
+      );
+      if (bal == null || bal < 1_000_000n) {
+        throw new Error(
+          `KAIDO_INTEGRATION_SECRET account needs a USDC trustline + balance (have ${bal ?? "none"})`,
+        );
+      }
+
+      const { params, state } = await kaido.getMarket(marketId);
+      expect(params.outcome_space.tag).toBe("Scalar");
+      if (state.status.tag !== "Open") {
+        throw new Error(`lifecycle market status is ${state.status.tag} — re-run make seed:testnet`);
+      }
+
+      const mu2 = state.belief.mu + 1_000_000_000_000_000_000n;
+      const sigma2 = state.belief.sigma;
+      const positionId = await kaido.trade(
+        marketId,
+        { mu2, sigma2, maxCollateral7dp: 5_000_000n },
+        signer,
+      );
+      expect(positionId).toBeGreaterThan(0n);
+
+      await waitUntilResolved(kaido, marketId, params.window.resolve, 12 * 60_000);
+
+      await kaido.resolve(marketId, signer);
+      const after = await kaido.getMarket(marketId);
+      expect(["Resolved", "ResolvedVec", "Disputable"]).toContain(after.state.status.tag);
+
+      const payout = await kaido.claim(marketId, positionId, signer);
+      expect(payout).toBeGreaterThanOrEqual(0n);
+    },
+    15 * 60_000,
+  );
 });

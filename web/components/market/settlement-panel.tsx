@@ -8,12 +8,15 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ResultCard } from "@/components/market/result-card";
 import { useWallet } from "@/components/wallet/provider";
 import { fromWad } from "@/lib/curve";
+import { fetchWalletPositions } from "@/lib/indexer/wallet-positions";
 import {
   formatUsdc7dp,
   loadPositions,
   markClaimed,
+  savePosition,
   type SavedPosition,
 } from "@/lib/positions";
 
@@ -24,6 +27,8 @@ export interface SettlementMarketView {
   windowOpen: number;
   windowLock: number;
   windowResolve: number;
+  kWad?: string;
+  bWad?: string;
   /** Resolved outcome value(s) in WAD, if known. */
   resolvedWad?: string[];
 }
@@ -65,6 +70,18 @@ function fmtCountdown(targetSec: number, nowSec: number): string {
   return `${s}s`;
 }
 
+function mergePositions(local: SavedPosition[], chainIds: string[]): SavedPosition[] {
+  const byId = new Map<string, SavedPosition>();
+  for (const id of chainIds) {
+    if (!byId.has(id)) byId.set(id, { id, openedAt: 0 });
+  }
+  for (const p of local) {
+    const cur = byId.get(p.id);
+    byId.set(p.id, cur ? { ...cur, ...p, openedAt: p.openedAt || cur.openedAt } : p);
+  }
+  return [...byId.values()].sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
+}
+
 export function SettlementPanel({
   config,
   market,
@@ -79,15 +96,51 @@ export function SettlementPanel({
   const kaido = useMemo(() => new Kaido(config), [config]);
 
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
-  const [, bumpClaimEpoch] = useState(0);
   const [resolving, setResolving] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolvedOverride, setResolvedOverride] = useState<bigint[] | null>(null);
+  const [chainIds, setChainIds] = useState<string[]>([]);
+  const [loadingChain, setLoadingChain] = useState(false);
+  const [manualId, setManualId] = useState("");
+  const [positionsEpoch, bumpPositionsEpoch] = useState(0);
+  const [lastClaim, setLastClaim] = useState<{
+    positionId: string;
+    payout7dp: bigint;
+    belief?: { muWad: bigint; sigmaWad: bigint };
+    collateral7dp?: bigint;
+  } | null>(null);
 
-  const positions: SavedPosition[] = wallet
+  const localPositions: SavedPosition[] = wallet
     ? loadPositions(config.network, wallet.signer.accountId, market.address)
     : [];
+  const positions = mergePositions(localPositions, chainIds);
+
+  useEffect(() => {
+    if (!wallet) {
+      setChainIds([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingChain(true);
+    void fetchWalletPositions(config.rpcUrl, market.address, wallet.signer.accountId)
+      .then((rows) => {
+        if (cancelled) return;
+        setChainIds(rows.map((r) => r.id));
+        for (const r of rows) {
+          savePosition(config.network, wallet.signer.accountId, market.address, BigInt(r.id));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setChainIds([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingChain(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wallet, config.rpcUrl, config.network, market.address, refreshKey, positionsEpoch]);
 
   const resolvedFromProps = useMemo(
     () => (market.resolvedWad?.length ? market.resolvedWad.map((x) => BigInt(x)) : null),
@@ -130,6 +183,8 @@ export function SettlementPanel({
     }
   }, [wallet, kaido, market.address]);
 
+  const bumpClaim = () => bumpPositionsEpoch((n) => n + 1);
+
   const claimPosition = useCallback(
     async (positionId: string) => {
       if (!wallet) return;
@@ -137,14 +192,28 @@ export function SettlementPanel({
       setError(null);
       try {
         const id = BigInt(positionId);
+        const saved = loadPositions(config.network, wallet.signer.accountId, market.address).find(
+          (p) => p.id === positionId,
+        );
         const payout =
           market.kind === "trajectory"
             ? await kaido.claimTrajectory(market.address, id, wallet.signer)
             : await kaido.claim(market.address, id, wallet.signer);
         markClaimed(config.network, wallet.signer.accountId, market.address, id, payout);
-        bumpClaimEpoch((n) => n + 1);
+        setLastClaim({
+          positionId,
+          payout7dp: payout,
+          belief:
+            saved?.muWad && saved?.sigmaWad
+              ? { muWad: BigInt(saved.muWad), sigmaWad: BigInt(saved.sigmaWad) }
+              : undefined,
+          collateral7dp: saved?.collateral7dp ? BigInt(saved.collateral7dp) : undefined,
+        });
+        bumpClaim();
+        return payout;
       } catch (e) {
         setError(e instanceof Error ? e.message : "claim failed");
+        return null;
       } finally {
         setClaimingId(null);
       }
@@ -188,42 +257,67 @@ export function SettlementPanel({
         </Button>
       )}
 
-      {wallet && isResolved && positions.length > 0 && (
+      {wallet && isResolved && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Your positions</h3>
-          <ul className="space-y-2">
-            {positions.map((p) => (
-              <li
-                key={p.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
-              >
-                <span className="font-mono">#{p.id}</span>
-                {p.claimedAt != null && p.payout7dp != null ? (
-                  <span className="text-muted-foreground">
-                    Claimed · {formatUsdc7dp(BigInt(p.payout7dp))} USDC
-                  </span>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={claimingId === p.id}
-                    onClick={() => void claimPosition(p.id)}
-                  >
-                    {claimingId === p.id ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {claimingId === p.id ? "Claiming…" : "Claim payout"}
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
+          {loadingChain && positions.length === 0 && (
+            <p className="text-xs text-muted-foreground">Loading on-chain trades…</p>
+          )}
+          {positions.length > 0 ? (
+            <ul className="space-y-2">
+              {positions.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <span className="font-mono">#{p.id}</span>
+                  {p.claimedAt != null && p.payout7dp != null ? (
+                    <span className="text-muted-foreground">
+                      Claimed · {formatUsdc7dp(BigInt(p.payout7dp))} USDC
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={claimingId === p.id}
+                      onClick={() => void claimPosition(p.id)}
+                    >
+                      {claimingId === p.id ? <Loader2 className="size-4 animate-spin" /> : null}
+                      {claimingId === p.id ? "Claiming…" : "Claim payout"}
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            !loadingChain && (
+              <p className="text-sm text-muted-foreground">
+                No open positions found for this wallet on this market.
+              </p>
+            )
+          )}
+          <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">Claim by position #</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="e.g. 1"
+                value={manualId}
+                onChange={(e) => setManualId(e.target.value)}
+                className="w-32 rounded-md border bg-background px-2 py-1.5 font-mono text-sm"
+              />
+            </label>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!manualId.trim() || claimingId != null}
+              onClick={() => void claimPosition(manualId.trim())}
+            >
+              Claim
+            </Button>
+          </div>
         </div>
-      )}
-
-      {wallet && isResolved && positions.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          No positions saved for this wallet on this market. If you traded from another browser, claim
-          with position id via the SDK.
-        </p>
       )}
 
       {!wallet && (
@@ -231,6 +325,19 @@ export function SettlementPanel({
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {lastClaim && resolvedOutcomes?.length && market.kWad && market.bWad && market.kind === "scalar" && (
+        <ResultCard
+          marketLabel="Scalar market"
+          kind="scalar"
+          market={{ kWad: BigInt(market.kWad), bWad: BigInt(market.bWad) }}
+          yourBelief={lastClaim.belief}
+          resolvedWad={resolvedOutcomes}
+          collateral7dp={lastClaim.collateral7dp}
+          payout7dp={lastClaim.payout7dp}
+          positionId={lastClaim.positionId}
+        />
+      )}
     </div>
   );
 }

@@ -18,8 +18,13 @@ import {
 } from "@/components/forecast/trajectory-belief-input";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/provider";
+import { useUsdcBalance } from "@/components/wallet/use-usdc-balance";
 import { fromWad, type GaussianBelief } from "@/lib/curve";
 import { savePosition } from "@/lib/positions";
+import {
+  TESTNET_USDC_ISSUER,
+  USDC_FAUCET_URL,
+} from "@/lib/stellar/usdc";
 
 /** Serialisable view of the market the panel trades against (built server-side). */
 export interface TradeMarketView {
@@ -51,6 +56,12 @@ export function TradePanel({
 }) {
   const { wallet, connecting } = useWallet();
   const kaido = useMemo(() => new Kaido(config), [config]);
+  const { balance7dp: usdcBal, formatted: usdcFormatted } = useUsdcBalance(
+    config.rpcUrl,
+    config.networkPassphrase,
+    config.usdcSacId,
+    wallet?.signer.accountId,
+  );
 
   const kWad = BigInt(market.kWad);
   const bWad = BigInt(market.bWad);
@@ -96,7 +107,11 @@ export function TradePanel({
       }
       setPositionId(id);
       if (wallet) {
-        savePosition(config.network, wallet.signer.accountId, market.address, id);
+        savePosition(config.network, wallet.signer.accountId, market.address, id, {
+          ...(market.kind === "scalar"
+            ? { muWad: scalarBelief.muWad, sigmaWad: scalarBelief.sigmaWad }
+            : {}),
+        });
         onPositionOpened?.(id);
       }
     } catch (e) {
@@ -152,7 +167,10 @@ export function TradePanel({
         {!wallet ? (
           <span className="text-sm text-muted-foreground">{connecting ? "connecting…" : "connect a wallet to trade"}</span>
         ) : (
-          <Button onClick={() => void submit()} disabled={submitting}>
+          <Button
+            onClick={() => void submit()}
+            disabled={submitting || (usdcBal != null && usdcBal <= 0n)}
+          >
             {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
             {submitting ? "Submitting…" : "Submit position"}
           </Button>
@@ -165,9 +183,30 @@ export function TradePanel({
         )}
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {wallet && usdcBal != null && (
+        <p className="text-xs text-muted-foreground">
+          USDC balance: <span className="font-mono">{usdcFormatted ?? "0"}</span>
+          {usdcBal <= 0n && (
+            <>
+              {" "}
+              — add a trustline to{" "}
+              <code className="font-mono text-[10px]">USDC:{TESTNET_USDC_ISSUER}</code> and fund via{" "}
+              <a
+                href={USDC_FAUCET_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2"
+              >
+                Circle testnet faucet
+              </a>
+              .
+            </>
+          )}
+        </p>
+      )}
       <p className="text-[11px] text-muted-foreground">
-        Trading needs a USDC trustline on your wallet (testnet:{" "}
-        <code className="font-mono">USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5</code>) and a USDC balance.
+        Trading needs a USDC trustline on your wallet (testnet issuer{" "}
+        <code className="font-mono">USDC:{TESTNET_USDC_ISSUER}</code>).
       </p>
     </div>
   );

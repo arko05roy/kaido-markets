@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { Navbar1 } from "@/components/ui/navbar-1";
 import { WalletProvider } from "@/components/wallet/provider";
+import { deployedConfig } from "@/lib/stellar/contracts";
 import { activeNetwork, activeNetworkId } from "@/lib/stellar/networks";
 
 const geistSans = Geist({
@@ -41,14 +42,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const networkId = activeNetworkId();
-  const { networkPassphrase } = activeNetwork();
+  const net = activeNetwork();
+  let usdcSacId: string | null = null;
+  try {
+    usdcSacId =
+      deployedConfig().external.usdcSacId ?? process.env.NEXT_PUBLIC_KAIDO_USDC_SAC ?? null;
+  } catch {
+    usdcSacId = process.env.NEXT_PUBLIC_KAIDO_USDC_SAC ?? null;
+  }
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#0b0b0c] text-[#ece9e2]">
-        <WalletProvider network={networkId} networkPassphrase={networkPassphrase}>
+        <WalletProvider
+          network={networkId}
+          networkPassphrase={net.networkPassphrase}
+          rpcUrl={net.rpcUrl}
+          usdcSacId={usdcSacId}
+        >
           <div className="absolute inset-x-0 top-0 z-30">
             <Navbar1 />
           </div>

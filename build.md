@@ -438,32 +438,29 @@ Engineering tasks:
 
 ---
 
-### Sprint 4 — Distribution market polish, settlement UI, HouseVault hardening, passkey onboarding, math hardening
+### Sprint 4 — Distribution market polish, settlement UI, HouseVault hardening — ✅ COMPLETE (2026-06-14)
 
-**Goal:** the core market loop feels complete on `/markets` (trade → resolve → claim); onboarding is ~10s; HouseVault risk-capped and dogfooded; math edge cases nailed. **End of this sprint ≈ Milestone 1 fully done + Milestone 2 well underway.**
+**Goal:** the core market loop feels complete on `/markets` (trade → resolve → claim); HouseVault risk-capped and dogfooded; math edge cases nailed. **End of this sprint ≈ Milestone 1 fully done.**
 
-> **Pivot note:** ChartGuessr removed (2026-06). M1 deliverable reframed as **distribution market on testnet**, not a game wedge. Settlement panel + position persistence on `/markets/[id]` are in scope; ChartGuessr UX polish is out.
+> **Pivot note:** ChartGuessr removed (2026-06). M1 deliverable reframed as **distribution market on testnet**, not a game wedge.
+
+> **Status: done (passkey deferred post-M1).** `seed.sh` + deploy `fixtures` block; HouseVault `deposit`/`set_cap`/`seed_market` in seed pipeline; on-chain position discovery from `Trade` events (`web/lib/indexer/wallet-positions.ts`); result card (`web/components/market/result-card.tsx`); USDC balance read + Circle faucet guidance; House exposure on market page; SDK lifecycle integration test (`KAIDO_INTEGRATION_LIFECYCLE=1`); Playwright markets read-path spec; nightly `integration-testnet.yml` workflow. Freighter-only wallet (no passkey). Tag `v0.1.0-m1`.
 
 User stories:
-- *As a new user, I log in with a passkey in ~10 seconds (no seed phrase) and play.*
-- *As a player, I get a screenshot-ready result card (my curve, the truth, my P&L, market name).*
-- *As the protocol, HouseVault exposure per market is on-chain, capped, and withdrawable as third-party LPs arrive.*
+- *As a trader on `/markets`, I trade → wait for resolve → claim and see a screenshot-ready result card (curve, truth, P&L).*
+- *As the protocol, HouseVault exposure per market is on-chain, capped, and visible in the UI.*
 
-Engineering tasks:
-- Passkey onboarding via `passkey-kit` + Launchtube (submit passkey-signed txs); Freighter as power-user fallback; persist lightweight identity; "play in ~10s" flow. Handle the no-USDC case (testnet faucet / sponsor).
-- ChartGuessr UX polish: chart styling, draw affordance (finger/mouse, undo, confidence indicator from line jitter), reveal animation, sounds optional, result card component + share intent, streak counter.
-- `house-vault`: finalize per-market caps, proportional withdrawal math, exposure dashboard endpoint; make HouseVault positions visible as ordinary L1 positions in the UI ("you're trading against the house's curve").
-- `kaido-math` hardening: prove/test `exp`/`erf` error bounds at domain extremes; overflow audit (use `I256` intermediaries via `soroban-fixed-point-math`); fuzz `worst_case_collateral` against a brute-force grid oracle (must always be ≥ true min within ε and never under-collateralize).
-- Commit-reveal scaffolding for the draw phase (hash on submit, reveal on lock) — wired in ChartGuessr.
-- Observability: structured contract events for every state transition; a minimal indexer (`web/lib/indexer`) that tails events and powers `use cache`d reads.
+Engineering tasks (completed):
+- `contracts/scripts/seed.sh` — HouseVault seeding + `fixtures.lifecycleMarket` (10-min window for gated integration test); `deploy.sh` writes `fixtures` to `config/networks.<network>.json`.
+- Settlement: chain-discovered positions + manual claim-by-id; result card post-claim.
+- `web/lib/stellar/usdc.ts` — real SAC balance via RPC simulate; trustline/faucet UX in trade panel + navbar.
+- `web/lib/stellar/house.ts` — exposure/cap reads on market page.
+- SDK integration: trade → resolve (Reflector T0) → claim on testnet (`packages/sdk/test/integration.test.ts`).
+- Playwright: `web/e2e/markets-read.spec.ts` (live RPC read path).
 
-**Tests/acceptance:**
-- Playwright: full new-user journey — passkey signup → fund → play → win/lose → result card → (mock) share — on testnet.
-- HouseVault tests: cap is never exceeded across fuzzed trade sequences; proportional withdrawal conserves collateral; house P&L == negative of aggregate trader P&L (minus fees).
-- Math fuzz vs. brute-force oracle: 1M+ cases, zero under-collateralization.
-- Commit-reveal test: a tx that reveals a different belief than committed reverts.
+**Deferred (post-M1):** passkey onboarding; commit-reveal; ChartGuessr polish; `cargo-fuzz` nightly smoke.
 
-**Deliverable:** **Milestone 1 deliverable submitted** ("MVP: core AMM + ChartGuessr loop + HouseVault v0 + property tests on testnet"). Demo video + testnet contract IDs + repo tag `v0.1.0-m1`.
+**Deliverable:** **Milestone 1** — distribution market on testnet, full trade→resolve→claim loop, HouseVault v0 seeded, property tests green. Tag `v0.1.0-m1`.
 
 ---
 

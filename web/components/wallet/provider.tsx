@@ -30,6 +30,11 @@ interface WalletContextValue {
   connectors: WalletConnector[];
   /** The connector kind used last (for "reconnect with …" affordances). */
   lastKind: WalletKind | null;
+  /** Soroban RPC URL for the active network (for balance reads). */
+  rpcUrl: string | null;
+  /** USDC SAC contract id for the active network. */
+  usdcSacId: string | null;
+  networkPassphrase: string;
   connect: (kind: WalletKind) => Promise<ConnectedWallet>;
   disconnect: () => Promise<void>;
 }
@@ -39,10 +44,18 @@ const WalletContext = createContext<WalletContextValue | null>(null);
 export interface WalletProviderProps {
   network: string;
   networkPassphrase: string;
+  rpcUrl?: string | null;
+  usdcSacId?: string | null;
   children: React.ReactNode;
 }
 
-export function WalletProvider({ network, networkPassphrase, children }: WalletProviderProps) {
+export function WalletProvider({
+  network,
+  networkPassphrase,
+  rpcUrl = null,
+  usdcSacId = null,
+  children,
+}: WalletProviderProps) {
   const [wallet, setWallet] = useState<ConnectedWallet | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,10 +108,13 @@ export function WalletProvider({ network, networkPassphrase, children }: WalletP
       error,
       connectors: Object.values(CONNECTORS),
       lastKind,
+      rpcUrl,
+      usdcSacId,
+      networkPassphrase,
       connect,
       disconnect,
     }),
-    [wallet, connecting, error, lastKind, connect, disconnect],
+    [wallet, connecting, error, lastKind, rpcUrl, usdcSacId, networkPassphrase, connect, disconnect],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

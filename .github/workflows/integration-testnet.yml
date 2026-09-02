@@ -1,0 +1,26 @@
+name: integration-testnet
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+
+jobs:
+  sdk-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install
+      - name: SDK integration (read + lifecycle)
+        env:
+          KAIDO_INTEGRATION: "1"
+          KAIDO_INTEGRATION_LIFECYCLE: "1"
+          KAIDO_INTEGRATION_SECRET: ${{ secrets.KAIDO_INTEGRATION_SECRET }}
+          STELLAR_NETWORK: testnet
+        run: pnpm --filter @kaido/sdk test

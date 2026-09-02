@@ -11,6 +11,11 @@ export interface SavedPosition {
   readonly claimedAt?: number;
   /** USDC payout in 7-decimal stroops, as a string. */
   readonly payout7dp?: string;
+  /** Collateral locked at open (7dp), if recorded. */
+  readonly collateral7dp?: string;
+  /** Scalar belief at trade time (WAD strings), for result card. */
+  readonly muWad?: string;
+  readonly sigmaWad?: string;
 }
 
 function storageKey(network: string, wallet: string, marketId: string): string {
@@ -39,12 +44,27 @@ export function loadPositions(network: string, wallet: string, marketId: string)
 }
 
 /** Record a newly opened position id (deduped). */
-export function savePosition(network: string, wallet: string, marketId: string, positionId: bigint): void {
+export function savePosition(
+  network: string,
+  wallet: string,
+  marketId: string,
+  positionId: bigint,
+  meta?: { muWad?: bigint; sigmaWad?: bigint; collateral7dp?: bigint },
+): void {
   const key = storageKey(network, wallet, marketId);
   const id = positionId.toString();
   const existing = readRaw(key);
   if (existing.some((p) => p.id === id)) return;
-  writeRaw(key, [{ id, openedAt: Date.now() }, ...existing]);
+  writeRaw(key, [
+    {
+      id,
+      openedAt: Date.now(),
+      ...(meta?.muWad != null ? { muWad: meta.muWad.toString() } : {}),
+      ...(meta?.sigmaWad != null ? { sigmaWad: meta.sigmaWad.toString() } : {}),
+      ...(meta?.collateral7dp != null ? { collateral7dp: meta.collateral7dp.toString() } : {}),
+    },
+    ...existing,
+  ]);
 }
 
 /** Mark a position as claimed with its payout. */
