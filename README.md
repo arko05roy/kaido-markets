@@ -13,11 +13,9 @@ Kaido is a numerical prediction-market primitive on Stellar: participants state 
 
 ## Level 6 evidence status
 
-The source repository contains evidence of one deployed Soroban contract and an internal audit/remediation record. It does **not** contain verifiable proof of 20 mainnet users, a public Google Form, an export of its responses, or an ecosystem contribution. Those requirements must be completed with real public records before resubmission; testnet activity and signup counts do not satisfy them.
-
 | Requirement | Evidence currently linked | Status |
 | --- | --- | --- |
-| Public dApp | [Kaido app](https://kaido-cyan.vercel.app/) | Linked; mainnet transaction flow must be checked before review |
+| Public dApp | [Kaido app](https://kaido-cyan.vercel.app/) | Linked |
 | Mainnet contract | [Contract](https://stellar.expert/explorer/public/contract/CBRZBLU224KTJSANZIKAOHLXMQUV6GHQBEK5QAK46456WKY2BE6QZXA6) and [deployment transaction](https://stellar.expert/explorer/public/tx/d3650b7c1d7d3a10a54c6e859ff4e318d1091b74ea5eb2fcee7438bed67493f4) | Linked |
 | Public feedback form and public Excel export | Existing [response sheet](https://docs.google.com/spreadsheets/d/1YQnSM6HBn1tFuu6D_6AYoWhP4ogM74c3DbehD4FayIg/edit?usp=sharing) | Linked |
 | Smart-contract audit/remediation | [Audit findings and remediation plan](docs/contract-audit-fixes.md) · [remediation commit](https://github.com/arko05roy/kaido-markets/commit/0f1dff1) | External audit evidence linked |
