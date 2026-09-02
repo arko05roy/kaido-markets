@@ -1,11 +1,11 @@
 "use client";
 
 import { clientSettlementAsset } from "@/lib/settlement-asset";
-import { TESTNET_USDC_ISSUER, USDC_FAUCET_URL } from "@/lib/stellar/usdc";
+import { USDC_FAUCET_URL } from "@/lib/stellar/usdc";
 
 import { DemoFaucetButton } from "./demo-faucet-button";
 import { useWallet } from "./provider";
-import { useClassicAssetBalance } from "./use-classic-asset-balance";
+import { useUsdcBalance } from "./use-usdc-balance";
 
 type ChipVariant = "dark" | "light";
 
@@ -35,10 +35,7 @@ function BalanceChip({
   );
 }
 
-/**
- * Settlement balance + faucet affordance for navbars.
- * Demo mode: KAIDO + Circle USDC via Horizon (matches Freighter).
- */
+/** Settlement SAC balance + faucet affordance for navbars. */
 export function SettlementWalletChip({
   variant = "dark",
   onFaucetSuccess,
@@ -46,72 +43,39 @@ export function SettlementWalletChip({
   variant?: ChipVariant;
   onFaucetSuccess?: () => void;
 }) {
-  const { wallet, horizonUrl, usdcSacId } = useWallet();
+  const { wallet, rpcUrl, usdcSacId, networkPassphrase } = useWallet();
   const settlement = clientSettlementAsset();
+  const sym = settlement.symbol;
 
-  const kaidoBal = useClassicAssetBalance(
-    horizonUrl ?? undefined,
-    settlement.isDemo ? settlement.symbol : undefined,
-    settlement.issuer,
-    wallet?.accountId,
-  );
-  const usdcBal = useClassicAssetBalance(
-    horizonUrl ?? undefined,
-    "USDC",
-    TESTNET_USDC_ISSUER,
+  const { balance7dp, formatted, loading, refresh } = useUsdcBalance(
+    rpcUrl ?? undefined,
+    networkPassphrase,
+    usdcSacId ?? undefined,
     wallet?.accountId,
   );
 
   if (!wallet || !usdcSacId) return null;
 
   const afterFaucet = () => {
-    kaidoBal.refresh();
+    refresh();
     onFaucetSuccess?.();
   };
 
   return (
     <div className="flex items-center gap-1.5 sm:gap-2">
+      <BalanceChip symbol={sym} formatted={formatted} loading={loading} variant={variant} />
       {settlement.isDemo ? (
-        <>
-          <BalanceChip
-            symbol={settlement.symbol}
-            formatted={kaidoBal.formatted}
-            loading={kaidoBal.loading}
-            variant={variant}
-          />
-          <BalanceChip
-            symbol="USDC"
-            formatted={usdcBal.formatted}
-            loading={usdcBal.loading}
-            variant={variant}
-          />
-          <DemoFaucetButton
-            symbol={settlement.symbol}
-            issuer={settlement.issuer}
-            onSuccess={afterFaucet}
-            compact
-          />
-        </>
-      ) : (
-        <>
-          <BalanceChip
-            symbol={settlement.symbol}
-            formatted={usdcBal.formatted}
-            loading={usdcBal.loading}
-            variant={variant}
-          />
-          {usdcBal.balance7dp != null && usdcBal.balance7dp <= 0n ? (
-            <a
-              href={USDC_FAUCET_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#d8c69a] underline underline-offset-2"
-            >
-              Faucet
-            </a>
-          ) : null}
-        </>
-      )}
+        <DemoFaucetButton symbol={sym} issuer={settlement.issuer} onSuccess={afterFaucet} compact />
+      ) : balance7dp != null && balance7dp <= 0n ? (
+        <a
+          href={USDC_FAUCET_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#d8c69a] underline underline-offset-2"
+        >
+          Faucet
+        </a>
+      ) : null}
     </div>
   );
 }

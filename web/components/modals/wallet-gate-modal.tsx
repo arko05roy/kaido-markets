@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 
+import { DemoFaucetButton } from "@/components/wallet/demo-faucet-button";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,9 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { clientSettlementAsset } from "@/lib/settlement-asset";
 import { USDC_FAUCET_URL } from "@/lib/stellar/usdc";
 
-export type WalletGateMode = "connect" | "no-usdc" | "wrong-network";
+export type WalletGateMode = "connect" | "no-funds" | "wrong-network";
 
 export function WalletGateModal({
   open,
@@ -23,6 +25,7 @@ export function WalletGateModal({
   onConnect,
   connecting,
   networkLabel,
+  onFaucetSuccess,
 }: {
   open: boolean;
   mode: WalletGateMode;
@@ -30,7 +33,10 @@ export function WalletGateModal({
   onConnect?: () => void;
   connecting?: boolean;
   networkLabel?: string;
+  onFaucetSuccess?: () => void;
 }) {
+  const settlement = clientSettlementAsset();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -70,23 +76,35 @@ export function WalletGateModal({
           </>
         )}
 
-        {mode === "no-usdc" && (
+        {mode === "no-funds" && (
           <>
             <DialogHeader>
-              <DialogTitle>You need testnet USDC</DialogTitle>
+              <DialogTitle>You need {settlement.symbol}</DialogTitle>
               <DialogDescription>
-                Your wallet balance is 0 USDC. Grab test funds before placing a belief.
+                Your wallet balance is 0 {settlement.symbol}. Grab test funds before placing a
+                belief.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Done
               </Button>
-              <Button asChild className="bg-[#f3efe6] text-[#141416] hover:bg-white">
-                <a href={USDC_FAUCET_URL} target="_blank" rel="noopener noreferrer">
-                  Open faucet
-                </a>
-              </Button>
+              {settlement.isDemo ? (
+                <DemoFaucetButton
+                  symbol={settlement.symbol}
+                  issuer={settlement.issuer}
+                  onSuccess={() => {
+                    onFaucetSuccess?.();
+                    onOpenChange(false);
+                  }}
+                />
+              ) : (
+                <Button asChild className="bg-[#f3efe6] text-[#141416] hover:bg-white">
+                  <a href={USDC_FAUCET_URL} target="_blank" rel="noopener noreferrer">
+                    Open faucet
+                  </a>
+                </Button>
+              )}
             </DialogFooter>
           </>
         )}
@@ -131,6 +149,8 @@ export function TradeErrorModal({
   onOpenChange: (open: boolean) => void;
   onRetry?: () => void;
 }) {
+  const settlement = clientSettlementAsset();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -139,11 +159,15 @@ export function TradeErrorModal({
           <DialogDescription className="text-red-300/90">{message}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" asChild>
-            <Link href={USDC_FAUCET_URL} target="_blank" rel="noopener noreferrer">
-              Get USDC
-            </Link>
-          </Button>
+          {settlement.isDemo ? (
+            <DemoFaucetButton symbol={settlement.symbol} issuer={settlement.issuer} />
+          ) : (
+            <Button variant="outline" asChild>
+              <Link href={USDC_FAUCET_URL} target="_blank" rel="noopener noreferrer">
+                Get USDC
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Dismiss
           </Button>

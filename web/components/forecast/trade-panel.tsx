@@ -231,7 +231,7 @@ export function TradePanel({
   const [maxUsdc, setMaxUsdc] = useState("25");
 
   const [receiptOpen, setReceiptOpen] = useState(false);
-  const [walletGate, setWalletGate] = useState<"connect" | "no-usdc" | null>(null);
+  const [walletGate, setWalletGate] = useState<"connect" | "no-funds" | null>(null);
   const [errorOpen, setErrorOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [quoting, setQuoting] = useState(false);
@@ -312,7 +312,7 @@ export function TradePanel({
       return;
     }
     if (usdcBal != null && usdcBal <= 0n) {
-      setWalletGate("no-usdc");
+      setWalletGate("no-funds");
       return;
     }
     const n = Number(maxUsdc);
@@ -555,6 +555,7 @@ export function TradePanel({
         onConnect={() => void connect("freighter").then(() => setWalletGate(null))}
         connecting={connecting}
         networkLabel={config.network}
+        onFaucetSuccess={refreshBal}
       />
       <TradeReceiptModal
         open={receiptOpen}
@@ -564,6 +565,7 @@ export function TradePanel({
         riskUsdc={riskUsdc}
         quote={quote}
         quoting={quoting}
+        symbol={sym}
         onConfirm={() => void confirmTrade()}
         onBack={() => setReceiptOpen(false)}
       />

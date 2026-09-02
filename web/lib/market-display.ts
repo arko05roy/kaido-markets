@@ -106,7 +106,7 @@ export function formatContractTradeError(message: string): string {
     return "This market is not authorized for BlendTap — run authorize_market on the adapter after deploy.";
   }
   if (message.includes("Error(Contract, #34)") || message.includes("SlippageExceeded")) {
-    return "Slippage guard tripped — raise your max USDC risk amount.";
+    return "Slippage guard tripped — raise your max risk amount.";
   }
   if (message.includes("Error(Contract, #15)") || message.includes("SigmaBelowFloor")) {
     return "Conviction is too tight — widen your range.";

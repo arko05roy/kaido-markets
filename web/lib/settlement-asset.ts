@@ -37,16 +37,20 @@ export function settlementAsset(config?: Pick<DeployedConfig, "external"> | null
   return clientSettlementAsset();
 }
 
+/** Format 7-decimal on-chain settlement units (USDC, KAIDO, etc.). */
+export function formatSettlement7dp(amount7dp: bigint | number): string {
+  const n = typeof amount7dp === "bigint" ? Number(amount7dp) / 1e7 : amount7dp;
+  if (!Number.isFinite(n)) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 10_000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 /** Human label for 7-dp on-chain amounts, e.g. "12.5 KAIDO". */
 export function formatSettlementAmount(
   amount7dp: bigint | number,
-  asset: Pick<SettlementAsset, "symbol"> = { symbol: "USDC" },
+  asset?: Pick<SettlementAsset, "symbol">,
 ): string {
-  const n = typeof amount7dp === "bigint" ? Number(amount7dp) / 1e7 : amount7dp;
-  if (!Number.isFinite(n)) return "—";
-  const formatted =
-    n >= 10_000
-      ? n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return `${formatted} ${asset.symbol}`;
+  const symbol = asset?.symbol ?? clientSettlementAsset().symbol;
+  return `${formatSettlement7dp(amount7dp)} ${symbol}`;
 }

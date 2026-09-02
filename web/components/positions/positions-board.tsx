@@ -28,6 +28,7 @@ import {
   isTradingWindowOpen,
   statusLabel,
 } from "@/lib/market-display";
+import { clientSettlementAsset } from "@/lib/settlement-asset";
 import { tradeViewFromMarketCard } from "@/lib/market-card-trade-view";
 import type { MarketCard } from "@/lib/market-types";
 import { loadPositions, type SavedPosition } from "@/lib/positions";
@@ -100,15 +101,16 @@ function rowDetail(row: PositionRow, title: string): PositionDetailData | null {
   const sigma = fromWad(BigInt(sigmaWad));
   const conviction = convictionLabel(convictionFromSigma(sigma, 1e-6, sigma * 16));
 
+  const sym = clientSettlementAsset().symbol;
   return {
     marketId: row.marketId,
     marketTitle: title,
     status: statusLabel(market.status),
     call: formatOutcome(mu),
     conviction,
-    riskUsdc: `${risk} USDC`,
+    riskUsdc: `${risk} ${sym}`,
     edgeLabel: `${edge.deltaLabel}. ${edge.stance}.`,
-    maxWin: `+${payout.maxWin.toFixed(2)} USDC`,
+    maxWin: `+${payout.maxWin.toFixed(2)} ${sym}`,
     closesIn: undefined,
     crowdMuWad: market.crowdMuWad?.toString(),
     crowdSigmaWad: market.crowdSigmaWad?.toString(),
@@ -388,7 +390,7 @@ function PositionCard({
 
           <div className="flex flex-wrap gap-1.5">
             <StatChip label="Your call" value={call} accent />
-            {riskUsdc && <StatChip label="Risk" value={`${riskUsdc} USDC`} />}
+            {riskUsdc && <StatChip label="Risk" value={riskUsdc} />}
             {conviction && <StatChip label="Conviction" value={conviction} />}
             {edgeLabel && crowd && (
               <StatChip label="Vs crowd" value={`${edgeLabel} (${crowd})`} accent />

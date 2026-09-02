@@ -32,6 +32,7 @@ export function TradeReceiptModal({
   riskUsdc,
   quote,
   quoting,
+  symbol,
   onConfirm,
   onBack,
 }: {
@@ -42,6 +43,7 @@ export function TradeReceiptModal({
   riskUsdc: number;
   quote: TradeQuote | null;
   quoting: boolean;
+  symbol: string;
   onConfirm: () => void;
   onBack: () => void;
 }) {
@@ -58,7 +60,7 @@ export function TradeReceiptModal({
         <div className="space-y-3 rounded-xl border border-white/[0.06] bg-[#080809] p-4">
           <QuoteRow label="Your call" value={call} />
           <QuoteRow label="Conviction" value={conviction} />
-          <QuoteRow label="Risk" value={`${riskUsdc} USDC`} />
+          <QuoteRow label="Risk" value={`${riskUsdc} ${symbol}`} />
           {quoting && (
             <p className="flex items-center gap-2 text-xs text-white/45">
               <Loader2 className="size-3.5 animate-spin" />
@@ -67,12 +69,12 @@ export function TradeReceiptModal({
           )}
           {quote && !quoting && (
             <>
-              <QuoteRow label="Collateral" value={`${quote.collateralUsdc.toFixed(2)} USDC`} />
-              <QuoteRow label="Est. max payout" value={`+${quote.maxWin.toFixed(2)} USDC`} accent />
+              <QuoteRow label="Collateral" value={`${quote.collateralUsdc.toFixed(2)} ${symbol}`} />
+              <QuoteRow label="Est. max payout" value={`+${quote.maxWin.toFixed(2)} ${symbol}`} accent />
               <QuoteRow label="Max multiple" value={`${quote.multiple.toFixed(1)}x`} />
-              <QuoteRow label="Worst case" value={`−${quote.worstCase.toFixed(2)} USDC`} />
+              <QuoteRow label="Worst case" value={`−${quote.worstCase.toFixed(2)} ${symbol}`} />
               {quote.feeUsdc > 0 && (
-                <QuoteRow label="Est. fee" value={`${quote.feeUsdc.toFixed(4)} USDC`} />
+                <QuoteRow label="Est. fee" value={`${quote.feeUsdc.toFixed(4)} ${symbol}`} />
               )}
             </>
           )}

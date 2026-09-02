@@ -55,7 +55,7 @@ export default function CreateMarketPage() {
     return (
       <ConfigNotice network={networkId}>
         USDC SAC id not configured for network “{networkId}”. Set{" "}
-        <code className="font-mono text-[#d8c69a]">external.usdcSacId</code> in{" "}
+        <code className="font-mono text-[#d8c69a]">external.usdcSacId</code> (settlement SAC) in{" "}
         <code className="font-mono text-[#d8c69a]">config/networks.{networkId}.json</code>.
       </ConfigNotice>
     );

@@ -10,6 +10,7 @@ import { BeliefChart } from "@/components/forecast/belief-chart";
 import { Button } from "@/components/ui/button";
 import { fromWad, type GaussianBelief } from "@/lib/curve";
 import { formatUsdc7dp } from "@/lib/positions";
+import { clientSettlementAsset } from "@/lib/settlement-asset";
 
 export interface ResultCardProps {
   marketLabel: string;
@@ -26,17 +27,18 @@ export interface ResultCardProps {
   positionId: string;
 }
 
-function buildShareText(props: ResultCardProps, pnl7dp: bigint): string {
+function buildShareText(props: ResultCardProps, pnl7dp: bigint, sym: string): string {
   const pnl = formatUsdc7dp(pnl7dp < 0n ? -pnl7dp : pnl7dp);
   const sign = pnl7dp >= 0n ? "+" : "−";
   const outcome =
     props.kind === "scalar" && props.resolvedWad[0] != null
       ? fromWad(props.resolvedWad[0]).toPrecision(6)
       : props.resolvedWad.map((x) => fromWad(x).toPrecision(4)).join(" · ");
-  return `${props.marketLabel} · position #${props.positionId}\nOutcome: ${outcome}\nP&L: ${sign}${pnl} USDC`;
+  return `${props.marketLabel} · position #${props.positionId}\nOutcome: ${outcome}\nP&L: ${sign}${pnl} ${sym}`;
 }
 
 export function ResultCard(props: ResultCardProps) {
+  const sym = clientSettlementAsset().symbol;
   const { marketLabel, kind, market, yourBelief, resolvedWad, collateral7dp, payout7dp, positionId } =
     props;
 
@@ -46,7 +48,7 @@ export function ResultCard(props: ResultCardProps) {
   }, [collateral7dp, payout7dp]);
 
   const [copied, setCopied] = useState(false);
-  const shareText = useMemo(() => buildShareText(props, pnl7dp), [props, pnl7dp]);
+  const shareText = useMemo(() => buildShareText(props, pnl7dp, sym), [props, pnl7dp, sym]);
 
   const copyShare = useCallback(async () => {
     try {
@@ -114,16 +116,16 @@ export function ResultCard(props: ResultCardProps) {
         {collateral7dp != null && (
           <>
             <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Collateral</dt>
-            <dd className="text-right font-mono text-[#f3efe6]">{formatUsdc7dp(collateral7dp)} USDC</dd>
+            <dd className="text-right font-mono text-[#f3efe6]">{formatUsdc7dp(collateral7dp)} {sym}</dd>
           </>
         )}
         <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Payout</dt>
-        <dd className="text-right font-mono text-[#f3efe6]">{formatUsdc7dp(payout7dp)} USDC</dd>
+        <dd className="text-right font-mono text-[#f3efe6]">{formatUsdc7dp(payout7dp)} {sym}</dd>
         <dt className="font-medium text-[#f3efe6]">P&L</dt>
         <dd
           className={`text-right font-mono font-semibold ${pnl7dp >= 0n ? "text-emerald-400" : "text-red-400"}`}
         >
-          {pnlLabel} USDC
+          {pnlLabel} {sym}
         </dd>
       </dl>
 

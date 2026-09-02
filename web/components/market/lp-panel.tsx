@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/provider";
 import { useUsdcBalance } from "@/components/wallet/use-usdc-balance";
 import { fromWad } from "@/lib/curve";
+import { clientSettlementAsset } from "@/lib/settlement-asset";
 
 export interface LpMarketView {
   id: string;
@@ -23,6 +24,7 @@ function fmt7dp(stroops: bigint): string {
 
 export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMarketView }) {
   const { wallet } = useWallet();
+  const sym = clientSettlementAsset().symbol;
   const { balance7dp: usdcBal } = useUsdcBalance(
     config.rpcUrl,
     config.networkPassphrase,
@@ -101,7 +103,7 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
     setLastTx(null);
     try {
       const out = await kaido.removeLiquidity(market.id, myShares, wallet.signer);
-      setLastTx(`Withdrew ${fmt7dp(out)} USDC`);
+      setLastTx(`Withdrew ${fmt7dp(out)} ${sym}`);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "remove liquidity failed");
@@ -117,11 +119,11 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
       <dl className="mb-5 mt-4 space-y-2 text-sm">
         <div className="flex justify-between">
           <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Pool collateral</dt>
-          <dd className="text-[#f3efe6]">{fromWad(pool / 10_000_000_000n).toFixed(4)} USDC</dd>
+          <dd className="text-[#f3efe6]">{fromWad(pool / 10_000_000_000n).toFixed(4)} {sym}</dd>
         </div>
         <div className="flex justify-between">
           <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Free to LP</dt>
-          <dd className="text-[#f3efe6]">{fromWad(freeWad).toFixed(4)} / {fromWad(BigInt(market.bWad)).toFixed(4)} USDC</dd>
+          <dd className="text-[#f3efe6]">{fromWad(freeWad).toFixed(4)} / {fromWad(BigInt(market.bWad)).toFixed(4)} {sym}</dd>
         </div>
         <div className="flex justify-between">
           <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Your shares</dt>
@@ -129,11 +131,11 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
         </div>
         <div className="flex justify-between">
           <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Accrued LP fees</dt>
-          <dd className="text-[#f3efe6]">{fromWad(feePool / 10_000_000_000n).toFixed(6)} USDC</dd>
+          <dd className="text-[#f3efe6]">{fromWad(feePool / 10_000_000_000n).toFixed(6)} {sym}</dd>
         </div>
         {wallet && usdcBal != null && (
           <div className="flex justify-between">
-            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Your USDC</dt>
+            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Your {sym}</dt>
             <dd className="font-mono text-[#f3efe6]">{fmt7dp(usdcBal)}</dd>
           </div>
         )}
@@ -152,7 +154,7 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
               className="kaido-input mt-1.5 block w-24"
             />
           </label>
-          <span className="text-xs text-white/40">≈ {fmt7dp(estDeposit7dp)} USDC</span>
+          <span className="text-xs text-white/40">≈ {fmt7dp(estDeposit7dp)} {sym}</span>
           <Button
             type="button"
             disabled={!wallet || busy || scaleWad <= 0n}
@@ -186,7 +188,7 @@ export function LpPanel({ config, market }: { config: KaidoConfig; market: LpMar
         mode={confirmMode ?? "add"}
         amountLabel={
           confirmMode === "add"
-            ? `Add ≈ ${fmt7dp(estDeposit7dp)} USDC (${scalePct}% of free pool)`
+            ? `Add ≈ ${fmt7dp(estDeposit7dp)} ${sym} (${scalePct}% of free pool)`
             : `Remove all shares (${sharePct} of pool)`
         }
         warning={confirmMode === "remove" ? "This burns your entire LP position on this market." : undefined}

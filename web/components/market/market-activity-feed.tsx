@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Panel } from "@/components/app/kaido-ui";
+import { clientSettlementAsset } from "@/lib/settlement-asset";
 import type { DecodedEvent } from "@/lib/indexer";
 
 const PRETTY: Record<string, string> = {
@@ -22,18 +23,19 @@ function fmt7dp(raw: unknown): string | null {
   return `${whole}${frac ? "." + frac : ""}`;
 }
 
-function detail(e: DecodedEvent): string | null {
+function detail(e: DecodedEvent, sym: string): string | null {
   const d = e.data;
   if (!d || typeof d !== "object") return null;
   const m = d as Record<string, unknown>;
   if (e.name === "Trade" || e.name === "TradeTrajectory") {
     const c = fmt7dp(m.collateral);
-    return c ? `${c} USDC` : null;
+    return c ? `${c} ${sym}` : null;
   }
   return null;
 }
 
 export function MarketActivityFeed({ marketId }: { marketId: string }) {
+  const sym = clientSettlementAsset().symbol;
   const [events, setEvents] = useState<DecodedEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +81,7 @@ export function MarketActivityFeed({ marketId }: { marketId: string }) {
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#d8c69a]">
               {e.name ? (PRETTY[e.name] ?? e.name) : "Event"}
             </span>
-            <span className="text-white/45">{detail(e) ?? e.txHash.slice(0, 10) + "…"}</span>
+            <span className="text-white/45">{detail(e, sym) ?? e.txHash.slice(0, 10) + "…"}</span>
             <span className="w-full font-mono text-[10px] text-white/30">
               {new Date(e.ledgerClosedAt).toLocaleString()}
             </span>

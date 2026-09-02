@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatUsdc7dp } from "@/lib/positions";
+import { clientSettlementAsset } from "@/lib/settlement-asset";
 
 export function ClaimReceiptModal({
   open,
@@ -28,6 +29,7 @@ export function ClaimReceiptModal({
   onConfirm: () => void;
   confirming: boolean;
 }) {
+  const sym = clientSettlementAsset().symbol;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -43,14 +45,14 @@ export function ClaimReceiptModal({
           {collateral7dp != null && (
             <div className="flex justify-between gap-4">
               <dt className="text-white/45">Collateral</dt>
-              <dd className="font-mono text-[#f3efe6]">{formatUsdc7dp(collateral7dp)} USDC</dd>
+              <dd className="font-mono text-[#f3efe6]">{formatUsdc7dp(collateral7dp)} {sym}</dd>
             </div>
           )}
           {estimatedPayout7dp != null && (
             <div className="flex justify-between gap-4">
               <dt className="text-white/45">Est. payout</dt>
               <dd className="font-mono text-emerald-300/90">
-                {formatUsdc7dp(estimatedPayout7dp)} USDC
+                {formatUsdc7dp(estimatedPayout7dp)} {sym}
               </dd>
             </div>
           )}
@@ -83,6 +85,7 @@ export function ClaimSuccessModal({
   payout7dp: bigint;
   children?: React.ReactNode;
 }) {
+  const sym = clientSettlementAsset().symbol;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -90,7 +93,7 @@ export function ClaimSuccessModal({
           <DialogTitle>Claim complete</DialogTitle>
           <DialogDescription>
             You received{" "}
-            <span className="font-mono text-emerald-300/90">{formatUsdc7dp(payout7dp)} USDC</span>.
+            <span className="font-mono text-emerald-300/90">{formatUsdc7dp(payout7dp)} {sym}</span>.
           </DialogDescription>
         </DialogHeader>
         {children}

@@ -309,7 +309,7 @@ for attempt in 1 2 3 4 5 6; do
   fi
   sleep 3
 done
-if [[ -n "${DEMO_MKT}" ]]; then
+  if [[ -n "${DEMO_MKT}" ]]; then
   echo "   created market : ${DEMO_MKT}"
   if [[ -n "${ID_blend_adapter:-}" ]]; then
     echo "-- blend-adapter.authorize_market (${DEMO_MKT}) --"
@@ -321,6 +321,24 @@ if [[ -n "${DEMO_MKT}" ]]; then
       fi
       sleep 3
     done || echo "   (authorize_market failed — re-run manually)" >&2
+  elif [[ "${DEMO_MODE_JSON}" == "true" ]]; then
+    LP_KEY="${KAIDO_TREASURY_KEY_NAME:-kaido-${NETWORK}-treasury}"
+    LP_SOURCE=(--source-account "${LP_KEY}")
+    if [[ -n "${KAIDO_TREASURY_SECRET_KEY:-}" ]]; then
+      LP_SOURCE=(--source-account "${KAIDO_TREASURY_SECRET_KEY}")
+      LP_ADDR="$(stellar keys public-key "${KAIDO_TREASURY_SECRET_KEY}" 2>/dev/null || echo "${DEPLOYER_ADDR}")"
+    else
+      LP_ADDR="$(stellar keys address "${LP_KEY}" 2>/dev/null || echo "${DEPLOYER_ADDR}")"
+    fi
+    echo "-- add_liquidity protocol seed (${DEMO_MKT}) lp=${LP_ADDR} --"
+    sleep 2
+    for attempt in 1 2 3 4 5; do
+      if stellar contract invoke --id "${DEMO_MKT}" --network "${NETWORK}" "${LP_SOURCE[@]}" \
+        -- add_liquidity --lp "${LP_ADDR}" --scale-y "${WAD18}" 2>/dev/null; then
+        break
+      fi
+      sleep 3
+    done || echo "   (add_liquidity seed failed — run make seed:${NETWORK})" >&2
   fi
   echo "   registry.count ->"
   stellar contract invoke --id "${ID_registry}" --network "${NETWORK}" "${SOURCE_ARG[@]}" --send=no -- count || true

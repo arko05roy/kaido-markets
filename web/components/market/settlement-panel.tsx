@@ -25,6 +25,7 @@ import {
   savePosition,
   type SavedPosition,
 } from "@/lib/positions";
+import { clientSettlementAsset } from "@/lib/settlement-asset";
 
 export interface SettlementMarketView {
   address: string;
@@ -102,6 +103,7 @@ export function SettlementPanel({
   /** Bump after a trade so we reload saved positions. */
   refreshKey?: number;
 }) {
+  const sym = clientSettlementAsset().symbol;
   const { wallet } = useWallet();
   const kaido = useMemo(() => new Kaido(config), [config]);
 
@@ -372,7 +374,7 @@ export function SettlementPanel({
     const v = Number(reportValue.trim());
     const bond = Number(optBond.trim());
     if (!Number.isFinite(v) || !Number.isFinite(bond) || bond <= 0) {
-      setError("enter outcome and bond (USDC)");
+      setError(`enter outcome and bond (${sym})`);
       return;
     }
     setResolverBusy("propose");
@@ -594,7 +596,7 @@ export function SettlementPanel({
                 >
                   {p.claimedAt != null && p.payout7dp != null ? (
                     <span className="text-white/55">
-                      Paid out {formatUsdc7dp(BigInt(p.payout7dp))} USDC
+                      Paid out {formatUsdc7dp(BigInt(p.payout7dp))} {sym}
                     </span>
                   ) : (
                     <>
@@ -646,8 +648,8 @@ export function SettlementPanel({
         <div className="border border-white/10 px-4 py-3 text-sm">
           <p className="font-medium text-[#f3efe6]">Accrued protocol fees</p>
           <p className="text-xs text-white/45">
-            Treasury: {formatUsdc7dp(pendingFees.treasury / 10_000_000_000n)} USDC · Creator:{" "}
-            {formatUsdc7dp(pendingFees.creator / 10_000_000_000n)} USDC
+            Treasury: {formatUsdc7dp(pendingFees.treasury / 10_000_000_000n)} {sym} · Creator:{" "}
+            {formatUsdc7dp(pendingFees.creator / 10_000_000_000n)} {sym}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {pendingFees.treasury > 0n && (
@@ -742,7 +744,7 @@ export function SettlementPanel({
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span>Bond (USDC)</span>
+              <span>Bond ({sym})</span>
               <input
                 type="text"
                 value={optBond}

@@ -20,8 +20,10 @@ import {
   convictionHint,
   convictionLabel,
 } from "@/lib/market-display";
-import { cn } from "@/lib/utils";
+import { clientSettlementAsset } from "@/lib/settlement-asset";
+import { seedMarketLiquidity } from "@/lib/seed-market";
 import { saveMarketMetadata } from "@/lib/market-metadata";
+import { cn } from "@/lib/utils";
 import {
   chartRangeForConfig,
   defaultBinaryConfig,
@@ -345,6 +347,13 @@ export function CreateMarketWizard({
         });
       } catch (e) {
         console.warn("market deployed but metadata write failed:", e);
+      }
+      if (clientSettlementAsset().isDemo) {
+        try {
+          await seedMarketLiquidity(id);
+        } catch (e) {
+          console.warn("market LP seed failed:", e);
+        }
       }
       setCreatedId(id);
       setSuccessOpen(true);
