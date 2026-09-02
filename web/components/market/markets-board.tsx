@@ -3,27 +3,17 @@
 import { useMemo, useState } from "react";
 
 import {
-  MiniCrowdCurve,
-} from "@/components/market/mini-crowd-curve";
-import { ClosesIn } from "@/components/market/closes-in";
-import {
   DashboardPageHeader,
   MetricChip,
 } from "@/components/app/dashboard-page-header";
 import {
   Panel,
   PrimaryLink,
-  StatusPill,
 } from "@/components/app/kaido-ui";
-import {
-  crowdTargetLabel,
-  formatUsdc7dp,
-  statusLabel,
-} from "@/lib/market-display";
-import { displayMarketQuestion } from "@/lib/market-metadata";
+import { MarketCardItem } from "@/components/market/market-card";
+import { statusLabel } from "@/lib/market-display";
 import type { SavedMarketMetadata } from "@/lib/market-metadata";
 import type { MarketCard } from "@/lib/market-types";
-import Link from "next/link";
 
 export type MarketFilter = "all" | "hot" | "closing" | "new" | "wide";
 
@@ -123,74 +113,6 @@ function MarketsBoardHeader({
   );
 }
 
-function MarketCardItem({
-  card,
-  metadata,
-}: {
-  card: MarketCard;
-  metadata?: SavedMarketMetadata;
-}) {
-  const { address, info, status, crowdMuWad, crowdSigmaWad, kWad, bWad, blendBackedDepth7dp } = card;
-  const statusText = statusLabel(status);
-  const closesAt =
-    Number(info.window.lock);
-  const title = displayMarketQuestion(info, crowdMuWad, metadata?.question);
-  const crowd =
-    crowdMuWad != null ? crowdTargetLabel(crowdMuWad) : null;
-
-  return (
-    <Link href={`/markets/${address}`} className="group block">
-      <Panel className="flex h-full flex-col gap-4 p-5 transition-[border-color,background-color] duration-200 hover:border-[#d8c69a]/25 hover:bg-[#222228] sm:p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusPill label={statusText} />
-              {info.capped && (
-                <span className="rounded-md border border-[#d8c69a]/25 bg-[#d8c69a]/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#d8c69a]">
-                  Capped
-                </span>
-              )}
-              {blendBackedDepth7dp != null && blendBackedDepth7dp > 0n && (
-                <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
-                  Blend · {formatUsdc7dp(blendBackedDepth7dp)} USDC
-                </span>
-              )}
-            </div>
-            <h2 className="font-serif text-lg leading-snug tracking-tight text-[#f3efe6] sm:text-xl">
-              {title}
-            </h2>
-            {crowd && (
-              <p className="font-mono text-sm text-white/55">
-                Crowd target: <span className="text-[#d8c69a]">{crowd}</span>
-              </p>
-            )}
-          </div>
-          {crowdMuWad != null && crowdSigmaWad != null && kWad != null && bWad != null && (
-            <MiniCrowdCurve
-              muWad={crowdMuWad}
-              sigmaWad={crowdSigmaWad}
-              kWad={kWad}
-              bWad={bWad}
-              capped={info.capped}
-            />
-          )}
-        </div>
-
-        <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-white/[0.06] pt-4">
-          <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
-            <span>
-              Closes in <ClosesIn at={closesAt} />
-            </span>
-          </div>
-          <span className="rounded-full border border-[#d8c69a]/30 bg-[#d8c69a]/10 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#d8c69a] transition-colors group-hover:border-[#d8c69a]/50 group-hover:bg-[#d8c69a]/15">
-            Trade range →
-          </span>
-        </div>
-      </Panel>
-    </Link>
-  );
-}
-
 export function MarketsBoard({
   markets,
   openCount,
@@ -238,9 +160,13 @@ export function MarketsBoard({
           <p className="text-sm text-white/50">No markets match this filter.</p>
         </Panel>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {filtered.map((card) => (
-            <MarketCardItem key={card.address} card={card} metadata={metadataByMarket[card.address]} />
+            <MarketCardItem
+              key={card.address}
+              card={card}
+              metadata={metadataByMarket[card.address]}
+            />
           ))}
         </div>
       )}
